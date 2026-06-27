@@ -5,6 +5,27 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.46] - 2026-06-27
+
+### Added
+- Added `1688 offer <offerIds...>` batch collection. A single offer ID keeps
+  the existing `OfferResult` JSON shape, while multiple IDs return a batch
+  envelope with partial successes and per-offer failures.
+- Added `1688 offer --pro` to run offer collection inline and bypass daemon
+  health pauses for the current call.
+- Added `1688 search --deeppro` to search first, then collect full offer
+  details for each result with retry/failure reporting and configurable
+  inter-offer delay.
+- Added a Chinese README translation and an Amazon FBA sourcing playbook.
+
+### Docs
+- Expanded README command coverage and documented the new batch offer and
+  deeppro output shapes in the command catalog and JSON contracts.
+
+### Tests
+- Added deterministic coverage for single vs batch offer JSON output and
+  `search --deeppro` dispatch behavior.
+
 ## [0.1.45] - 2026-06-16
 
 ### Docs
