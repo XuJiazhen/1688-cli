@@ -54,6 +54,9 @@ program
   .option('--verified <kind>', 'Filter: any | factory | business | super-factory', 'any')
   .option('--min-turnover <n>', 'Minimum parsed turnover/order count')
   .option('--exclude-ads', 'Exclude P4P/ad results')
+  .option('--deeppro', 'After search, deep collect each offer using pro inline mode (retry up to 3x)')
+  .option('--deeppro-delay-min <seconds>', 'Minimum delay between deeppro offer collections', '6')
+  .option('--deeppro-delay-max <seconds>', 'Maximum delay between deeppro offer collections', '10')
   .option('--profile <name>', 'Profile name (default: default)')
   .option('--headed', 'Open a browser window (use to pass slider verification)')
   .action(async (keyword, opts) => {
@@ -171,13 +174,14 @@ program
 
 program
   .command('offer')
-  .description('Show details of a single 1688 offer')
-  .argument('<offerId>', 'Offer ID (digits)')
+  .description('Show details of one or more 1688 offers')
+  .argument('<offerIds...>', 'One or more offer IDs (digits)')
   .option('--profile <name>', 'Profile name (default: default)')
   .option('--headed', 'Open a browser window (fallback for risk control)')
-  .action(async (offerId, opts) => {
+  .option('--pro', 'Run offer collection inline and bypass daemon health pause')
+  .action(async (offerIds: string[], opts) => {
     const { run } = await import('./commands/offer.js');
-    await run({ ...opts, offerId });
+    await run({ ...opts, offerIds });
   });
 
 program

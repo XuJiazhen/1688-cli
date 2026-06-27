@@ -9,9 +9,27 @@ import { startResponseCapture } from '../session/response-capture.js';
 import { debugTmpPath } from '../util/temp.js';
 
 export interface OfferOpts {
-  offerId: string;
+  offerId?: string;
+  offerIds?: string[];
   profile?: string;
   headed?: boolean;
+  pro?: boolean;
+}
+
+export interface OfferFailure {
+  offerId: string;
+  code: string;
+  message: string;
+}
+
+export interface OfferBatchResult {
+  mode: 'batch';
+  total: number;
+  success: number;
+  failed: number;
+  offerIds: string[];
+  offers: OfferResult[];
+  failures: OfferFailure[];
 }
 
 export interface OfferArgs {
@@ -788,17 +806,75 @@ function parseIntOrNull(s: string | undefined): number | null {
 }
 
 export async function run(opts: OfferOpts): Promise<void> {
-  if (!opts.offerId) {
+  // Normalise: single offerId or batch offerIds.
+  const ids = opts.offerIds?.length
+    ? opts.offerIds
+    : opts.offerId
+      ? [opts.offerId]
+      : [];
+
+  if (ids.length === 0) {
     throw new CliError(2, 'BAD_INPUT', 'offerId required.');
   }
-  const data = await dispatch<OfferArgs, OfferResult>(
-    'offer',
-    { offerId: opts.offerId, headed: opts.headed },
-    { headed: opts.headed, profile: opts.profile },
-  );
+
+  // Single ID — original behaviour, original JSON shape.
+  if (ids.length === 1) {
+    const data = await dispatch<OfferArgs, OfferResult>(
+      'offer',
+      { offerId: ids[0]!, headed: opts.headed },
+      { headed: opts.headed, profile: opts.profile, noDaemon: opts.pro === true },
+    );
+    emit({
+      human: () => printOffer(data),
+      data,
+    });
+    return;
+  }
+
+  // Batch mode — multiple IDs, serial collection, partial results.
+  const offers: OfferResult[] = [];
+  const failures: OfferFailure[] = [];
+
+  for (let i = 0; i < ids.length; i++) {
+    const offerId = ids[i]!;
+    if (!/^\d+$/.test(offerId)) {
+      failures.push({ offerId, code: 'BAD_INPUT', message: 'Invalid offerId' });
+      continue;
+    }
+
+    process.stderr.write(`[${i + 1}/${ids.length}] collecting offerId ${offerId}\n`);
+
+    try {
+      const data = await dispatch<OfferArgs, OfferResult>(
+        'offer',
+        { offerId, headed: opts.headed },
+        { headed: opts.headed, profile: opts.profile, noDaemon: opts.pro === true },
+      );
+      offers.push(data);
+    } catch (error) {
+      const err = error as Error & { code?: string };
+      const message = sanitiseFailMessage(err.message || String(error));
+      failures.push({
+        offerId,
+        code: err.code || 'DEEP_COLLECT_FAILED',
+        message,
+      });
+    }
+  }
+
+  const result: OfferBatchResult = {
+    mode: 'batch',
+    total: ids.length,
+    success: offers.length,
+    failed: failures.length,
+    offerIds: ids,
+    offers,
+    failures,
+  };
+
   emit({
-    human: () => printOffer(data),
-    data,
+    human: () => printBatch(result),
+    data: result,
   });
 }
 
@@ -845,4 +921,34 @@ function printOffer(o: OfferResult): void {
       process.stdout.write(`  ${price.padEnd(10)} ${stock.padEnd(15)} ${s.specs}\n`);
     }
   }
+}
+
+function printBatch(result: OfferBatchResult): void {
+  process.stdout.write(
+    `Batch offer results: ${result.success}/${result.total} ok` +
+      (result.failed ? `, ${result.failed} failed` : '') +
+      '\n\n',
+  );
+  for (const o of result.offers) {
+    process.stdout.write(
+      `${o.offerId} | ${(o.title || '').slice(0, 80)}\n` +
+        `  SKUs: ${o.skus.length} | packages: ${o.packageInfo.length}` +
+        (o.priceRange ? ` | price: ${o.priceRange}` : '') +
+        '\n\n',
+    );
+  }
+  if (result.failures.length > 0) {
+    process.stdout.write('Failures:\n');
+    for (const f of result.failures) {
+      process.stdout.write(`  ${f.offerId}  ${f.code}  ${f.message}\n`);
+    }
+  }
+}
+
+/** Strip long risk-control URLs from error messages. */
+function sanitiseFailMessage(message: string): string {
+  if (/x5secdata|punish|captcha|verify|nocaptcha/i.test(message)) {
+    return '1688 触发滑块验证，请使用 --headed 手动处理。';
+  }
+  return message;
 }

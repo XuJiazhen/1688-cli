@@ -18,6 +18,7 @@ import {
 } from '../session/search-mtop.js';
 import { parseMtopJsonp } from '../session/mtop.js';
 import { sleep, waitWithDeadline } from '../session/wait.js';
+import type { OfferResult, OfferArgs } from './offer.js';
 import {
   applySearchControls,
   hasActiveFilters,
@@ -40,6 +41,9 @@ export interface SearchOpts {
   verified?: string;
   minTurnover?: string;
   excludeAds?: boolean;
+  deeppro?: boolean;
+  deepproDelayMin?: string;
+  deepproDelayMax?: string;
   profile?: string;
   headed?: boolean;
 }
@@ -52,6 +56,23 @@ export interface SearchArgs {
   headed?: boolean;
 }
 
+export interface DeepProFailure {
+  offerId: string;
+  code: string;
+  message: string;
+  attempts: number;
+}
+
+export interface DeepProSummary {
+  enabled: true;
+  total: number;
+  success: number;
+  failed: number;
+  offerIds: string[];
+  offers: OfferResult[];
+  failures: DeepProFailure[];
+}
+
 export interface SearchResult {
   keyword: string;
   sort: SearchSort;
@@ -59,6 +80,7 @@ export interface SearchResult {
   totalBeforeFilter: number;
   total: number;
   offers: Offer[];
+  deeppro?: DeepProSummary;
 }
 
 export type { Offer };
@@ -115,11 +137,31 @@ export async function run(keyword: string, opts: SearchOpts): Promise<void> {
     excludeAds: opts.excludeAds,
   });
 
+  // --deeppro bypasses daemon for the initial search too, so DAEMON_PAUSED
+  // can't block the search before deep collection even starts.
   const data = await dispatch<SearchArgs, SearchResult>(
     'search',
     { keyword: kw, max, sort, filters, headed: opts.headed },
-    { headed: opts.headed, profile: opts.profile },
+    { headed: opts.headed, profile: opts.profile, noDaemon: opts.deeppro === true },
   );
+
+  // --deeppro: deep collect each search result in pro inline mode.
+  if (opts.deeppro === true) {
+    const ids = data.offers
+      .map((o) => String(o.offerId ?? '').trim())
+      .filter((id) => /^\d+$/.test(id) && id !== '0');
+
+    const delayMin = parsePositiveInt(opts.deepproDelayMin, '--deeppro-delay-min', 6, 120);
+    const delayMax = parsePositiveInt(opts.deepproDelayMax, '--deeppro-delay-max', 10, 120);
+
+    data.deeppro = await deepProCollect(ids, {
+      headed: opts.headed,
+      profile: opts.profile,
+      delayMin,
+      delayMax,
+      maxRetries: 3,
+    });
+  }
 
   emit({
     human: () => printOffers(data),
@@ -949,34 +991,186 @@ export async function extractOffers(page: Page): Promise<Offer[]> {
   });
 }
 
+// ---------- deeppro ----------
+
+interface DeepProCollectOpts {
+  headed?: boolean;
+  profile?: string;
+  delayMin: number;
+  delayMax: number;
+  maxRetries: number;
+}
+
+async function deepProCollect(
+  ids: string[],
+  opts: DeepProCollectOpts,
+): Promise<DeepProSummary> {
+  const offers: OfferResult[] = [];
+  const failures: DeepProFailure[] = [];
+
+  process.stderr.write(
+    `\nDEEPPRO: starting deep collection of ${ids.length} offers (retries up to ${opts.maxRetries}x)\n`,
+  );
+
+  for (let i = 0; i < ids.length; i++) {
+    const offerId = ids[i]!;
+    process.stderr.write(
+      `==== [${i + 1}/${ids.length}] DEEPPRO collecting offerId: ${offerId} ====\n`,
+    );
+
+    let collected: OfferResult | null = null;
+    let lastCode = '';
+    let lastMessage = '';
+    let attempts = 0;
+
+    for (let attempt = 1; attempt <= opts.maxRetries; attempt++) {
+      attempts = attempt;
+      try {
+        const detail = await dispatch<OfferArgs, OfferResult>(
+          'offer',
+          { offerId, headed: opts.headed },
+          { headed: opts.headed, profile: opts.profile, noDaemon: true },
+        );
+
+        if (!isValidDeepOffer(detail)) {
+          lastCode = 'INVALID_DEEP_OFFER';
+          lastMessage = 'Deep offer result is incomplete or captcha-intercepted.';
+          if (attempt < opts.maxRetries) {
+            process.stderr.write(
+              `DEEPPRO attempt ${attempt} failed: ${offerId}, code=${lastCode}\n`,
+            );
+            await sleep(5000);
+            continue;
+          }
+          break;
+        }
+
+        collected = detail;
+        break;
+      } catch (error) {
+        const err = error as Error & { code?: string };
+        lastCode = err.code || 'DEEP_COLLECT_FAILED';
+        lastMessage = sanitiseDeepproMessage(err.message || String(error));
+        if (attempt < opts.maxRetries) {
+          process.stderr.write(
+            `DEEPPRO attempt ${attempt} failed: ${offerId}, code=${lastCode}\n`,
+          );
+          await sleep(5000);
+        }
+      }
+    }
+
+    if (collected) {
+      offers.push(collected);
+      process.stderr.write(
+        `DEEPPRO valid: ${offerId}, SKU=${collected.skus.length}, images=${collected.images.length}\n`,
+      );
+    } else {
+      failures.push({
+        offerId,
+        code: lastCode || 'DEEP_COLLECT_FAILED',
+        message: lastMessage || 'Unknown error after retries',
+        attempts,
+      });
+      process.stderr.write(
+        `DEEPPRO failed: ${offerId}, code=${lastCode}, attempts=${attempts}\n`,
+      );
+    }
+
+    if (i < ids.length - 1) {
+      const delay = randomInt(opts.delayMin * 1000, opts.delayMax * 1000);
+      process.stderr.write(`waiting ${Math.round(delay / 1000)}s before next...\n`);
+      await sleep(delay);
+    }
+  }
+
+  process.stderr.write(
+    `\nDEEPPRO complete: ${offers.length}/${ids.length} valid` +
+      (failures.length > 0 ? `, ${failures.length} failed` : '') +
+      '\n',
+  );
+
+  return {
+    enabled: true as const,
+    total: ids.length,
+    success: offers.length,
+    failed: failures.length,
+    offerIds: ids,
+    offers,
+    failures,
+  };
+}
+
+function isValidDeepOffer(o: OfferResult): boolean {
+  if (o.title === 'Captcha Interception') return false;
+  if (/captcha|验证码|滑块|风控|访问受限/i.test(o.title)) return false;
+  if (o.priceRange === null && o.priceMin === null && o.priceMax === null) return false;
+  if (!Array.isArray(o.images) || o.images.length === 0) return false;
+  return true;
+}
+
+function sanitiseDeepproMessage(message: string): string {
+  if (/x5secdata|punish|captcha|verify|nocaptcha/i.test(message)) {
+    return '1688 触发滑块验证，请使用 --headed 手动处理。';
+  }
+  return message.length > 300 ? message.slice(0, 300) : message;
+}
+
+function randomInt(min: number, max: number): number {
+  const lo = Math.min(min, max);
+  const hi = Math.max(min, max);
+  return Math.floor(lo + Math.random() * (hi - lo + 1));
+}
+
+// ---------- output ----------
+
 function printOffers(result: SearchResult): void {
   const { offers, keyword } = result;
+
+  // Search results header.
   if (offers.length === 0) {
     process.stdout.write(`No offers found for "${keyword}".\n`);
-    return;
+  } else {
+    const suffix =
+      result.sort !== 'relevance' || hasActiveFilters(result.filters)
+        ? ` (${offers.length}/${result.totalBeforeFilter}, sort=${result.sort})`
+        : '';
+    process.stdout.write(`Search results for "${keyword}"${suffix}:\n\n`);
+    const w = String(offers.length).length;
+    offers.forEach((o, i) => {
+      const idx = String(i + 1).padStart(w, ' ');
+      const price = o.price.text || '(n/a)';
+      process.stdout.write(`${idx}. ${o.title}\n`);
+      const pad = ' '.repeat(w + 2);
+      process.stdout.write(`${pad}${price}`);
+      if (o.turnover) process.stdout.write(`  ·  ${o.turnover}`);
+      process.stdout.write('\n');
+      const supBits = [
+        o.supplier.name,
+        o.supplier.years ? `${o.supplier.years}年` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      if (supBits) process.stdout.write(`${pad}${supBits}\n`);
+      process.stdout.write(`${pad}${o.url}\n`);
+      if (i < offers.length - 1) process.stdout.write('\n');
+    });
   }
-  const suffix =
-    result.sort !== 'relevance' || hasActiveFilters(result.filters)
-      ? ` (${offers.length}/${result.totalBeforeFilter}, sort=${result.sort})`
-      : '';
-  process.stdout.write(`Search results for "${keyword}"${suffix}:\n\n`);
-  const w = String(offers.length).length;
-  offers.forEach((o, i) => {
-    const idx = String(i + 1).padStart(w, ' ');
-    const price = o.price.text || '(n/a)';
-    process.stdout.write(`${idx}. ${o.title}\n`);
-    const pad = ' '.repeat(w + 2);
-    process.stdout.write(`${pad}${price}`);
-    if (o.turnover) process.stdout.write(`  ·  ${o.turnover}`);
-    process.stdout.write('\n');
-    const supBits = [
-      o.supplier.name,
-      o.supplier.years ? `${o.supplier.years}年` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ');
-    if (supBits) process.stdout.write(`${pad}${supBits}\n`);
-    process.stdout.write(`${pad}${o.url}\n`);
-    if (i < offers.length - 1) process.stdout.write('\n');
-  });
+
+  // DEEPPRO summary.
+  const dp = result.deeppro;
+  if (dp) {
+    process.stdout.write(
+      `\nDEEPPRO: ${dp.success}/${dp.total} valid` +
+        (dp.failed ? `, ${dp.failed} failed` : '') +
+        '\n',
+    );
+    if (dp.failures.length > 0) {
+      for (const f of dp.failures) {
+        process.stdout.write(
+          `  FAIL ${f.offerId}  ${f.code}  ${f.message.slice(0, 120)}\n`,
+        );
+      }
+    }
+  }
 }

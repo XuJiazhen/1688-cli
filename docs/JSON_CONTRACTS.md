@@ -142,6 +142,27 @@ the matching profile-scoped daemon status.
 }
 ```
 
+`search --deeppro` keeps the normal `search` fields and adds:
+
+```ts
+{
+  deeppro: {
+    enabled: true,
+    total: number,
+    success: number,
+    failed: number,
+    offerIds: string[],
+    offers: OfferResult[],
+    failures: Array<{
+      offerId: string,
+      code: string,
+      message: string,
+      attempts: number,
+    }>,
+  },
+}
+```
+
 `similar` uses this shape only when 1688's official same-product endpoint
 returns comparable offers. The command intentionally does not fall back to
 keyword or image search. When the official endpoint returns the current empty
@@ -441,6 +462,25 @@ CSV table.
   }>,
   mainImage: string | null,
   images: string[],
+}
+```
+
+When `offer` receives multiple IDs, it emits a batch envelope instead of the
+single-offer shape:
+
+```ts
+{
+  mode: "batch",
+  total: number,
+  success: number,
+  failed: number,
+  offerIds: string[],
+  offers: OfferResult[],
+  failures: Array<{
+    offerId: string,
+    code: string,
+    message: string,
+  }>,
 }
 ```
 

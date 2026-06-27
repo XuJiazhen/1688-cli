@@ -8,11 +8,13 @@ checkout -> tracking -> post-sale.
 ```bash
 1688 search <keyword>             # keyword search; --max N to limit
 1688 search <keyword> --sort best-selling --price-max 50 --exclude-ads
+1688 search <keyword> --deeppro   # search, then collect full offer details
 1688 search --headed              # open window if slider verification appears
 1688 research <keyword...>        # multi-keyword research, scoring, export
 1688 similar <offerId>            # official 1688 same-product entry point; currently may be unavailable
 1688 image-search <pathOrUrl>     # local .jpg/.png/.webp or http(s) URL
 1688 offer <offerId>              # product detail, SKUs, price tiers, package info
+1688 offer <offerId...> --pro     # batch details, bypassing daemon health pause
 1688 compare <offerId...>         # compare offer details for sourcing
 1688 supplier inspect <target>    # supplier/factory trust signals from offerId or b2b-* memberId
 1688 supplier search <keyword...> # supplier discovery from 1688 company search
@@ -30,7 +32,14 @@ Research-oriented `search` filters:
 --verified any|factory|business|super-factory
 --min-turnover <n>
 --exclude-ads
+--deeppro
+--deeppro-delay-min <seconds>
+--deeppro-delay-max <seconds>
 ```
+
+`--deeppro` preserves normal `search` output and adds a `deeppro` envelope
+containing full `offer` results plus per-offer failures. It runs inline with
+daemon bypass so a paused daemon does not block the deep collection chain.
 
 `research` adds:
 
