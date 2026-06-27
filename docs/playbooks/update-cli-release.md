@@ -12,6 +12,10 @@ postinstall changes, and update-notifier behavior.
    - Do not describe post-tag work as part of an already-published npm version.
 2. Check `package.json`, `README.md`, npm metadata, and update-notifier behavior
    in `src/cli.ts`.
+   - Keep translated root README files from matching npm's `README.*`
+     selector. Use a name such as `README_zh-CN.md` or place translations
+     under `docs/`, otherwise npm may publish the translation as the package
+     default README.
 3. Preserve the update protocol in `docs/SAFETY.md`: never run a global install
    command without explicit current-turn user approval.
 4. If daemon behavior changes after upgrade, document whether
@@ -69,6 +73,8 @@ postinstall changes, and update-notifier behavior.
    npm view 1688-cli@X.Y.Z readmeFilename version --registry https://registry.npmjs.org/ --json
    git ls-remote --tags origin refs/tags/vX.Y.Z
    ```
+
+   `readmeFilename` should be `README.md` unless intentionally changed.
 
 ## Omission Tracking
 

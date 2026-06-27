@@ -5,6 +5,17 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.1.47] - 2026-06-27
+
+### Fixed
+- Restored the npm package page to use the English `README.md` as the default
+  README by renaming the Chinese translation to `README_zh-CN.md`.
+
+### Docs
+- Added a release-check guard and release-omission record for npm README
+  filename selection, so future root-level translated README files do not
+  silently override the npm default README.
+
 ## [0.1.46] - 2026-06-27
 
 ### Added
