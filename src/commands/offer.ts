@@ -6,7 +6,14 @@ import { withRecovery } from '../session/recovery.js';
 import { sleep } from '../session/wait.js';
 import { parseMtop } from '../session/mtop.js';
 import { startResponseCapture } from '../session/response-capture.js';
+import { withIsolatedOperationPages } from '../session/page-lifecycle.js';
 import { debugTmpPath } from '../util/temp.js';
+import {
+  mapConsignmentPayload,
+  mapShopCardPayload,
+  type ConsignmentInfo,
+  type ShopCardInfo,
+} from '../session/offer-evidence.js';
 
 export interface OfferOpts {
   offerId?: string;
@@ -66,6 +73,10 @@ export interface OfferResult {
     memberId: string | null;
     userId: string | null;
   };
+  /** Structured evidence from mtop.1688.moga.pc.shopcard. */
+  shopCard: ShopCardInfo | null;
+  /** Structured evidence from offerPCConsignInfoService. */
+  consignment: ConsignmentInfo | null;
   freight: {
     receiveAddress: string | null;
     sendArea: string | null;
@@ -79,6 +90,12 @@ export interface OfferResult {
   skus: SkuVariant[];
   mainImage: string | null;
   images: string[];
+  sources: {
+    shopCardResponseObserved: boolean;
+    shopCardCaptured: boolean;
+    consignmentResponseObserved: boolean;
+    consignmentCaptured: boolean;
+  };
 }
 
 export interface PriceTier {
@@ -122,6 +139,8 @@ export interface SkuVariant {
 }
 
 const SKU_API_RE = /wosc\.queryofferskuselectormodel/i;
+const SHOPCARD_API_RE = /mtop\.1688\.moga\.pc\.shopcard/i;
+const OFFER_DETAIL_SERVICE_API_RE = /mtop\.1688\.mmga\.offerdetail\.service/i;
 let DETAIL_SEQ = 0;
 
 export async function execute(
@@ -131,11 +150,13 @@ export async function execute(
   if (!/^\d+$/.test(args.offerId)) {
     throw new CliError(2, 'BAD_INPUT', `Invalid offerId: ${args.offerId}`);
   }
-  return withRecovery(
-    ctx,
-    { cmd: 'offer', args },
-    () => executeRaw(ctx, args),
-    { headed: args.headed === true, maxRetries: 1 },
+  return withIsolatedOperationPages(ctx, () =>
+    withRecovery(
+      ctx,
+      { cmd: 'offer', args },
+      () => executeRaw(ctx, args),
+      { headed: args.headed === true, maxRetries: 1 },
+    ),
   );
 }
 
@@ -168,6 +189,29 @@ export async function executeRaw(
       );
       return json?.data?.skuSelectorBizModel ?? null;
     },
+  });
+  const shopCardCapture = startResponseCapture<{ value: ShopCardInfo | null }>({
+    page,
+    timeoutMs: 18000,
+    matcher: SHOPCARD_API_RE,
+    parse: async (resp) => ({
+      value: mapShopCardPayload(parseMtop(await resp.text())),
+    }),
+  });
+  const consignmentCapture = startResponseCapture<{
+    value: ConsignmentInfo | null;
+  }>({
+    page,
+    timeoutMs: 18000,
+    matcher: (resp) =>
+      OFFER_DETAIL_SERVICE_API_RE.test(resp.url()) &&
+      /offerPCConsignInfoService/i.test(resp.url()),
+    parse: async (resp) => ({
+      value: mapConsignmentPayload(
+        parseMtop(await resp.text()),
+        resp.url(),
+      ),
+    }),
   });
   const onResp = async (resp: PWResponse) => {
     // Probe: save every offerdetail.service response so we can see which
@@ -302,11 +346,29 @@ export async function executeRaw(
       );
     }
 
-    const sku = await skuCapture.wait();
-    const pageInfo = await readPageInfo(page);
-    return assemble(args.offerId, url, sku, pageInfo);
+    const [sku, shopCardResponse, consignmentResponse, pageInfo] =
+      await Promise.all([
+        skuCapture.wait(),
+        shopCardCapture.wait(),
+        consignmentCapture.wait(),
+        readPageInfo(page),
+      ]);
+    const shopCard = shopCardResponse?.value ?? null;
+    const consignment = consignmentResponse?.value ?? null;
+    return assemble(
+      args.offerId,
+      url,
+      sku,
+      pageInfo,
+      shopCard,
+      consignment,
+      shopCardResponse !== null,
+      consignmentResponse !== null,
+    );
   } finally {
     skuCapture.dispose();
+    shopCardCapture.dispose();
+    consignmentCapture.dispose();
     page.off('response', onResp);
   }
 }
@@ -440,8 +502,21 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         };
         tempModel?: TempModel;
       };
+      type SellerModel = {
+        companyName?: string;
+        loginId?: string;
+        memberId?: string;
+        userId?: number | string;
+      };
       const w = window as unknown as {
-        context?: { result?: { data?: OfferData } };
+        context?: {
+          result?: {
+            data?: OfferData;
+            global?: {
+              globalData?: { model?: { sellerModel?: SellerModel } };
+            };
+          };
+        };
         FE_GLOBALS?: {
           offerLoginId?: string;
           loginId?: string;
@@ -451,6 +526,8 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
       const d = w.context?.result?.data as Record<string, unknown> | undefined;
       if (!d) return null;
       const feg = w.FE_GLOBALS ?? {};
+      const seller =
+        w.context?.result?.global?.globalData?.model?.sellerModel ?? {};
 
       // description module — has detailUrl + leafCategoryId.
       const descFields = (d.description as {
@@ -602,10 +679,12 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         packageInfo,
         title: productTitle.title ?? gallery.subject ?? '',
         supplierName:
-          shop.companyName ?? shop.authCompanyName ?? null,
-        sellerLoginId: feg.offerLoginId ?? feg.loginId ?? null,
-        sellerMemberId: feg.memberId ?? null,
-        sellerUserId: null,
+          shop.companyName ?? shop.authCompanyName ?? seller.companyName ?? null,
+        sellerLoginId:
+          seller.loginId ?? feg.offerLoginId ?? feg.loginId ?? null,
+        sellerMemberId: seller.memberId ?? feg.memberId ?? null,
+        sellerUserId:
+          seller.userId != null ? String(seller.userId) : null,
         saledCount: null,
         mainImage: imgs[0] ?? null,
         images: imgs,
@@ -672,6 +751,10 @@ function assemble(
   url: string,
   sku: SkuBizModel | null,
   info: PageInfo,
+  shopCard: ShopCardInfo | null,
+  consignment: ConsignmentInfo | null,
+  shopCardResponseObserved: boolean,
+  consignmentResponseObserved: boolean,
 ): OfferResult {
   const priceRange = sku?.skuPriceScale ?? null;
   const { min: priceMin, max: priceMax } = parseRange(priceRange);
@@ -768,6 +851,8 @@ function assemble(
           ? String(sku.extraInfo.freightInfo.sellerUserId)
           : null),
     },
+    shopCard,
+    consignment,
     freight,
     saledCount:
       tradeSaleCount ??
@@ -780,6 +865,12 @@ function assemble(
     skus,
     mainImage: fallbackImage,
     images: info.images,
+    sources: {
+      shopCardResponseObserved,
+      shopCardCaptured: shopCard !== null,
+      consignmentResponseObserved,
+      consignmentCaptured: consignment !== null,
+    },
   };
 }
 
@@ -892,6 +983,21 @@ function printOffer(o: OfferResult): void {
   }
   if (o.supplier.name) {
     process.stdout.write(`  supplier: ${o.supplier.name}\n`);
+  }
+  if (o.shopCard?.badge?.label || o.shopCard?.mainCategoryName) {
+    process.stdout.write(
+      `  shop:     ${[
+        o.shopCard.badge?.label,
+        o.shopCard.mainCategoryName,
+      ].filter(Boolean).join(' · ')}\n`,
+    );
+  }
+  if (o.consignment) {
+    const price =
+      o.consignment.onePiecePrice !== null
+        ? ` · 1pc ¥${o.consignment.onePiecePrice}`
+        : '';
+    process.stdout.write(`  consign:  ${o.consignment.name ?? 'available'}${price}\n`);
   }
   if (o.freight.receiveAddress) {
     process.stdout.write(

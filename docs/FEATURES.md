@@ -13,7 +13,8 @@ Last updated: 2026-06-04
 | Search filters | Done | Added price range, province/city, verified supplier, minimum turnover/order count, and optional ad exclusion. |
 | `1688 research <keyword...>` | Done | Multi-keyword research records `sourceKeyword`, rank, demand signals, supplier trust signals, score, JSON/JSONL/CSV output. |
 | Top-N enrichment | Done | `research --enrich top:N` enriches only top N results through `offer` detail extraction. |
-| Supplier quality fields | Planned | Basic service tags, product badges, demand, and verification fields are additive; deeper trade-service scores still need reliable payload mapping. |
+| Supplier quality fields | Done | Search retains supplier/member IDs, direct badge images, trade-service scores, demand, service tags, and product/spec signals; offer detail adds structured shop-card metrics. |
+| Consignment evidence | Done | `offer` captures `offerPCConsignInfoService`, including mode, quantity/price, pickup rates, protections, actions, and supported channels. |
 | `1688 supplier inspect` | Done | Inspect supplier/factory trust signals from offerId or `b2b-*` memberId. loginId-only lookup is intentionally rejected until a deterministic resolver exists. |
 | `1688 supplier search` | Done | Supplier discovery now comes from 1688 company search (`companySearchBusinessService`) with GBK keyword encoding, not offer-result aggregation. |
 | `1688 supplier research` | Done | Scores company-search suppliers and optionally enriches top N via `supplier inspect`; supports JSONL/CSV export. |

@@ -404,10 +404,33 @@ export function scoreDetail(detail: OfferResult): SourcingScore {
       min: detail.priceMin,
       max: detail.priceMax,
     },
+    purchase: {
+      priceTiers: detail.priceTiers.map((tier) => ({
+        quantityText: String(tier.minQty),
+        minimumQuantity: tier.minQty,
+        price: tier.price,
+      })),
+      minimumQuantity: detail.minOrderQty,
+      onePieceEligible:
+        detail.minOrderQty === null ? null : detail.minOrderQty <= 1,
+    },
     supplier: {
       name: detail.supplier.name,
+      loginId: detail.supplier.loginId,
+      memberId: detail.supplier.memberId,
       shopUrl: null,
       years: null,
+      badgeImageUrl: detail.shopCard?.badge?.imageUrl ?? null,
+      tradeService: {
+        compositeScore: null,
+        consultationScore: null,
+        logisticsScore: null,
+        disputeScore: null,
+        returnScore: null,
+        goodsScore: null,
+        inspectionCreditUrl: null,
+        sameDesignUrl: null,
+      },
     },
     location: {
       province: detail.freight.province,
@@ -420,6 +443,7 @@ export function scoreDetail(detail: OfferResult): SourcingScore {
     turnover: detail.saledCount !== null ? String(detail.saledCount) : null,
     url: detail.url,
     image: detail.mainImage,
+    images: detail.images,
   };
   const scored = scoreOffer(pseudoOffer);
   const skuPoints = detail.skus.length >= 20 ? 5 : detail.skus.length >= 5 ? 3 : detail.skus.length > 0 ? 1 : 0;

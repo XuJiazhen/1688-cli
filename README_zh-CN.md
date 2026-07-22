@@ -219,6 +219,7 @@ node .\dist\cli.js search "修枝剪" --max 30 --deeppro --json --pretty
 ```
 
 - `--max` 控制深度采集的搜索结果数量。
+- `--page-delay-min` / `--page-delay-max` 控制搜索结果翻页间隔（默认 2–4 秒）。
 - `--deeppro` 为每个 offer 使用 pro inline 采集，绕过 daemon 健康暂停。
 - `--deeppro-delay-min` / `--deeppro-delay-max` 控制两次采集之间的等待时间（默认 6–10 秒）。
 - 每个 offer 最多尝试 3 次（1 次初始 + 2 次重试）。

@@ -65,10 +65,10 @@ describe('supplier inspect helpers', () => {
       },
     });
     expect(shopCard).toMatchObject({
-      companyName: '深圳狼途实业科技有限公司',
+      name: '深圳狼途实业科技有限公司',
       companyId: '37712893',
       companyLabel: '实力商家',
-      retentionRate: 0.4,
+      returnRate: 0.4,
       shopTags: ['ISO 9000认证', 'AAA诚信等级'],
     });
     expect(shopCard?.companyIcons[0]).toMatchObject({
@@ -112,6 +112,34 @@ describe('supplier inspect helpers', () => {
       employeeScale: '51~100人',
       workerCount: '12',
       tags: ['深圳数码', '来样加工'],
+    });
+  });
+
+  it('maps current shopcard data.model fields used by detail pages', () => {
+    const shopCard = mapShopCardPayload({
+      data: {
+        model: {
+          iconType: 'slsj',
+          mainCategoryName: '电动工具',
+          shopData: [
+            { dataKey: '店铺回头率', dataValue: '29%' },
+            { dataKey: '准时发货率', dataValue: '99%' },
+          ],
+          shopName: '南通发财树工具有限公司',
+          shopType: 'slsj',
+          shopUrl: 'https://tiaisjd.1688.com',
+          tpYear: 4,
+        },
+      },
+    });
+
+    expect(shopCard).toMatchObject({
+      name: '南通发财树工具有限公司',
+      badge: { code: 'slsj', label: '实力商家' },
+      mainCategoryName: '电动工具',
+      years: 4,
+      returnRate: 0.29,
+      onTimeDeliveryRate: 0.99,
     });
   });
 

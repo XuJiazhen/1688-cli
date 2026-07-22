@@ -13,12 +13,41 @@ import {
   scoreOffer,
 } from '../src/commands/sourcing-utils.js';
 
-function offer(partial: Partial<Offer> & { offerId: string }): Offer {
+function offer(
+  partial: Omit<Partial<Offer>, 'supplier'> & {
+    offerId: string;
+    supplier?: Partial<Offer['supplier']>;
+  },
+): Offer {
+  const supplier: Offer['supplier'] = {
+    name: '工厂',
+    loginId: null,
+    memberId: null,
+    shopUrl: null,
+    years: 3,
+    badgeImageUrl: null,
+    tradeService: {
+      compositeScore: null,
+      consultationScore: null,
+      logisticsScore: null,
+      disputeScore: null,
+      returnScore: null,
+      goodsScore: null,
+      inspectionCreditUrl: null,
+      sameDesignUrl: null,
+    },
+    ...partial.supplier,
+  };
   return {
     offerId: partial.offerId,
     title: partial.title ?? `Offer ${partial.offerId}`,
     price: partial.price ?? { text: '¥10', min: 10, max: 10 },
-    supplier: partial.supplier ?? { name: '工厂', shopUrl: null, years: 3 },
+    purchase: partial.purchase ?? {
+      priceTiers: [],
+      minimumQuantity: null,
+      onePieceEligible: null,
+    },
+    supplier,
     location: partial.location ?? { province: '广东', city: '深圳' },
     bizType: partial.bizType ?? null,
     verified:
@@ -31,6 +60,7 @@ function offer(partial: Partial<Offer> & { offerId: string }): Offer {
     turnover: partial.turnover ?? '100+',
     url: partial.url ?? `https://detail.1688.com/offer/${partial.offerId}.html`,
     image: partial.image ?? null,
+    images: partial.images ?? [],
   };
 }
 

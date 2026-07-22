@@ -108,6 +108,10 @@ the matching profile-scoped daemon status.
 
 ## `search`, `similar`, `image-search`
 
+Shop-card and consignment percentage fields described as decimal ratios use
+`0..1` (`0.96` means 96%). Search-list percentages retain the existing
+percentage-point convention (`26` means 26%) for compatibility.
+
 ```ts
 {
   keyword?: string,
@@ -121,23 +125,55 @@ the matching profile-scoped daemon status.
     offerId: string,
     title: string,
     price: { text: string, min: number | null, max: number | null },
-    supplier: { name: string | null, shopUrl: string | null, years: number | null },
+    purchase: {
+      priceTiers: Array<{
+        quantityText: string | null,
+        minimumQuantity: number | null,
+        price: number | null,
+      }>,
+      minimumQuantity: number | null,
+      onePieceEligible: boolean | null,
+    },
+    supplier: {
+      name: string | null,
+      loginId: string | null,
+      memberId: string | null,
+      shopUrl: string | null,
+      years: number | null,
+      badgeImageUrl: string | null,
+      tradeService: {
+        compositeScore: number | null,
+        consultationScore: number | null,
+        logisticsScore: number | null,
+        disputeScore: number | null,
+        returnScore: number | null,
+        goodsScore: number | null,
+        inspectionCreditUrl: string | null,
+        sameDesignUrl: string | null,
+      },
+    },
     location: { province: string | null, city: string | null },
     bizType: string | null,
     verified: { factory: boolean, business: boolean, superFactory: boolean },
     tags: string[],
     serviceTags?: string[],
     productBadges?: string[],
+    specHighlights?: string[],
     demand?: {
       orderCountText: string | null,
       orderCount: number | null,
       repurchaseRateText: string | null,
       repurchaseRate: number | null,
+      soldCountText: string | null,
+      soldCount: number | null,
+      shopReturnRateText: string | null,
+      shopReturnRate: number | null,
     },
     isP4P: boolean,
     turnover: string | null,
     url: string,
     image: string | null,
+    images: string[],
   }>
 }
 ```
@@ -288,6 +324,7 @@ Normal JSON result:
     shopTags: string[],
     serviceScores: Array<{ key: string, label: string, score: number | null }>,
   },
+  shopCard: ShopCardInfo | null,
   offers: { availableCount: number | null, source: "factory-card-dom" | null },
   sources: {
     offerUrl: string | null,
@@ -441,6 +478,8 @@ CSV table.
     memberId: string | null,
     userId: string | null,
   },
+  shopCard: ShopCardInfo | null,
+  consignment: ConsignmentInfo | null,
   freight: {
     receiveAddress: string | null,
     sendArea: string | null,
@@ -462,8 +501,100 @@ CSV table.
   }>,
   mainImage: string | null,
   images: string[],
+  sources: {
+    shopCardResponseObserved: boolean,
+    shopCardCaptured: boolean,
+    consignmentResponseObserved: boolean,
+    consignmentCaptured: boolean,
+  },
 }
 ```
+
+`ShopCardInfo` is shared by `offer` and `supplier inspect`:
+
+```ts
+{
+  name: string | null,
+  url: string | null,
+  shopType: string | null,
+  iconType: string | null,
+  badge: { code: string, label: string | null, imageUrl: string | null } | null,
+  mainCategoryName: string | null,
+  years: number | null,
+  attention: {
+    isFollowing: boolean | null,
+    followersText: string | null,
+    operationType: string | null,
+  },
+  metrics: Array<{
+    key: string,
+    valueText: string | null,
+    value: number | null,
+    unit: string | null,
+  }>,
+  returnRate: number | null,
+  serviceScore: number | null,
+  onTimeDeliveryRate: number | null,
+  positiveReviewRate: number | null,
+  companyId: string | null,
+  companyLabel: string | null,
+  companyIcons: Array<{ title: string, link: string | null }>,
+  shopTags: string[],
+  factoryCardUrl: string | null,
+  factoryAuthText: string | null,
+  serviceScores: Array<{ key: string, label: string, score: number | null }>,
+}
+```
+
+Known shop-card badge codes are mapped to labels and canonical image URLs.
+Unknown codes are preserved in `badge.code` with nullable label/image fields;
+the mapper does not assume the current badge list is exhaustive.
+
+`ConsignmentInfo` comes from `offerPCConsignInfoService`:
+
+```ts
+{
+  name: string | null,
+  offerFlags: Record<string, boolean>,
+  metrics: Array<{ key: string, name: string | null, valueText: string | null }>,
+  orderCount30dText: string | null,
+  orderCount7dText: string | null,
+  delivery24hRate: number | null,
+  delivery48hRate: number | null,
+  downstreamListingCountText: string | null,
+  distributorCountText: string | null,
+  offerPublishedAtText: string | null,
+  prices: Array<{
+    text: string | null,
+    price: number | null,
+    minimumQuantity: number | null,
+  }>,
+  minimumQuantity: number | null,
+  onePieceEligible: boolean | null,
+  onePiecePrice: number | null,
+  operations: Array<{
+    name: string | null,
+    operationType: string | null,
+    displayStatus: string | null,
+    buttonType: string | null,
+    displayType: string | null,
+    imageUrl: string | null,
+    backgroundColor: string | null,
+  }>,
+  protections: Array<{
+    serviceName: string | null,
+    description: string | null,
+    actions: Array<{ text: string | null, url: string | null, appUrl: string | null }>,
+  }>,
+  supportedChannels: Array<{ name: string | null, iconUrl: string | null }>,
+}
+```
+
+Fuzzy counts such as `100以内` remain text rather than being promoted to an
+exact count. Unknown consignment names and operation codes are preserved.
+`offerFlags` preserves boolean page-model signals observed in the card request
+(for example `isOnePsale`, `isCrossBorderOffer`, or customization flags); these
+are page evidence, not a substitute for supplier confirmation.
 
 When `offer` receives multiple IDs, it emits a batch envelope instead of the
 single-offer shape:

@@ -6,6 +6,13 @@ import { parseMtopJsonp } from '../session/mtop.js';
 import { startResponseCapture } from '../session/response-capture.js';
 import { withRecovery } from '../session/recovery.js';
 import { sleep } from '../session/wait.js';
+import {
+  mapShopCardPayload as mapSharedShopCardPayload,
+  type ShopCardInfo,
+  type SupplierServiceScore,
+} from '../session/offer-evidence.js';
+
+export type { SupplierServiceScore } from '../session/offer-evidence.js';
 
 const SHOPCARD_API_RE = /mtop\.1688\.moga\.pc\.shopcard/i;
 const FACTORY_CARD_API_RE =
@@ -27,12 +34,6 @@ export interface SupplierTarget {
   type: 'offerId' | 'memberId';
   offerId: string | null;
   memberId: string | null;
-}
-
-export interface SupplierServiceScore {
-  key: string;
-  label: string;
-  score: number | null;
 }
 
 export interface SupplierInspectResult {
@@ -71,6 +72,7 @@ export interface SupplierInspectResult {
     shopTags: string[];
     serviceScores: SupplierServiceScore[];
   };
+  shopCard: ShopCardInfo | null;
   offers: {
     availableCount: number | null;
     source: 'factory-card-dom' | null;
@@ -95,17 +97,7 @@ interface OfferSupplierData {
   shopUrls: Record<string, string>;
 }
 
-interface ShopCardData {
-  companyName: string | null;
-  companyId: string | null;
-  companyLabel: string | null;
-  retentionRate: number | null;
-  companyIcons: Array<{ title: string; link: string | null }>;
-  shopTags: string[];
-  factoryCardUrl: string | null;
-  factoryAuthText: string | null;
-  serviceScores: SupplierServiceScore[];
-}
+type ShopCardData = ShopCardInfo;
 
 interface FactoryCardData {
   name: string | null;
@@ -443,48 +435,7 @@ function parseTargetUrl(input: string): SupplierTarget | null {
 }
 
 export function mapShopCardPayload(payload: unknown): ShopCardData | null {
-  const data = objectAt(payload, ['data']);
-  if (!data) return null;
-  const factoryInfo = objectAt(data, ['factoryInfo']);
-  const shopProperty = objectAt(factoryInfo, ['shopProperty']);
-  const appData = objectAt(data, ['appData']);
-  const lindormData = objectAt(data, ['lindormDataModel']);
-  const serviceRaw =
-    arrayAt(appData, ['serviceList']) ?? arrayAt(lindormData, ['serviceStarList']) ?? [];
-
-  const mapped = {
-    companyName: stringOrNull(data.companyName),
-    companyId: stringOrNull(data.companyId),
-    companyLabel: stringOrNull(data.companyLabel),
-    retentionRate: numberOrNull(data.retentionRate),
-    companyIcons: arrayAt(data, ['companyIcons'])
-      .map((item) => ({
-        title: stringOrNull((item as { title?: unknown }).title) ?? '',
-        link: normalizeUrl(stringOrNull((item as { link?: unknown }).link)),
-      }))
-      .filter((item) => item.title),
-    shopTags: arrayAt(factoryInfo, ['shopTag'])
-      .map((item) => stringOrNull((item as { text?: unknown }).text))
-      .filter((text): text is string => text !== null),
-    factoryCardUrl: normalizeUrl(
-      stringOrNull(shopProperty?.pcLinkUrl) ?? stringOrNull(shopProperty?.linkUrl),
-    ),
-    factoryAuthText: stringOrNull(shopProperty?.authText),
-    serviceScores: serviceRaw.map(mapServiceScore).filter((score) => score.key),
-  };
-  if (
-    !mapped.companyName &&
-    !mapped.companyId &&
-    !mapped.companyLabel &&
-    mapped.companyIcons.length === 0 &&
-    mapped.shopTags.length === 0 &&
-    !mapped.factoryCardUrl &&
-    !mapped.factoryAuthText &&
-    mapped.serviceScores.length === 0
-  ) {
-    return null;
-  }
-  return mapped;
+  return mapSharedShopCardPayload(payload);
 }
 
 export function mapFactoryCardPayload(payload: unknown): FactoryCardData | null {
@@ -562,7 +513,7 @@ export function assembleSupplierInspectResult(input: {
   return {
     target: input.target,
     supplier: {
-      name: factory?.name ?? offerSeller?.name ?? shopCard?.companyName ?? null,
+      name: factory?.name ?? offerSeller?.name ?? shopCard?.name ?? null,
       loginId: factory?.loginId ?? offerSeller?.loginId ?? null,
       memberId: factory?.memberId ?? offerSeller?.memberId ?? input.target.memberId,
       userId: offerSeller?.userId ?? null,
@@ -597,11 +548,12 @@ export function assembleSupplierInspectResult(input: {
     },
     trust: {
       companyLabel: shopCard?.companyLabel ?? null,
-      retentionRate: shopCard?.retentionRate ?? null,
+      retentionRate: shopCard?.returnRate ?? null,
       companyIcons: shopCard?.companyIcons ?? [],
       shopTags,
       serviceScores: shopCard?.serviceScores ?? [],
     },
+    shopCard,
     offers: {
       availableCount,
       source: availableCount !== null ? 'factory-card-dom' : null,
@@ -707,27 +659,6 @@ function booleanRecordFromSellerSign(raw: unknown): Record<string, boolean> {
     }
   }
   return out;
-}
-
-function mapServiceScore(raw: unknown): SupplierServiceScore {
-  const rec = raw && typeof raw === 'object' ? raw as Record<string, unknown> : {};
-  const key = stringOrNull(rec.serviceKey) ?? '';
-  return {
-    key,
-    label: serviceScoreLabel(key),
-    score: numberOrNull(rec.score),
-  };
-}
-
-function serviceScoreLabel(key: string): string {
-  const labels: Record<string, string> = {
-    cst_group_value_new: 'response',
-    lgt_group_value_new: 'logistics',
-    dspt_group_value: 'dispute',
-    goods_group_value: 'goods',
-    rdf_group_value_new: 'repurchase',
-  };
-  return labels[key] ?? key;
 }
 
 function objectAt(

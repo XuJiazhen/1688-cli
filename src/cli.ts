@@ -54,6 +54,8 @@ program
   .option('--verified <kind>', 'Filter: any | factory | business | super-factory', 'any')
   .option('--min-turnover <n>', 'Minimum parsed turnover/order count')
   .option('--exclude-ads', 'Exclude P4P/ad results')
+  .option('--page-delay-min <seconds>', 'Minimum pause between search result pages', '2')
+  .option('--page-delay-max <seconds>', 'Maximum pause between search result pages', '4')
   .option('--deeppro', 'After search, deep collect each offer using pro inline mode (retry up to 3x)')
   .option('--deeppro-delay-min <seconds>', 'Minimum delay between deeppro offer collections', '6')
   .option('--deeppro-delay-max <seconds>', 'Maximum delay between deeppro offer collections', '10')

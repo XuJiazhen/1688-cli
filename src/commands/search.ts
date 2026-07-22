@@ -41,6 +41,8 @@ export interface SearchOpts {
   verified?: string;
   minTurnover?: string;
   excludeAds?: boolean;
+  pageDelayMin?: string;
+  pageDelayMax?: string;
   deeppro?: boolean;
   deepproDelayMin?: string;
   deepproDelayMax?: string;
@@ -54,6 +56,8 @@ export interface SearchArgs {
   sort?: SearchSort;
   filters?: SearchFilterSummary;
   headed?: boolean;
+  pageDelayMin?: number;
+  pageDelayMax?: number;
 }
 
 export interface DeepProFailure {
@@ -104,6 +108,8 @@ export async function execute(
         args.headed === true,
         fetchMax,
         sort,
+        args.pageDelayMin ?? 2,
+        args.pageDelayMax ?? 4,
       );
       const controlled = applySearchControls(offers, sort, filters);
       const slice = controlled.slice(0, args.max);
@@ -127,6 +133,11 @@ export async function run(keyword: string, opts: SearchOpts): Promise<void> {
   }
   const max = parsePositiveInt(opts.max, '--max', 20, PAGE_SIZE * MAX_PAGES);
   const sort = normalizeSearchSort(opts.sort);
+  const pageDelayMin = parsePositiveInt(opts.pageDelayMin, '--page-delay-min', 2, 120);
+  const pageDelayMax = parsePositiveInt(opts.pageDelayMax, '--page-delay-max', 4, 120);
+  if (pageDelayMin > pageDelayMax) {
+    throw new CliError(2, 'BAD_INPUT', '--page-delay-min must not exceed --page-delay-max.');
+  }
   const filters = normalizeFilters({
     priceMin: parseOptionalNumber(opts.priceMin, '--price-min'),
     priceMax: parseOptionalNumber(opts.priceMax, '--price-max'),
@@ -141,7 +152,15 @@ export async function run(keyword: string, opts: SearchOpts): Promise<void> {
   // can't block the search before deep collection even starts.
   const data = await dispatch<SearchArgs, SearchResult>(
     'search',
-    { keyword: kw, max, sort, filters, headed: opts.headed },
+    {
+      keyword: kw,
+      max,
+      sort,
+      filters,
+      headed: opts.headed,
+      pageDelayMin,
+      pageDelayMax,
+    },
     { headed: opts.headed, profile: opts.profile, noDaemon: opts.deeppro === true },
   );
 
@@ -177,11 +196,11 @@ export const SEARCH_WARMUP_URL = 'https://www.1688.com/';
 // 1688 search returns 60 offers per page. `--max` auto-paginates by
 // clicking the in-page "next" arrow (which keeps the search-context
 // `pageId` stable — see fetchSearch for why that matters). MAX_PAGES caps
-// it: each extra page is another click + mtop round-trip (~3-5s) and a bit
-// more WAF exposure, so we stop at 10 pages (600 results) even if --max
-// asks for more.
+// it: each extra page is another click + mtop round-trip and additional WAF
+// exposure. Twenty pages allow a 1,000-result organic snapshot after P4P ads
+// are filtered while retaining a finite upper bound.
 const PAGE_SIZE = 60;
-const MAX_PAGES = 10;
+const MAX_PAGES = 20;
 
 export { parseMtopJsonp };
 
@@ -193,6 +212,8 @@ async function fetchSearch(
   headed: boolean,
   maxResults: number,
   sort: SearchSort,
+  pageDelayMin: number,
+  pageDelayMax: number,
 ): Promise<Offer[]> {
   const page = await ctx.newPage();
 
@@ -471,6 +492,9 @@ async function fetchSearch(
           info(`Fetching page ${pageNum}/${pagesWanted}...`);
           const advanced = await clickSearchNextPage(page).catch(() => false);
           if (!advanced) {
+            if (process.env.BB1688_PROBE === '1') {
+              await capturePaginationProbe(page, pageNum, allOffers.length);
+            }
             info(`Could not advance to page ${pageNum} — stopping at ${allOffers.length} results.`);
             throw new PageAdvanceStopped();
           }
@@ -506,7 +530,18 @@ async function fetchSearch(
       if (!got) await detectLoginRedirect(page);
     }
     if (!got) {
-      if (pageNum === 1) {
+      if (process.env.BB1688_PROBE === '1') {
+        await capturePaginationProbe(page, pageNum, allOffers.length);
+      }
+      const failure = classifyUncapturedSearchPage(
+        pageNum,
+        page.url(),
+        await isBlocked(page, 1),
+      );
+      if (failure === 'not_logged_in') {
+        await detectLoginRedirect(page);
+      }
+      if (failure === 'risk_control') {
         throw riskControlError(headed);
       }
       info(
@@ -536,13 +571,59 @@ async function fetchSearch(
     if (capturedOffers.length < PAGE_SIZE) break;
     if (added === 0) break;
 
-    // Human-like jitter between page clicks to keep the WAF score low.
+    // Configurable pacing makes long search snapshots reproducible and lets
+    // callers record the exact browsing cadence used for a risk-control run.
     if (pageNum < pagesWanted) {
-      await sleep(1500 + Math.random() * 2000);
+      await sleep(randomInt(pageDelayMin * 1000, pageDelayMax * 1000));
     }
   }
 
   return allOffers;
+}
+
+async function capturePaginationProbe(
+  page: Page,
+  requestedPage: number,
+  collectedOffers: number,
+): Promise<void> {
+  const fs = await import('node:fs/promises');
+  const elements = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('a,button,[role="button"],[class*="page"],[class*="next"]'))
+      .map((element) => {
+        const node = element as HTMLElement;
+        const rect = node.getBoundingClientRect();
+        return {
+          tag: node.tagName,
+          className: String(node.className || ''),
+          text: String(node.innerText || node.textContent || '').trim().slice(0, 120),
+          ariaLabel: node.getAttribute('aria-label'),
+          title: node.getAttribute('title'),
+          href: node instanceof HTMLAnchorElement ? node.href : null,
+          disabled: node instanceof HTMLButtonElement ? node.disabled : node.getAttribute('aria-disabled'),
+          visible: rect.width > 0 && rect.height > 0,
+          outerHTML: node.outerHTML.slice(0, 500),
+        };
+      })
+      .filter((item) =>
+        /page|next|下一页|后一页|fui-arrow/i.test(
+          `${item.className} ${item.text} ${item.ariaLabel} ${item.title}`,
+        ),
+      ),
+  );
+  const stem = `1688-pagination-page-${requestedPage}-after-${collectedOffers}`;
+  const jsonPath = debugTmpPath(`${stem}.json`);
+  const htmlPath = debugTmpPath(`${stem}.html`);
+  const screenshotPath = debugTmpPath(`${stem}.png`);
+  await fs.writeFile(jsonPath, JSON.stringify({
+    url: page.url(),
+    title: await page.title().catch(() => ''),
+    requestedPage,
+    collectedOffers,
+    elements,
+  }, null, 2));
+  await fs.writeFile(htmlPath, await page.content());
+  await page.screenshot({ path: screenshotPath, fullPage: true }).catch(() => {});
+  process.stderr.write(`[probe] saved ${jsonPath}, ${htmlPath}, ${screenshotPath}\n`);
 }
 
 export function buildSearchUrl(keyword: string, sort: SearchSort): string {
@@ -834,6 +915,16 @@ function isLoginRedirectUrl(url: string): boolean {
   return /login\.1688\.com|login\.taobao\.com/.test(url);
 }
 
+export function classifyUncapturedSearchPage(
+  pageNum: number,
+  url: string,
+  blocked: boolean,
+): 'not_logged_in' | 'risk_control' | 'partial' {
+  if (isLoginRedirectUrl(url)) return 'not_logged_in';
+  if (pageNum === 1 || blocked) return 'risk_control';
+  return 'partial';
+}
+
 export async function extractOffers(page: Page): Promise<Offer[]> {
   return page.evaluate(() => {
     // Selector list for offer-detail anchors. URL patterns are far more
@@ -928,8 +1019,21 @@ export async function extractOffers(page: Page): Promise<Offer[]> {
 
     function extractSupplier(card: HTMLElement): {
       name: string | null;
+      loginId: string | null;
+      memberId: string | null;
       shopUrl: string | null;
       years: number | null;
+      badgeImageUrl: string | null;
+      tradeService: {
+        compositeScore: number | null;
+        consultationScore: number | null;
+        logisticsScore: number | null;
+        disputeScore: number | null;
+        returnScore: number | null;
+        goodsScore: number | null;
+        inspectionCreditUrl: string | null;
+        sameDesignUrl: string | null;
+      };
     } {
       // 1688 supplier shops use subdomains like shop4c1183j536987.1688.com,
       // winportXXXX.1688.com, or qm.1688.com/winport/...
@@ -947,7 +1051,24 @@ export async function extractOffers(page: Page): Promise<Offer[]> {
       const text = card.textContent ?? '';
       const ym = text.match(/(\d{1,2})\s*年/);
       const years = ym ? parseInt(ym[1]!, 10) : null;
-      return { name, shopUrl, years };
+      return {
+        name,
+        loginId: null,
+        memberId: null,
+        shopUrl,
+        years,
+        badgeImageUrl: null,
+        tradeService: {
+          compositeScore: null,
+          consultationScore: null,
+          logisticsScore: null,
+          disputeScore: null,
+          returnScore: null,
+          goodsScore: null,
+          inspectionCreditUrl: null,
+          sameDesignUrl: null,
+        },
+      };
     }
 
     const anchors = Array.from(
@@ -975,6 +1096,11 @@ export async function extractOffers(page: Page): Promise<Offer[]> {
         offerId,
         title,
         price,
+        purchase: {
+          priceTiers: [],
+          minimumQuantity: null,
+          onePieceEligible: null,
+        },
         supplier,
         location: { province: null, city: null },
         bizType: null,
@@ -984,6 +1110,7 @@ export async function extractOffers(page: Page): Promise<Offer[]> {
         turnover: null,
         url: `https://detail.m.1688.com/page/index.html?offerId=${offerId}`,
         image,
+        images: image ? [image] : [],
       });
     }
 

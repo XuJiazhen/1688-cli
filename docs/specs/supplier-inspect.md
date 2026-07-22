@@ -40,6 +40,12 @@ Direct `loginId` factory-card lookup is not reliable. A probe with
 `loginId=<sellerLoginId>` returned a different factory, so V1 must reject
 loginId-only input with a clear error instead of returning possibly wrong data.
 
+Samples confirmed on 2026-07-22 show the current shop-card payload under
+`data.model`. It exposes `iconType`, main category, shop years, follower state,
+return rate, service score, on-time delivery rate, and positive review rate.
+Known badge codes are mapped for convenience, while unknown codes remain in
+the output rather than being rejected.
+
 ## Command
 
 ```bash
@@ -108,6 +114,7 @@ Options:
     shopTags: string[],
     serviceScores: Array<{ key: string; label: string; score: number | null }>,
   },
+  shopCard: ShopCardInfo | null,
   offers: {
     availableCount: number | null,
     source: "factory-card-dom" | null,
@@ -122,8 +129,10 @@ Options:
 }
 ```
 
-All fields are additive and nullable. Missing values mean the current page or
-payload did not expose the signal.
+`ShopCardInfo` is defined in `docs/JSON_CONTRACTS.md`. All fields are additive
+and nullable. Missing values mean the current page or payload did not expose
+the signal. Shop-card percentage metrics are decimal ratios (`0.99` means
+99%).
 
 ## Failure Semantics
 

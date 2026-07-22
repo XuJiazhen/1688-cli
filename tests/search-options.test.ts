@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   SEARCH_WARMUP_URL,
   buildSearchUrl,
+  classifyUncapturedSearchPage,
   shouldUseMainSiteSearchSubmit,
 } from '../src/commands/search.js';
 
@@ -28,5 +29,15 @@ describe('search options', () => {
     expect(shouldUseMainSiteSearchSubmit('best-selling')).toBe(false);
     expect(shouldUseMainSiteSearchSubmit('price-asc')).toBe(false);
     expect(shouldUseMainSiteSearchSubmit('price-desc')).toBe(false);
+  });
+
+  it('treats a deep-page login redirect as authentication failure, not partial success', () => {
+    expect(
+      classifyUncapturedSearchPage(
+        4,
+        'https://login.taobao.com/?redirect_url=https%3A%2F%2Fs.1688.com',
+        false,
+      ),
+    ).toBe('not_logged_in');
   });
 });

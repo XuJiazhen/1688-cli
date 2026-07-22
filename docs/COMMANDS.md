@@ -13,7 +13,7 @@ checkout -> tracking -> post-sale.
 1688 research <keyword...>        # multi-keyword research, scoring, export
 1688 similar <offerId>            # official 1688 same-product entry point; currently may be unavailable
 1688 image-search <pathOrUrl>     # local .jpg/.png/.webp or http(s) URL
-1688 offer <offerId>              # product detail, SKUs, price tiers, package info
+1688 offer <offerId>              # product, SKU, shop-card, and consignment evidence
 1688 offer <offerId...> --pro     # batch details, bypassing daemon health pause
 1688 compare <offerId...>         # compare offer details for sourcing
 1688 supplier inspect <target>    # supplier/factory trust signals from offerId or b2b-* memberId
@@ -32,6 +32,8 @@ Research-oriented `search` filters:
 --verified any|factory|business|super-factory
 --min-turnover <n>
 --exclude-ads
+--page-delay-min <seconds>
+--page-delay-max <seconds>
 --deeppro
 --deeppro-delay-min <seconds>
 --deeppro-delay-max <seconds>
@@ -40,6 +42,12 @@ Research-oriented `search` filters:
 `--deeppro` preserves normal `search` output and adds a `deeppro` envelope
 containing full `offer` results plus per-offer failures. It runs inline with
 daemon bypass so a paused daemon does not block the deep collection chain.
+
+Search results retain listing-level supplier IDs, direct shop badge image
+URLs, trade-service scores, displayed sales/repurchase signals, service tags,
+and specification highlights. `offer` additionally captures the detail-page
+shop card and `offerPCConsignInfoService`, including one-piece eligibility,
+consignment price, pickup rates, protections, and supported channels.
 
 `research` adds:
 
