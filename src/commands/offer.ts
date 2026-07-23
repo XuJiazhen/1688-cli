@@ -5,7 +5,10 @@ import { CliError } from '../io/errors.js';
 import { withRecovery } from '../session/recovery.js';
 import { sleep } from '../session/wait.js';
 import { parseMtop } from '../session/mtop.js';
-import { startResponseCapture } from '../session/response-capture.js';
+import {
+  startResponseCapture,
+  type ResponseCaptureDiagnostics,
+} from '../session/response-capture.js';
 import { withIsolatedOperationPages } from '../session/page-lifecycle.js';
 import { debugTmpPath } from '../util/temp.js';
 import {
@@ -376,12 +379,16 @@ export async function executeRaw(
         detailMediaCapture.wait(),
         readPageInfo(page),
       ]);
+    const requiredSku = requireSkuSelectorModel(
+      selectSkuSelectorModel(sku, pageInfo.skuModel),
+      skuCapture.diagnostics(),
+    );
     const shopCard = shopCardResponse?.value ?? null;
     const consignment = consignmentResponse?.value ?? null;
     return assemble(
       args.offerId,
       url,
-      sku,
+      requiredSku,
       pageInfo,
       shopCard,
       consignment,
@@ -399,12 +406,33 @@ export async function executeRaw(
   }
 }
 
-interface SkuBizModel {
+export function requireSkuSelectorModel(
+  model: SkuBizModel | null,
+  diagnostics: ResponseCaptureDiagnostics,
+): SkuBizModel {
+  if (model !== null) return model;
+  throw new CliError(
+    9,
+    'OFFER_SKU_CAPTURE_INCOMPLETE',
+    'Required SKU selector response was not captured.',
+    {
+      category: 'offer-capture',
+      retryable: true,
+      matchedCount: diagnostics.matchedCount,
+      parsedCount: diagnostics.parsedCount,
+      emptyResultCount: diagnostics.emptyResultCount,
+      failureCount: diagnostics.failureCount,
+      timedOut: diagnostics.timedOut,
+    },
+  );
+}
+
+export interface SkuBizModel {
   skuProps?: { prop?: string; value?: { name?: string; imageUrl?: string }[] }[];
   skuInfoMap?: Record<
     string,
     {
-      skuId?: string;
+      skuId?: string | number;
       specAttrs?: string;
       price?: string;
       discountPrice?: string;
@@ -435,6 +463,148 @@ interface SkuBizModel {
   };
 }
 
+export interface ContextSkuModels {
+  skuModel?: unknown;
+  skuModelOrigin?: unknown;
+  tradeModel?: unknown;
+}
+
+export function mapContextSkuBizModel(
+  input: ContextSkuModels,
+): SkuBizModel | null {
+  for (const candidate of [input.skuModel, input.skuModelOrigin]) {
+    const mapped = mapContextSkuCandidate(candidate, input.tradeModel);
+    if (mapped !== null) return mapped;
+  }
+  return null;
+}
+
+export function selectSkuSelectorModel(
+  captured: SkuBizModel | null,
+  contextFallback: SkuBizModel | null,
+): SkuBizModel | null {
+  return captured ?? contextFallback;
+}
+
+function mapContextSkuCandidate(
+  candidate: unknown,
+  rawTradeModel: unknown,
+): SkuBizModel | null {
+  const source = asRecord(candidate);
+  const rawSkuInfoMap = asRecord(source?.skuInfoMap);
+  if (!source || !rawSkuInfoMap) return null;
+
+  const trade = asRecord(rawTradeModel);
+  const tradeSkus = new Map<string, Record<string, unknown>>();
+  const rememberTradeSkus = (value: unknown) => {
+    if (!Array.isArray(value)) return;
+    for (const item of value) {
+      const row = asRecord(item);
+      const skuId = scalarString(row?.skuId);
+      if (row && skuId) tradeSkus.set(skuId, row);
+    }
+  };
+  rememberTradeSkus(asRecord(trade?.tradeWithoutPromotion)?.skuMapOriginal);
+  rememberTradeSkus(trade?.skuMap);
+
+  const skuInfoMap: NonNullable<SkuBizModel['skuInfoMap']> = {};
+  for (const [key, value] of Object.entries(rawSkuInfoMap)) {
+    const row = asRecord(value);
+    const skuId = scalarString(row?.skuId);
+    if (!row || !skuId) continue;
+    const tradeRow = tradeSkus.get(skuId);
+    const mapped = {
+      skuId,
+      specAttrs: scalarString(row.specAttrs) ?? key,
+      price: scalarString(row.price),
+      discountPrice: scalarString(row.discountPrice),
+      multiPrice: scalarString(row.multiPrice),
+      canBookCount:
+        scalarString(tradeRow?.canBookCount) ??
+        scalarString(row.canBookCount),
+      saleCount: numericScalar(tradeRow?.saleCount ?? row.saleCount),
+    };
+    skuInfoMap[key] = mapped;
+  }
+  if (Object.keys(skuInfoMap).length === 0) return null;
+
+  const skuProps = Array.isArray(source.skuProps)
+    ? source.skuProps.flatMap((value) => {
+        const prop = asRecord(value);
+        const propName = scalarString(prop?.prop);
+        if (!prop || !propName) return [];
+        const values = Array.isArray(prop.value)
+          ? prop.value.flatMap((item) => {
+              const option = asRecord(item);
+              const name = scalarString(option?.name);
+              if (!option || !name) return [];
+              const imageUrl = scalarString(option.imageUrl);
+              return [{ name, ...(imageUrl ? { imageUrl } : {}) }];
+            })
+          : [];
+        return [{ prop: propName, value: values }];
+      })
+    : [];
+
+  const currentPrices = Array.isArray(
+    asRecord(trade?.offerPriceModel)?.currentPrices,
+  )
+    ? (
+        asRecord(trade?.offerPriceModel)!.currentPrices as unknown[]
+      ).flatMap((value) => {
+        const row = asRecord(value);
+        const beginAmount = numericScalar(row?.beginAmount);
+        const price = numericScalar(row?.price);
+        return beginAmount === undefined || price === undefined
+          ? []
+          : [{ beginAmount, price }];
+      })
+    : [];
+  const mixAmount = numericScalar(asRecord(trade?.mixModel)?.mixAmount);
+  const tradeModel = trade
+    ? {
+        beginAmount: numericScalar(trade.beginAmount),
+        saleCount: numericScalar(trade.saleCount),
+        unit: scalarString(trade.unit),
+        ...(mixAmount === undefined
+          ? {}
+          : { mixModel: { mixAmount } }),
+        ...(currentPrices.length === 0
+          ? {}
+          : { offerPriceModel: { currentPrices } }),
+      }
+    : undefined;
+
+  return {
+    skuInfoMap,
+    skuProps,
+    ...(typeof source.skuPriceScale === 'string'
+      ? { skuPriceScale: source.skuPriceScale }
+      : {}),
+    ...(tradeModel ? { skuSelectorModel: { tradeModel } } : {}),
+  };
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function scalarString(value: unknown): string | undefined {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const normalized = String(value).trim();
+  return normalized || undefined;
+}
+
+function numericScalar(value: unknown): number | string | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : typeof value === 'string' && value.trim()
+      ? value
+      : undefined;
+}
+
 interface PageInfo {
   title: string;
   supplierName: string | null;
@@ -451,6 +621,7 @@ interface PageInfo {
   detailUrl: string | null;
   attributes: ProductAttribute[];
   packageInfo: SkuPackage[];
+  skuModel: SkuBizModel | null;
 }
 
 /**
@@ -539,7 +710,12 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
           result?: {
             data?: OfferData;
             global?: {
-              globalData?: { model?: { sellerModel?: SellerModel } };
+              globalData?: {
+                model?: {
+                  sellerModel?: SellerModel;
+                  tradeModel?: unknown;
+                };
+              };
             };
           };
         };
@@ -552,8 +728,20 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
       const d = w.context?.result?.data as Record<string, unknown> | undefined;
       if (!d) return null;
       const feg = w.FE_GLOBALS ?? {};
-      const seller =
-        w.context?.result?.global?.globalData?.model?.sellerModel ?? {};
+      const globalModel =
+        w.context?.result?.global?.globalData?.model ?? {};
+      const seller = globalModel.sellerModel ?? {};
+      const skuDataJson =
+        (
+          d.Root as {
+            fields?: {
+              dataJson?: {
+                skuModel?: unknown;
+                skuModelOrigin?: unknown;
+              };
+            };
+          }
+        )?.fields?.dataJson ?? {};
 
       // description module — has detailUrl + leafCategoryId.
       const descFields = (d.description as {
@@ -700,6 +888,11 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
           ? String(descFields.leafCategoryId)
           : null;
       return {
+        skuContext: {
+          skuModel: skuDataJson.skuModel,
+          skuModelOrigin: skuDataJson.skuModelOrigin,
+          tradeModel: globalModel.tradeModel,
+        },
         detailUrl: descFields.detailUrl ?? null,
         attributes,
         packageInfo,
@@ -730,7 +923,12 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     const raw = await page.title();
     title = raw.replace(/\s*-\s*阿里巴巴\s*$/, '').trim();
   }
-  return { ...fromContext, title };
+  const { skuContext, ...pageInfo } = fromContext;
+  return {
+    ...pageInfo,
+    title,
+    skuModel: mapContextSkuBizModel(skuContext),
+  };
 }
 
 async function scrapeDomFallback(page: Page): Promise<PageInfo> {
@@ -769,6 +967,7 @@ async function scrapeDomFallback(page: Page): Promise<PageInfo> {
     detailUrl: null,
     attributes: [],
     packageInfo: [],
+    skuModel: null,
   };
 }
 
@@ -823,7 +1022,7 @@ function assemble(
           ? v.saleCount
           : parseIntOrNull(v.saleCount);
       return {
-        skuId: v.skuId ?? '',
+        skuId: v.skuId == null ? '' : String(v.skuId),
         specs,
         price,
         multiPrice: parseFloatOrNull(v.multiPrice),
