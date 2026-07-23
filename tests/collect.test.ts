@@ -5,6 +5,7 @@ import type { Page, Response as PWResponse } from 'playwright';
 import { describe, expect, it } from 'vitest';
 import {
   createFixtureCollectionRuntime,
+  createPlaywrightCollectionRuntime,
   executeCollectionUnit,
   navigateAndResolveQualificationMember,
   type CollectionRuntime,
@@ -16,6 +17,7 @@ import {
   STORE_CATEGORIES_COMPONENT_KEY,
 } from '../src/session/alisite-module.js';
 import type { Offer } from '../src/session/search-mtop.js';
+import { SUPPLIER_QUALIFICATION_COMPONENT_KEY } from '../src/session/supplier-qualification.js';
 
 const catalogUnit: CollectionUnit = {
   schemaVersion: 1,
@@ -66,6 +68,56 @@ class QualificationMemberPage extends EventEmitter {
   }
 }
 
+class QualificationCollectionPage extends EventEmitter {
+  requestedMemberId: string | null = null;
+  private currentUrl = 'https://fixture-shop.1688.com/';
+
+  constructor(private readonly responseMemberId: string) {
+    super();
+  }
+
+  async goto(url: string): Promise<null> {
+    this.currentUrl = url;
+    return null;
+  }
+
+  url(): string {
+    return this.currentUrl;
+  }
+
+  async title(): Promise<string> {
+    return 'Fixture shop';
+  }
+
+  isClosed(): boolean {
+    return false;
+  }
+
+  async waitForFunction(): Promise<void> {}
+
+  async evaluate(
+    _pageFunction: unknown,
+    runtimeRequest?: unknown,
+  ): Promise<string> {
+    if (
+      runtimeRequest !== null &&
+      typeof runtimeRequest === 'object' &&
+      'data' in runtimeRequest
+    ) {
+      const request = runtimeRequest as { data: { params: string } };
+      const params = JSON.parse(request.data.params) as { memberId: string };
+      this.requestedMemberId = params.memberId;
+      this.emit(
+        'response',
+        qualificationResponse(params.memberId, this.responseMemberId),
+      );
+    }
+    return '';
+  }
+
+  async close(): Promise<void> {}
+}
+
 function qualificationMemberResponse(
   payload: unknown,
   memberId: string,
@@ -81,6 +133,31 @@ function qualificationMemberResponse(
     url: () => url,
     request: () => ({ postData: () => null }),
     text: async () => JSON.stringify(payload),
+  } as unknown as PWResponse;
+}
+
+function qualificationResponse(
+  requestMemberId: string,
+  responseMemberId: string,
+): PWResponse {
+  const data = {
+    componentKey: SUPPLIER_QUALIFICATION_COMPONENT_KEY,
+    params: JSON.stringify({ memberId: requestMemberId }),
+  };
+  const url =
+    `https://h5api.m.1688.com/h5/${ALISITE_MODULE_API}/1.0/` +
+    `?data=${encodeURIComponent(JSON.stringify(data))}`;
+  return {
+    url: () => url,
+    request: () => ({ postData: () => null }),
+    text: async () =>
+      JSON.stringify({
+        data: {
+          memberId: responseMemberId,
+          businessInfo: {},
+          certList: [],
+        },
+      }),
   } as unknown as PWResponse;
 }
 
@@ -271,6 +348,65 @@ describe('collect entry', () => {
         completedPages: [],
         pendingKeys: ['910000000102', '910000000103'],
       },
+    });
+  });
+
+  it('uses the fixture request identity independently from the response member alias', async () => {
+    const qualificationUnit: CollectionUnit = {
+      schemaVersion: 1,
+      unitId: 'collect-qualification-fixture',
+      kind: 'store-qualification',
+      subject: {
+        supplier: { shopUrl: 'https://fixture-shop.1688.com/' },
+      },
+    };
+
+    const batch = await executeCollectionUnit({
+      unit: qualificationUnit,
+      runtime: createFixtureCollectionRuntime({
+        qualificationRequestMemberId: 'fixtureLogin_01',
+        qualificationPayload: {
+          data: {
+            memberId: 'b2b-canonical-supplier',
+            businessInfo: {},
+            certList: [],
+          },
+        },
+      }),
+    });
+
+    expect(batch.observations[0]).toMatchObject({
+      requestMemberId: 'fixtureLogin_01',
+      memberId: 'b2b-canonical-supplier',
+    });
+  });
+
+  it('records the actual online qualification request key in the observation', async () => {
+    const page = new QualificationCollectionPage('b2b-canonical-supplier');
+    const qualificationUnit: CollectionUnit = {
+      schemaVersion: 1,
+      unitId: 'collect-qualification-online',
+      kind: 'store-qualification',
+      subject: {
+        supplier: {
+          memberId: 'fixtureLogin_01',
+          shopUrl: 'https://fixture-shop.1688.com/',
+        },
+      },
+    };
+    const context = {
+      newPage: async () => page,
+    } as unknown as import('playwright').BrowserContext;
+
+    const batch = await executeCollectionUnit({
+      unit: qualificationUnit,
+      runtime: createPlaywrightCollectionRuntime(context, false),
+    });
+
+    expect(page.requestedMemberId).toBe('fixtureLogin_01');
+    expect(batch.observations[0]).toMatchObject({
+      requestMemberId: 'fixtureLogin_01',
+      memberId: 'b2b-canonical-supplier',
     });
   });
 

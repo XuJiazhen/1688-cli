@@ -22,6 +22,7 @@ interface QualificationBatchBaseInput {
   batchId: string;
   startedAt: string;
   completedAt: string;
+  requestMemberId?: string;
   sourceRef?: string;
   rawEvidenceRefs?: string[];
 }
@@ -33,6 +34,9 @@ export type CreateQualificationBatchInput = QualificationBatchBaseInput &
   );
 
 export interface QualificationObservation {
+  /** Exact shop member key used to correlate the captured response. */
+  requestMemberId: string | null;
+  /** Member identifier reported by the response; it may be an alias. */
   memberId: string | null;
   companyName: Evidence<string>;
   registeredBusinessScope: Evidence<string>;
@@ -68,13 +72,22 @@ export function createQualificationBatch(
     );
   }
   const qualification = resolveQualification(input);
+  const requestMemberId = resolveRequestMemberId(
+    input.requestMemberId,
+    unit,
+    qualification.memberId,
+  );
   const rawEvidenceRefs = input.rawEvidenceRefs ?? [];
   const source = normalizeSource(
     qualification.source,
     input.sourceRef,
     rawEvidenceRefs[0],
   );
-  const observation = rebaseQualification(qualification, source);
+  const observation = rebaseQualification(
+    qualification,
+    source,
+    requestMemberId,
+  );
   const failedFacts = countAvailability(observation, 'failed');
   const availableFacts = countAvailability(observation, 'available');
   const notPresentFacts = countAvailability(observation, 'not-present');
@@ -178,8 +191,10 @@ function resolveQualification(
 function rebaseQualification(
   qualification: SupplierQualification,
   source: EvidenceSource,
+  requestMemberId: string | null,
 ): QualificationObservation {
   return {
+    requestMemberId,
     memberId: qualification.memberId,
     companyName: rebaseEvidence(qualification.companyName, source),
     registeredBusinessScope: rebaseEvidence(
@@ -196,6 +211,25 @@ function rebaseQualification(
     certificationImages: qualification.certificationImages.map((image) => ({ ...image })),
     source,
   };
+}
+
+function resolveRequestMemberId(
+  requestMemberId: string | undefined,
+  unit: CollectionUnit,
+  responseMemberId: string | null,
+): string | null {
+  if (requestMemberId !== undefined) {
+    const normalized = requestMemberId.trim();
+    if (normalized.length === 0) {
+      throw new CliError(
+        2,
+        'BAD_INPUT',
+        'Qualification batch requestMemberId must be a non-empty string.',
+      );
+    }
+    return normalized;
+  }
+  return unit.subject.supplier?.memberId ?? responseMemberId;
 }
 
 function rebaseEvidence<T>(

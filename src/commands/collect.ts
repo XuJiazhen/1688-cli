@@ -97,6 +97,7 @@ export interface CollectionFixture {
   };
   qualification?: unknown;
   qualificationPayload?: unknown;
+  qualificationRequestMemberId?: string;
   qualificationSourceRef?: string;
   offerResult?: OfferResult;
   mediaScript?: string;
@@ -248,6 +249,7 @@ export function createFixtureCollectionRuntime(
               checkpoint,
               batchId: randomUUID(),
               qualification: fixture.qualification as SupplierQualification,
+              requestMemberId: fixture.qualificationRequestMemberId,
               startedAt,
               completedAt,
               sourceRef: fixture.qualificationSourceRef,
@@ -261,6 +263,7 @@ export function createFixtureCollectionRuntime(
             checkpoint,
             batchId: randomUUID(),
             payload: fixture.qualificationPayload,
+            requestMemberId: fixture.qualificationRequestMemberId,
             collectedAt: completedAt,
             startedAt,
             completedAt,
@@ -353,6 +356,7 @@ async function collectQualificationUnit(
           checkpoint,
           batchId: randomUUID(),
           qualification: capture.qualification,
+          requestMemberId: memberId,
           startedAt,
           completedAt,
           sourceRef,
@@ -363,6 +367,7 @@ async function collectQualificationUnit(
           checkpoint,
           batchId: randomUUID(),
           payload: null,
+          requestMemberId: memberId,
           collectedAt: completedAt,
           startedAt,
           completedAt,

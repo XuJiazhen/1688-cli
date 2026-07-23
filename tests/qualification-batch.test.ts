@@ -59,6 +59,7 @@ describe('createQualificationBatch', () => {
     });
     expect(batch.observations).toHaveLength(1);
     expect(batch.observations[0]).toMatchObject({
+      requestMemberId: 'b2b-sanitized-supplier',
       memberId: 'b2b-sanitized-supplier',
       registeredBusinessScope: {
         availability: 'available',
@@ -74,6 +75,32 @@ describe('createQualificationBatch', () => {
     });
     expect(batch.observations[0]).not.toHaveProperty('allowedToSell');
     expect(batch).not.toHaveProperty('qualified');
+  });
+
+  it('keeps the request identity separate from a canonical response alias', () => {
+    const batch = createQualificationBatch({
+      unit: {
+        ...unit,
+        subject: {
+          supplier: { memberId: 'fixtureLogin_01' },
+        },
+      },
+      batchId: 'batch-qualification-alias',
+      payload: {
+        data: {
+          memberId: 'b2b-canonical-supplier',
+          businessInfo: {},
+        },
+      },
+      collectedAt: '2026-07-22T00:10:01.000Z',
+      startedAt: '2026-07-22T00:10:00.000Z',
+      completedAt: '2026-07-22T00:10:02.000Z',
+    });
+
+    expect(batch.observations[0]).toMatchObject({
+      requestMemberId: 'fixtureLogin_01',
+      memberId: 'b2b-canonical-supplier',
+    });
   });
 
   it('accepts a parsed qualification and preserves distinct facts and source refs', () => {

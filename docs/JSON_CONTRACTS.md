@@ -829,13 +829,16 @@ Kind-specific observations are additive records inside the common batch:
 | `search-page` | `offerId`, full normalized search `offer`, source page, page/raw rank, remote sort, and collection time |
 | `store-catalog` | `offerId`, normalized store offer, source page/position, query/category/sort metadata, supplier identity, and collection time |
 | `store-categories` | store identity, `offerCount`, category tree/counts, and parsed plus raw `userDefined` state |
-| `store-qualification` | company/business-scope facts as `Evidence`, certificates/images, and certificate-list availability |
+| `store-qualification` | request-correlated `requestMemberId`, response `memberId` alias, company/business-scope facts as `Evidence`, certificates/images, and certificate-list availability |
 | `offer-detail` | `offerId`, normalized `OfferResult`, and collection time |
 | `offer-media-manifest` | `offerId`, ordered main/SKU/detail media manifest, and collection time |
 
 An empty `certificates` array with `certificateListAvailability: "available"`
 means the returned list contained no certificate items; it does not mean that
 the supplier lacks business registration or other qualification facts.
+For qualification observations, `requestMemberId` is the exact member key used
+for the captured request. The response `memberId` may be a canonical alias and
+must not replace the request correlation identity.
 Unknown SKU price, stock, or sales remain `null` with `availability` rather
 than becoming zero. Media observations contain URL references only; no image
 bytes are downloaded by this protocol.
