@@ -1,0 +1,26 @@
+{
+  "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+  "data": {
+    "memberId": "b2b-sanitized-supplier",
+    "companyName": "脱敏工具有限公司",
+    "certList": [],
+    "summary": "店铺自述内容",
+    "productionService": "电动工具",
+    "businessLine": "五金、工具",
+    "businessInfo": {
+      "companyBusinessLine": "一般项目：风动和电动工具制造；户外用品销售。",
+      "companyName": "脱敏工具有限公司",
+      "companyYearStarted": "2024-05-27",
+      "socialCreditCode": "SANITIZED-CREDIT-CODE"
+    },
+    "propaganda": {
+      "companyImg": [
+        {
+          "type": "营业执照",
+          "url": "//img.example.test/license.jpg"
+        }
+      ]
+    }
+  },
+  "ret": ["SUCCESS::调用成功"]
+}

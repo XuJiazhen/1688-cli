@@ -1,0 +1,56 @@
+{
+  "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+  "data": {
+    "content": {
+      "offerCount": "96",
+      "offerList": [
+        {
+          "id": "900000000001",
+          "memberId": "b2b-fixture-ordinary",
+          "subject": "家用组合工具套装",
+          "offerPrice": "19.90",
+          "quantityBegin": "1",
+          "unit": "套",
+          "vagueSaleQuantity": "300+",
+          "thirtySaleQuantity": "354",
+          "bookedCount": "17",
+          "ninetySaleQuantity": "0",
+          "saleQuantity": "0",
+          "offerImages": [
+            {
+              "imageURI": "https://img.example.test/ordinary-tool.jpg"
+            }
+          ],
+          "offerModel": {
+            "categoryId1": "0"
+          }
+        }
+      ],
+      "offerCategoryDataModel": {
+        "offerCategoryList": [
+          {
+            "id": "fixture-category-ordinary",
+            "name": "家用组合工具",
+            "fullName": "家用组合工具",
+            "count": "1",
+            "children": []
+          }
+        ],
+        "userDefined": "false"
+      },
+      "offerCategoryParent": {
+        "count": "96",
+        "children": []
+      },
+      "offerSumm": {
+        "offersCount": "96",
+        "privateOffersCount": "0",
+        "categoryMap": {
+          "fixture-category-ordinary": "1"
+        },
+        "userDefined": "false"
+      }
+    }
+  },
+  "ret": ["SUCCESS::调用成功"]
+}

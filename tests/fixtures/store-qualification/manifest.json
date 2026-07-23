@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-07-22T00:00:00.000Z",
+  "parserVersion": "supplier-qualification-v1",
+  "source": "sanitized-minimal-derivative-of-local-real-capture",
+  "allowedTopLevelFields": ["api", "data", "ret"],
+  "fixtures": {
+    "basic-info.json": "registered business scope with empty certList"
+  }
+}

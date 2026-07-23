@@ -38,6 +38,10 @@ npm i -g 1688-cli
 1688 supplier search 键盘 --factory-only --json                # supplier discovery from company search
 1688 supplier research 键盘 --enrich top:5 --csv               # supplier scoring + inspect enrichment
 1688 supplier inspect 628196518518                            # inspect supplier/factory trust signals
+1688 supplier catalog 628196518518 --max-pages 1 --json        # bounded store catalog batch
+
+# Production fact collection
+1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
 
 # Pre-sale inquiry (with live watch for AI agents)
 1688 seller inquire 628196518518 "支持定制 logo 吗？"          # ask seller
@@ -103,8 +107,10 @@ npm i -g 1688-cli
 | `1688 research <keywords...>` | Multi-keyword sourcing with scoring and enrichment |
 | `1688 compare <offerIds...>` | Compare multiple offer detail pages |
 | `1688 supplier inspect <target>` | Supplier identity, factory card, trust signals |
+| `1688 supplier catalog <target>` | Bounded store offers/categories with resumable checkpoints |
 | `1688 supplier search <keywords...>` | Company-search supplier discovery |
 | `1688 supplier research <keywords...>` | Scored supplier dataset with inspect enrichment |
+| `1688 collect <unit>` | Execute one versioned, bounded fact-collection unit |
 | `1688 image-search <path\|url>` | Search by local image or http(s) URL |
 | `1688 offer <offerIds...>` | Single or batch product detail (SKUs, package, images) |
 | `1688 similar <offerId>` | Find similar / 找同款 offers (official entry point) |
@@ -255,6 +261,8 @@ matches.
 1688 supplier research 键盘 --enrich top:5 --csv   # supplier scoring + optional supplier inspect enrichment
 1688 supplier inspect 628196518518                # supplier identity, factory card, trust/service signals
 1688 supplier inspect b2b-22066467246504ba0d      # inspect by supplier memberId
+1688 supplier catalog 628196518518 --max-pages 1  # bounded store offer batch
+1688 supplier catalog https://shopname.1688.com --categories
 ```
 
 `1688 supplier search` is the read-only 1688 Supplier Scraper. It pulls
@@ -281,6 +289,8 @@ points.
 | Find companies or factories directly | `1688 supplier search <keyword...>` |
 | Build a scored supplier dataset | `1688 supplier research <keyword...>` |
 | Inspect one supplier/factory | `1688 supplier inspect <offerId|memberId>` |
+| Collect store offers or categories | `1688 supplier catalog <target>` |
+| Execute a production collection unit | `1688 collect <unit>` |
 
 Supplier company-search flags:
 
@@ -297,6 +307,27 @@ company-search suppliers when a `memberId` is available. The supplier result
 includes company name, `memberId`, shop URL, location, service years, factory
 signals, repeat/response rates, 3-month order/amount signals, score breakdown,
 and product previews from the company-search payload.
+
+#### Bounded fact collection
+
+`supplier catalog` collects all offers, one store category, a store keyword,
+or the category tree. Every invocation remains bounded by pages/items and can
+return a checkpoint for the next batch. `collect` exposes the same collection
+modules through the versioned `CollectionUnit -> CollectionBatch` worker
+contract:
+
+```bash
+1688 supplier catalog 628196518518 --full --max-pages 3 --max-items 80 --json
+1688 supplier catalog https://shopname.1688.com --keyword 帐篷 --sort tradenumdown --json
+1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
+cat unit.json | 1688 collect - --json
+```
+
+The six collection kinds cover search pages, store catalogs/categories,
+supplier qualification, offer details, and media manifests. The CLI records
+facts, provenance, completeness, and recovery state; selection rules, cache
+TTL, review pools, and qualified-SKU targets remain business-system concerns.
+See [the collection JSON contract](./docs/JSON_CONTRACTS.md#collection-protocol-v1).
 
 ### 2. Pre-sale inquiry — ask the supplier
 

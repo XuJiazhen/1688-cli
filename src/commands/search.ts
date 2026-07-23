@@ -87,6 +87,24 @@ export interface SearchResult {
   deeppro?: DeepProSummary;
 }
 
+export interface IncrementalSearchPageArgs {
+  keyword: string;
+  page: number;
+  sort?: SearchSort;
+  headed?: boolean;
+  pageDelayMin?: number;
+  pageDelayMax?: number;
+}
+
+export interface IncrementalSearchPageResult {
+  page: number;
+  pageSize: number;
+  remoteSort: string | null;
+  offers: Offer[];
+  hasMore: boolean;
+  collectedAt: string;
+}
+
 export type { Offer };
 
 export async function execute(
@@ -124,6 +142,54 @@ export async function execute(
     },
     { headed: args.headed === true, maxRetries: 1 },
   );
+}
+
+/** Executes one production search page while retaining the legacy search API. */
+export async function fetchIncrementalSearchPage(
+  ctx: BrowserContext,
+  args: IncrementalSearchPageArgs,
+): Promise<IncrementalSearchPageResult> {
+  if (!Number.isInteger(args.page) || args.page < 1 || args.page > MAX_PAGES) {
+    throw new CliError(2, 'BAD_INPUT', `Search page must be between 1 and ${MAX_PAGES}.`);
+  }
+  const keyword = args.keyword.trim();
+  if (!keyword) throw new CliError(2, 'BAD_INPUT', 'Search keyword is required.');
+  const sort = args.sort ?? 'relevance';
+  let captured: Offer[] | null = null;
+  let collectedAt: string | null = null;
+  await fetchSearch(
+    ctx,
+    keyword,
+    args.headed === true,
+    args.page * PAGE_SIZE,
+    sort,
+    args.pageDelayMin ?? 2,
+    args.pageDelayMax ?? 4,
+    {
+      onCapturedPage(page, offers) {
+        if (page === args.page) {
+          captured = offers;
+          collectedAt = new Date().toISOString();
+        }
+      },
+    },
+  );
+  if (captured === null || collectedAt === null) {
+    throw new CliError(
+      9,
+      'CAPTURE_TIMEOUT',
+      `Search page ${args.page} did not produce a correlated offer response.`,
+    );
+  }
+  const pageOffers = captured as Offer[];
+  return {
+    page: args.page,
+    pageSize: PAGE_SIZE,
+    remoteSort: remoteSortType(sort),
+    offers: pageOffers,
+    hasMore: pageOffers.length >= PAGE_SIZE,
+    collectedAt: collectedAt as string,
+  };
 }
 
 export async function run(keyword: string, opts: SearchOpts): Promise<void> {
@@ -214,6 +280,9 @@ async function fetchSearch(
   sort: SearchSort,
   pageDelayMin: number,
   pageDelayMax: number,
+  hooks: {
+    onCapturedPage?: (page: number, offers: Offer[]) => void;
+  } = {},
 ): Promise<Offer[]> {
   const page = await ctx.newPage();
 
@@ -551,6 +620,7 @@ async function fetchSearch(
       break;
     }
     if (pageNum === 1) await detectLoginRedirect(page);
+    hooks.onCapturedPage?.(pageNum, [...capturedOffers]);
 
     // Accumulate with cross-page dedup. 1688 occasionally repeats P4P ad
     // slots across pages; dedup keeps the result set clean.

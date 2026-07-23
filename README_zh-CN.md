@@ -37,6 +37,10 @@ npm i -g 1688-cli
 1688 supplier search 键盘 --factory-only --json                # 公司搜索供应商发现
 1688 supplier research 键盘 --enrich top:5 --csv               # 供应商评分 + inspect 增强
 1688 supplier inspect 628196518518                            # 检查供应商/工厂信任信号
+1688 supplier catalog 628196518518 --max-pages 1 --json        # 有界店铺目录批次
+
+# 生产事实采集
+1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
 
 # 售前询盘（支持 AI agent 实时监听）
 1688 seller inquire 628196518518 "支持定制 logo 吗？"          # 向卖家提问
@@ -97,8 +101,10 @@ npm i -g 1688-cli
 | `1688 research <keywords...>` | 多关键词采购调研，带评分与增强 |
 | `1688 compare <offerIds...>` | 对比多个商品详情 |
 | `1688 supplier inspect <target>` | 供应商身份、工厂档案、信任信号 |
+| `1688 supplier catalog <target>` | 可恢复的有界店铺商品/分类采集 |
 | `1688 supplier search <keywords...>` | 公司搜索供应商发现 |
 | `1688 supplier research <keywords...>` | 带评分的供应商数据集 + inspect 增强 |
+| `1688 collect <unit>` | 执行一个版本化、有界的事实采集单元 |
 | `1688 image-search <path\|url>` | 本地图片或 URL 以图搜货 |
 | `1688 offer <offerIds...>` | 单个或批量商品详情（SKU、包装、图片） |
 | `1688 similar <offerId>` | 找同款（官方入口） |
@@ -241,6 +247,8 @@ node .\dist\cli.js search "修枝剪" --max 30 --deeppro --json --pretty
 1688 supplier research 键盘 --enrich top:5 --csv   # 供应商评分 + 可选 supplier inspect 增强
 1688 supplier inspect 628196518518                # 供应商身份、工厂档案、信任/服务信号
 1688 supplier inspect b2b-22066467246504ba0d      # 按 supplier memberId 检查
+1688 supplier catalog 628196518518 --max-pages 1  # 有界店铺商品批次
+1688 supplier catalog https://shopname.1688.com --categories
 ```
 
 `1688 supplier search` 是只读的 1688 供应商采集器。它直接通过 1688 公司搜索
@@ -264,6 +272,8 @@ node .\dist\cli.js search "修枝剪" --max 30 --deeppro --json --pretty
 | 直接找公司或工厂 | `1688 supplier search <keyword...>` |
 | 构建带评分的供应商数据集 | `1688 supplier research <keyword...>` |
 | 检查单个供应商/工厂 | `1688 supplier inspect <offerId\|memberId>` |
+| 采集店铺商品或分类 | `1688 supplier catalog <target>` |
+| 执行生产采集单元 | `1688 collect <unit>` |
 
 供应商公司搜索参数：
 
@@ -278,6 +288,23 @@ node .\dist\cli.js search "修枝剪" --max 30 --deeppro --json --pretty
 `--enrich top:10`，在可用 `memberId` 时调用 `supplier inspect` 增强排名靠前的公司搜索
 供应商。供应商结果包含公司名称、`memberId`、店铺 URL、所在地、经营年限、工厂信号、
 复购/响应率、近 3 个月订单/金额信号、评分细项，以及公司搜索 payload 中的商品预览。
+
+#### 有界事实采集
+
+`supplier catalog` 可采集全店商品、指定店铺分类、店内关键词结果或分类树。每次调用仍受
+页数和商品数上限约束，未完成时返回检查点供下一批恢复。`collect` 通过版本化的
+`CollectionUnit -> CollectionBatch` 合同暴露同一组采集模块：
+
+```bash
+1688 supplier catalog 628196518518 --full --max-pages 3 --max-items 80 --json
+1688 supplier catalog https://shopname.1688.com --keyword 帐篷 --sort tradenumdown --json
+1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
+cat unit.json | 1688 collect - --json
+```
+
+六种采集单元覆盖搜索页、店铺目录/分类、供应商资质、商品详情和媒体清单。CLI 只返回事实、
+来源、完整度与恢复状态；选品规则、缓存 TTL、审核池和合格 SKU 目标仍由业务系统负责。
+完整协议见[采集 JSON 合同](./docs/JSON_CONTRACTS.md#collection-protocol-v1)。
 
 ### 2. 售前询盘 — 向卖家提问
 

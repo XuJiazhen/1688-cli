@@ -119,6 +119,25 @@ supplier
   });
 
 supplier
+  .command('catalog')
+  .description('Collect a bounded supplier catalog batch or category snapshot')
+  .argument('<target>', 'offerId, offer URL, b2b-* memberId, or 1688 shop URL')
+  .option('--categories', 'Collect the store category tree instead of offers')
+  .option('--category-id <id>', 'Collect offers under one store category')
+  .option('--keyword <keyword>', 'Search within the supplier store')
+  .option('--sort <sort>', 'Store sortType, e.g. wangpu_score or tradenumdown')
+  .option('--page-size <n>', 'Requested offers per page', '30')
+  .option('--max-pages <n>', 'Maximum pages in this batch', '1')
+  .option('--max-items <n>', 'Maximum unique offers in this batch')
+  .option('--full', 'Request a resumable full scan, still bounded by --max-pages')
+  .option('--profile <name>', 'Profile name (default: default)')
+  .option('--headed', 'Open a window (fallback for risk control)')
+  .action(async (target, opts) => {
+    const { run } = await import('./commands/supplier-catalog.js');
+    await run({ ...opts, target });
+  });
+
+supplier
   .command('search')
   .description('Search suppliers from 1688 company search')
   .argument('<keywords...>', 'One or more supplier/company search keywords')
@@ -184,6 +203,20 @@ program
   .action(async (offerIds: string[], opts) => {
     const { run } = await import('./commands/offer.js');
     await run({ ...opts, offerIds });
+  });
+
+program
+  .command('collect')
+  .description('Execute one versioned, bounded CollectionUnit')
+  .argument('<unit>', 'CollectionUnit JSON, @file, or - for stdin')
+  .option('--checkpoint <value>', 'CollectionCheckpoint JSON or @file')
+  .option('--fixture <file>', 'Replay a sanitized fixture without a browser')
+  .option('--output <file>', 'Write the complete CollectionBatch JSON to a file')
+  .option('--profile <name>', 'Profile name (default: default)')
+  .option('--headed', 'Open a window (fallback for risk control)')
+  .action(async (unit, opts) => {
+    const { run } = await import('./commands/collect.js');
+    await run({ ...opts, unit });
   });
 
 program

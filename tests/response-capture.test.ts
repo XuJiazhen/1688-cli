@@ -209,6 +209,41 @@ describe('startResponseCapture', () => {
     });
   });
 
+  it('redacts sensitive query values from diagnostics without changing matching', async () => {
+    const mockPage = page();
+    const matcher = vi.fn((resp: PWResponse) =>
+      resp.url().includes('sign=secret-sign'),
+    );
+    const capture = startResponseCapture({
+      page: mockPage,
+      timeoutMs: 50,
+      matcher,
+      parse: async (resp) => {
+        const body = await resp.text();
+        if (body === 'bad') throw new Error('parse failed');
+        return body === 'ready' ? { ok: true } : null;
+      },
+    });
+    const sensitiveUrl =
+      'https://h5api.m.1688.com/h5/mtop.example.catalog/1.0/' +
+      '?api=mtop.example.catalog&sign=secret-sign&_m_h5_tk=secret-token' +
+      '&data=%7B%22memberId%22%3A%22b2b-secret%22%7D';
+
+    const wait = capture.wait();
+    mockPage.emitResponse(response(sensitiveUrl, 'bad'));
+    mockPage.emitResponse(response(sensitiveUrl, 'empty'));
+    mockPage.emitResponse(response(sensitiveUrl, 'ready'));
+
+    expect(await wait).toEqual({ ok: true });
+    expect(matcher).toHaveBeenCalledTimes(3);
+    const diagnosticsText = JSON.stringify(capture.diagnostics());
+    expect(diagnosticsText).toContain('mtop.example.catalog');
+    expect(diagnosticsText).not.toContain('secret-sign');
+    expect(diagnosticsText).not.toContain('secret-token');
+    expect(diagnosticsText).not.toContain('b2b-secret');
+    expect(capture.diagnostics().lastSeenUrl).toContain('sign=%5Bredacted%5D');
+  });
+
   it('records empty parser results', async () => {
     const mockPage = page();
     const capture = startResponseCapture({
@@ -271,6 +306,29 @@ describe('startResponseCapture', () => {
       phase: 'match',
       message: 'bad matcher',
     });
+  });
+
+  it('redacts sensitive response URLs embedded in diagnostic error messages', async () => {
+    const mockPage = page();
+    const capture = startResponseCapture({
+      page: mockPage,
+      timeoutMs: 5,
+      matcher: (resp) => {
+        throw new Error(`matcher failed for ${resp.url()}`);
+      },
+      parse: async () => ({ ok: true }),
+    });
+    const sensitiveUrl =
+      'https://h5api.m.1688.com/h5/mtop.example/1.0/?api=mtop.example&sign=secret-sign&data=secret-data';
+
+    const wait = capture.wait();
+    mockPage.emitResponse(response(sensitiveUrl));
+
+    expect(await wait).toBeNull();
+    const message = capture.diagnostics().failures[0]?.message ?? '';
+    expect(message).toContain('api=mtop.example');
+    expect(message).not.toContain('secret-sign');
+    expect(message).not.toContain('secret-data');
   });
 
   it('keeps diagnostics available after dispose', async () => {

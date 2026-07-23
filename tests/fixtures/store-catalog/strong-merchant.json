@@ -1,0 +1,48 @@
+{
+  "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+  "data": {
+    "content": {
+      "offerCount": "199",
+      "offerList": [
+        {
+          "id": "900000000002",
+          "memberId": "b2b-fixture-strong",
+          "subject": "洗车水枪",
+          "offerPrice": "29.00",
+          "quantityBegin": "2",
+          "unit": "件",
+          "vagueSaleQuantity": "1.1万+",
+          "thirtySaleQuantity": "1520",
+          "bookedCount": "1706",
+          "ninetySaleQuantity": "0",
+          "saleQuantity": "0",
+          "offerImages": [
+            {
+              "imageURI": "https://img.example.test/strong-water-gun.jpg"
+            }
+          ],
+          "offerModel": {
+            "categoryId1": "0",
+            "bookedCount": "0",
+            "agentBookedCount": "0",
+            "quantitySumMonth": "0",
+            "saleQuantity": "0"
+          }
+        }
+      ],
+      "offerCategoryDataModel": {
+        "offerCategoryList": [
+          {
+            "id": "fixture-category-strong",
+            "name": "洗车水枪",
+            "fullName": "洗车水枪",
+            "count": "4",
+            "children": []
+          }
+        ],
+        "userDefined": "false"
+      }
+    }
+  },
+  "ret": ["SUCCESS::调用成功"]
+}

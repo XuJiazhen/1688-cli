@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-07-22T00:00:00.000Z",
+  "parserVersion": "store-catalog-v1",
+  "source": "sanitized-minimal-derivative-of-local-real-capture",
+  "allowedTopLevelFields": ["api", "data", "ret"],
+  "fixtures": {
+    "ordinary-store.json": "all-products ordinary store",
+    "strong-merchant.json": "all-products strong merchant",
+    "source-flagship.json": "all-products source flagship",
+    "super-factory.json": "all-products super factory",
+    "categories.json": "store category tree",
+    "category-filter.json": "category-filtered products",
+    "keyword-search.json": "store keyword search",
+    "sales-sort.json": "sales-sorted products",
+    "page-1.json": "synthetic sanitized page 1 for recovery",
+    "page-2.json": "synthetic sanitized page 2 with one overlapping offerId"
+  }
+}

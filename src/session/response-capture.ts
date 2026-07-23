@@ -1,4 +1,8 @@
 import type { Page, Response as PWResponse } from 'playwright';
+import {
+  redactTextForDiagnostics,
+  redactUrlForDiagnostics,
+} from './redaction.js';
 import { withTimeout } from './wait.js';
 
 export type ResponseMatcher = RegExp | ((response: PWResponse) => boolean);
@@ -92,9 +96,9 @@ export function startResponseCapture<T>(
 
   const errorInfo = (error: unknown): { name?: string; message: string } => {
     if (error instanceof Error) {
-      return { name: error.name, message: error.message };
+      return { name: error.name, message: redactTextForDiagnostics(error.message) };
     }
-    return { message: String(error) };
+    return { message: redactTextForDiagnostics(String(error)) };
   };
 
   const recordFailure = (
@@ -126,33 +130,37 @@ export function startResponseCapture<T>(
   const onResponse = async (response: PWResponse) => {
     if (disposed || settled) return;
     const url = response.url();
+    const diagnosticUrl = redactUrlForDiagnostics(url);
     seenCount++;
-    lastSeenUrl = url;
+    lastSeenUrl = diagnosticUrl;
     let matched = false;
     try {
       matched = matches(response);
     } catch (e) {
-      recordFailure('match', url, e);
+      recordFailure('match', diagnosticUrl, e);
       return;
     }
     if (!matched) return;
     matchedCount++;
-    lastMatchedUrl = url;
+    lastMatchedUrl = diagnosticUrl;
     try {
       const value = await opts.parse(response);
       if (!value) {
         emptyResultCount++;
-        remember(emptyResults, { at: new Date().toISOString(), url });
+        remember(emptyResults, {
+          at: new Date().toISOString(),
+          url: diagnosticUrl,
+        });
         return;
       }
       if (settled || disposed) return;
       parsedCount++;
-      lastParsedUrl = url;
+      lastParsedUrl = diagnosticUrl;
       settled = true;
       endedAt = new Date().toISOString();
       resolveCaptured(value);
     } catch (e) {
-      recordFailure('parse', url, e);
+      recordFailure('parse', diagnosticUrl, e);
     }
   };
 

@@ -14,6 +14,11 @@ import {
   type ConsignmentInfo,
   type ShopCardInfo,
 } from '../session/offer-evidence.js';
+import {
+  buildOfferMediaManifest,
+  parseOfferDetailsScript,
+  type OfferMediaManifest,
+} from '../session/offer-media.js';
 
 export interface OfferOpts {
   offerId?: string;
@@ -90,11 +95,15 @@ export interface OfferResult {
   skus: SkuVariant[];
   mainImage: string | null;
   images: string[];
+  /** URL-only media inventory. Image bytes are deliberately not downloaded. */
+  media: OfferMediaManifest;
   sources: {
     shopCardResponseObserved: boolean;
     shopCardCaptured: boolean;
     consignmentResponseObserved: boolean;
     consignmentCaptured: boolean;
+    detailMediaResponseObserved: boolean;
+    detailMediaCaptured: boolean;
   };
 }
 
@@ -133,7 +142,12 @@ export interface SkuVariant {
   /** Bulk-tier price when 1688 surfaces a separate multi-piece price. */
   multiPrice: number | null;
   stock: number | null;
-  saleCount: number;
+  saleCount: number | null;
+  availability: {
+    price: 'available' | 'not-present';
+    stock: 'available' | 'not-present';
+    saleCount: 'available' | 'not-present';
+  };
   /** Best-effort image URL derived from the first option (颜色/款式) match. */
   image: string | null;
 }
@@ -141,6 +155,7 @@ export interface SkuVariant {
 const SKU_API_RE = /wosc\.queryofferskuselectormodel/i;
 const SHOPCARD_API_RE = /mtop\.1688\.moga\.pc\.shopcard/i;
 const OFFER_DETAIL_SERVICE_API_RE = /mtop\.1688\.mmga\.offerdetail\.service/i;
+const OFFER_DETAILS_CONTENT_RE = /itemcdn\.tmall\.com\/1688offer\//i;
 let DETAIL_SEQ = 0;
 
 export async function execute(
@@ -212,6 +227,13 @@ export async function executeRaw(
         resp.url(),
       ),
     }),
+  });
+  const detailMediaCapture = startResponseCapture<OfferMediaManifest>({
+    page,
+    timeoutMs: 18000,
+    matcher: OFFER_DETAILS_CONTENT_RE,
+    parse: async (resp) =>
+      parseOfferDetailsScript(await resp.text(), resp.url()),
   });
   const onResp = async (resp: PWResponse) => {
     // Probe: save every offerdetail.service response so we can see which
@@ -346,11 +368,12 @@ export async function executeRaw(
       );
     }
 
-    const [sku, shopCardResponse, consignmentResponse, pageInfo] =
+    const [sku, shopCardResponse, consignmentResponse, detailMedia, pageInfo] =
       await Promise.all([
         skuCapture.wait(),
         shopCardCapture.wait(),
         consignmentCapture.wait(),
+        detailMediaCapture.wait(),
         readPageInfo(page),
       ]);
     const shopCard = shopCardResponse?.value ?? null;
@@ -362,13 +385,16 @@ export async function executeRaw(
       pageInfo,
       shopCard,
       consignment,
+      detailMedia,
       shopCardResponse !== null,
       consignmentResponse !== null,
+      detailMediaCapture.diagnostics().matchedCount > 0,
     );
   } finally {
     skuCapture.dispose();
     shopCardCapture.dispose();
     consignmentCapture.dispose();
+    detailMediaCapture.dispose();
     page.off('response', onResp);
   }
 }
@@ -753,8 +779,10 @@ function assemble(
   info: PageInfo,
   shopCard: ShopCardInfo | null,
   consignment: ConsignmentInfo | null,
+  detailMedia: OfferMediaManifest | null,
   shopCardResponseObserved: boolean,
   consignmentResponseObserved: boolean,
+  detailMediaResponseObserved: boolean,
 ): OfferResult {
   const priceRange = sku?.skuPriceScale ?? null;
   const { min: priceMin, max: priceMax } = parseRange(priceRange);
@@ -788,16 +816,24 @@ function assemble(
   const skus: SkuVariant[] = Object.entries(sku?.skuInfoMap ?? {}).map(
     ([k, v]) => {
       const specs = v.specAttrs ?? k;
+      const price = parseFloatOrNull(v.discountPrice ?? v.price);
+      const stock = parseIntOrNull(v.canBookCount);
+      const saleCount =
+        typeof v.saleCount === 'number'
+          ? v.saleCount
+          : parseIntOrNull(v.saleCount);
       return {
         skuId: v.skuId ?? '',
         specs,
-        price: parseFloatOrNull(v.discountPrice ?? v.price),
+        price,
         multiPrice: parseFloatOrNull(v.multiPrice),
-        stock: parseIntOrNull(v.canBookCount),
-        saleCount:
-          typeof v.saleCount === 'number'
-            ? v.saleCount
-            : parseIntOrNull(v.saleCount) ?? 0,
+        stock,
+        saleCount,
+        availability: {
+          price: price === null ? 'not-present' : 'available',
+          stock: stock === null ? 'not-present' : 'available',
+          saleCount: saleCount === null ? 'not-present' : 'available',
+        },
         image: deriveSkuImage(specs),
       };
     },
@@ -825,6 +861,17 @@ function assemble(
     typeof trade?.saleCount === 'number'
       ? trade.saleCount
       : parseIntOrNull(trade?.saleCount as string | undefined);
+  const skuSaleCount =
+    skus.length > 0 && skus.every((skuItem) => skuItem.saleCount !== null)
+      ? skus.reduce((sum, skuItem) => sum + (skuItem.saleCount ?? 0), 0)
+      : null;
+  const media = buildOfferMediaManifest({
+    offerId,
+    mainImage: fallbackImage,
+    images: info.images,
+    skuImages: skus.map((skuItem) => skuItem.image),
+    detail: detailMedia,
+  });
 
   return {
     offerId,
@@ -857,19 +904,20 @@ function assemble(
     saledCount:
       tradeSaleCount ??
       info.saledCount ??
-      (skus.length > 0
-        ? skus.reduce((s, x) => s + (x.saleCount || 0), 0)
-        : null),
+      skuSaleCount,
     categoryId: info.categoryId,
     options,
     skus,
     mainImage: fallbackImage,
     images: info.images,
+    media,
     sources: {
       shopCardResponseObserved,
       shopCardCaptured: shopCard !== null,
       consignmentResponseObserved,
       consignmentCaptured: consignment !== null,
+      detailMediaResponseObserved,
+      detailMediaCaptured: detailMedia?.availability === 'available',
     },
   };
 }

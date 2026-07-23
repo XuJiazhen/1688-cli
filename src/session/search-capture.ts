@@ -6,6 +6,10 @@ import {
   readSearchMtopRequestMeta,
   type Offer,
 } from './search-mtop.js';
+import {
+  redactTextForDiagnostics,
+  redactUrlForDiagnostics,
+} from './redaction.js';
 
 export interface SearchOfferCaptureOptions {
   page: Page;
@@ -96,9 +100,9 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
 
   const errorInfo = (error: unknown): { name?: string; message: string } => {
     if (error instanceof Error) {
-      return { name: error.name, message: error.message };
+      return { name: error.name, message: redactTextForDiagnostics(error.message) };
     }
-    return { message: String(error) };
+    return { message: redactTextForDiagnostics(String(error)) };
   };
 
   const recordFailure = (url: string, error: unknown) => {
@@ -147,8 +151,9 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
   const onResponse = async (resp: PWResponse) => {
     if (disposed) return;
     const url = resp.url();
+    const diagnosticUrl = redactUrlForDiagnostics(url);
     seenCount++;
-    lastSeenUrl = url;
+    lastSeenUrl = diagnosticUrl;
     try {
       const meta = readSearchMtopRequestMeta(url);
       if (meta) {
@@ -164,7 +169,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
         return;
       }
       matchedCount++;
-      lastMatchedUrl = url;
+      lastMatchedUrl = diagnosticUrl;
       const parsed = parseOfferItemsFromMtopText(await resp.text());
       if (parsed.length === 0) return;
       if (opts.keep === 'largest') {
@@ -173,9 +178,9 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
         offers = parsed;
       }
       parsedCount++;
-      lastParsedUrl = url;
+      lastParsedUrl = diagnosticUrl;
     } catch (error) {
-      recordFailure(url, error);
+      recordFailure(diagnosticUrl, error);
     }
   };
 

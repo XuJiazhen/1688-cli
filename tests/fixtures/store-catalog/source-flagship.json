@@ -1,0 +1,44 @@
+{
+  "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+  "data": {
+    "content": {
+      "offerCount": "67",
+      "offerList": [
+        {
+          "id": "900000000003",
+          "memberId": "b2b-fixture-source",
+          "subject": "电圆锯",
+          "offerPrice": "88.00",
+          "quantityBegin": "1",
+          "unit": "台",
+          "vagueSaleQuantity": "",
+          "thirtySaleQuantity": "3",
+          "bookedCount": "7",
+          "ninetySaleQuantity": "0",
+          "saleQuantity": "0",
+          "offerImages": [
+            {
+              "imageURI": "https://img.example.test/source-circular-saw.jpg"
+            }
+          ],
+          "offerModel": {
+            "categoryId1": "0"
+          }
+        }
+      ],
+      "offerCategoryDataModel": {
+        "offerCategoryList": [
+          {
+            "id": "fixture-category-source",
+            "name": "电圆锯",
+            "fullName": "电圆锯",
+            "count": "2",
+            "children": []
+          }
+        ],
+        "userDefined": "true"
+      }
+    }
+  },
+  "ret": ["SUCCESS::调用成功"]
+}

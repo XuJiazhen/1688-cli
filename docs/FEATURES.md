@@ -3,7 +3,19 @@
 This file records product ideas that should survive chat context loss. Status
 is intentionally lightweight: `Idea`, `Planned`, `Active`, or `Done`.
 
-Last updated: 2026-06-04
+Last updated: 2026-07-23
+
+## Production Evidence Collection
+
+| Feature | Status | Notes |
+|---|---|---|
+| Collection protocol v1 | Done | Added versioned `CollectionUnit`, `CollectionBatch`, checkpoints, fingerprints, field availability, partial results, and login/risk action requirements. |
+| Incremental search batches | Done | `collect` can fetch one search page with source rank, supplier identity, deduplication, and a resumable cursor while preserving legacy `search` output. |
+| Store catalog collector | Done | `supplier catalog` and `collect` support bounded all-offer scans, categories, category filtering, store keyword search, UI-backed sorting, deduplication, drift warnings, and page checkpoints. |
+| Supplier qualification facts | Done | Qualification collection includes registered business scope, business line, company identity, service/summary facts, certificates, images, and explicit availability. |
+| Offer media manifests | Done | Offer collection preserves nullable SKU facts and extracts ordered main, SKU, and detail image references without downloading image bytes. |
+| Fixture/Playwright parity | Done | All six collection kinds run through the same runtime contract with sanitized fixture replay and live Playwright adapters. |
+| Central diagnostic redaction | Done | Response diagnostics, events, artifacts, evidence references, and fixtures reject or redact cookies, authorization, MTOP tokens, signatures, request data, phone numbers, and unrelated identity fields. |
 
 ## Sourcing Research
 

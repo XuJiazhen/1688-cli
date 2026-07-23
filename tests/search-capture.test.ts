@@ -99,6 +99,8 @@ describe('startSearchOfferCapture', () => {
     expect(result.diagnostics.startedAt).toBeTruthy();
     expect(result.diagnostics.endedAt).toBeTruthy();
     expect(capture.diagnostics().matchedCount).toBe(1);
+    expect(JSON.stringify(result.diagnostics)).not.toContain('getOfferList');
+    expect(JSON.stringify(result.diagnostics)).not.toContain('beginPage');
     targetPage = 3;
   });
 

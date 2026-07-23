@@ -6,6 +6,7 @@ import {
   normalizeSupplierTarget,
   parseAvailableOfferCount,
 } from '../src/commands/supplier-inspect.js';
+import { mapSupplierQualificationPayload } from '../src/session/supplier-qualification.js';
 
 describe('supplier inspect helpers', () => {
   it('normalizes supported supplier targets', () => {
@@ -219,5 +220,32 @@ describe('supplier inspect helpers', () => {
   it('parses visible factory-card offer count', () => {
     expect(parseAvailableOfferCount('工厂店 共34个商品 全部')).toBe(34);
     expect(parseAvailableOfferCount('暂无商品')).toBeNull();
+  });
+
+  it('keeps registered business scope independent from an empty certificate list', () => {
+    const qualification = mapSupplierQualificationPayload({
+      data: {
+        memberId: 'b2b-22066467246504ba0d',
+        certList: [],
+        businessInfo: { companyBusinessLine: '一般项目：户外用品销售。' },
+      },
+    });
+    const result = assembleSupplierInspectResult({
+      target: {
+        input: 'b2b-22066467246504ba0d',
+        type: 'memberId',
+        offerId: null,
+        memberId: 'b2b-22066467246504ba0d',
+      },
+      offerProbe: null,
+      factoryProbe: null,
+      qualification,
+    });
+
+    expect(result.qualification?.registeredBusinessScope).toMatchObject({
+      availability: 'available',
+      value: '一般项目：户外用品销售。',
+    });
+    expect(result.qualification?.certificates).toEqual([]);
   });
 });

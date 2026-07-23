@@ -73,4 +73,47 @@ describe('captureFailureArtifact', () => {
       await fs.rm(home, { recursive: true, force: true });
     }
   });
+
+  it('redacts network URLs and command metadata before persisting artifacts', async () => {
+    const home = await fs.mkdtemp(path.join(os.tmpdir(), 'bb1688-artifacts-'));
+    const previousHome = process.env.BB1688_HOME;
+    process.env.BB1688_HOME = home;
+    try {
+      const secretUrl =
+        'https://h5api.m.1688.com/h5/catalog/1.0/?api=catalog&sign=secret&data=%7B%22memberId%22%3A%22private%22%7D';
+      const details = await captureFailureArtifact(
+        mockContext(),
+        { cmd: 'collect', args: { requestUrl: secretUrl, token: 'secret' } },
+        new CliError(1, 'CAPTURE_TIMEOUT', `Timed out at ${secretUrl}`),
+        {
+          trace: {
+            console: [],
+            pageErrors: [],
+            network: {
+              recent: [{ url: secretUrl }],
+              failed: [],
+              httpErrors: [],
+            },
+          },
+        },
+      );
+
+      const networkText = await fs.readFile(
+        path.join(details.artifactDir!, 'network.json'),
+        'utf8',
+      );
+      const metaText = await fs.readFile(
+        path.join(details.artifactDir!, 'meta.json'),
+        'utf8',
+      );
+      expect(`${networkText}\n${metaText}`).not.toContain('secret');
+      expect(`${networkText}\n${metaText}`).not.toContain('private');
+      expect(networkText).toContain('api=catalog');
+      expect(networkText).toContain('%5Bredacted%5D');
+    } finally {
+      if (previousHome === undefined) delete process.env.BB1688_HOME;
+      else process.env.BB1688_HOME = previousHome;
+      await fs.rm(home, { recursive: true, force: true });
+    }
+  });
 });

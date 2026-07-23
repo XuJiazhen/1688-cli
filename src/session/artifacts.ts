@@ -8,6 +8,11 @@ import {
   type PageState,
 } from './page-state.js';
 import { runsDir } from './paths.js';
+import {
+  redactDiagnosticMetadata,
+  redactTextForDiagnostics,
+  redactUrlForDiagnostics,
+} from './redaction.js';
 
 export interface RunMeta {
   requestId?: string;
@@ -107,14 +112,17 @@ function traceSummary(trace: FailureTraceSnapshot | undefined): Record<string, n
 }
 
 async function writeJson(file: string, value: unknown): Promise<void> {
-  await fs.writeFile(file, JSON.stringify(value, null, 2));
+  await fs.writeFile(
+    file,
+    JSON.stringify(redactDiagnosticMetadata(value), null, 2),
+  );
 }
 
 function errorText(shape: ErrorShape): string {
   const lines = [];
   if (shape.code) lines.push(`code: ${shape.code}`);
-  lines.push(`message: ${shape.message}`);
-  if (shape.stack) lines.push(`stack:\n${shape.stack}`);
+  lines.push(`message: ${redactTextForDiagnostics(shape.message)}`);
+  if (shape.stack) lines.push(`stack:\n${redactTextForDiagnostics(shape.stack)}`);
   return lines.join('\n\n');
 }
 
@@ -141,7 +149,7 @@ export async function captureFailureArtifact(
   };
 
   if (pageState) {
-    details.currentUrl = pageState.url;
+    details.currentUrl = redactUrlForDiagnostics(pageState.url);
     details.pageState = pageState.kind;
     details.category = categoryForPageState(pageState.kind);
     details.recoverHint = recoverHintForPageState(pageState.kind);

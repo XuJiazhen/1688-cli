@@ -124,4 +124,14 @@ describe('command events', () => {
       safe: ['x', { password: '[redacted]', visible: true }],
     });
   });
+
+  it('redacts sensitive query values from URL fields', () => {
+    expect(sanitizeForEvent({
+      currentUrl:
+        'https://h5api.m.1688.com/h5/catalog/1.0/?api=catalog&sign=secret&data=private',
+    })).toEqual({
+      currentUrl:
+        'https://h5api.m.1688.com/h5/catalog/1.0/?api=catalog&sign=%5Bredacted%5D&data=%5Bredacted%5D',
+    });
+  });
 });

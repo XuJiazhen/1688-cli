@@ -1,0 +1,27 @@
+{
+  "searchPage": {
+    "page": 1,
+    "remoteSort": "va_sales_amount_desc",
+    "hasMore": true,
+    "collectedAt": "2026-07-22T00:00:00.000Z",
+    "sourceRef": "fixture:search-page:1",
+    "offers": [
+      {
+        "offerId": "900000000101",
+        "title": "脱敏帐篷商品",
+        "turnover": null,
+        "demand": {
+          "orderCountText": null,
+          "orderCount": null,
+          "soldCountText": null,
+          "soldCount": null
+        },
+        "supplier": {
+          "loginId": "sanitized-supplier",
+          "memberId": "b2b-fixture-supplier",
+          "shopUrl": "https://shop-fixture.1688.com/"
+        }
+      }
+    ]
+  }
+}

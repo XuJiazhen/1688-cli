@@ -93,6 +93,14 @@ const REGISTRY: Record<string, () => Promise<Executor<unknown, unknown>>> = {
     import('../commands/supplier-inspect.js').then(
       (m) => m.execute as Executor<unknown, unknown>,
     ),
+  'supplier-catalog': () =>
+    import('../commands/supplier-catalog.js').then(
+      (m) => m.execute as Executor<unknown, unknown>,
+    ),
+  collect: () =>
+    import('../commands/collect.js').then(
+      (m) => m.execute as Executor<unknown, unknown>,
+    ),
   'supplier-search': () =>
     import('../commands/supplier-search.js').then(
       (m) => m.execute as Executor<unknown, unknown>,

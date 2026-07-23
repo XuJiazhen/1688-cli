@@ -2,6 +2,10 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { eventsFile } from './paths.js';
 import type { CliErrorDetails } from '../io/errors.js';
+import {
+  redactTextForDiagnostics,
+  redactUrlForDiagnostics,
+} from './redaction.js';
 
 export type CommandEventPhase = 'start' | 'end' | 'error';
 export type CommandEventStatus = 'running' | 'ok' | 'error';
@@ -29,16 +33,22 @@ interface ErrorLike {
 
 const SENSITIVE_KEY_RE = /cookie|token|password|passwd|secret|authorization|headers|body|message/i;
 
-export function sanitizeForEvent(value: unknown): unknown {
+export function sanitizeForEvent(value: unknown, key?: string): unknown {
   if (value === null || value === undefined) return value;
+  if (key && SENSITIVE_KEY_RE.test(key)) return '[redacted]';
+  if (typeof value === 'string') {
+    return key && /url$/i.test(key)
+      ? redactUrlForDiagnostics(value)
+      : redactTextForDiagnostics(value);
+  }
   if (typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map(sanitizeForEvent);
+  if (Array.isArray(value)) return value.map((item) => sanitizeForEvent(item));
   const out: Record<string, unknown> = {};
   for (const [key, raw] of Object.entries(value)) {
     if (SENSITIVE_KEY_RE.test(key)) {
       out[key] = '[redacted]';
     } else {
-      out[key] = sanitizeForEvent(raw);
+      out[key] = sanitizeForEvent(raw, key);
     }
   }
   return out;
@@ -189,24 +199,27 @@ function verificationFromDetails(
   details: CliErrorDetails | undefined,
 ): CommandEvent['verification'] | undefined {
   if (!details) return undefined;
+  const currentUrl = details.currentUrl
+    ? redactUrlForDiagnostics(details.currentUrl)
+    : undefined;
   if (details.pageState === 'not_logged_in') {
     return {
       state: 'login_required',
-      currentUrl: details.currentUrl,
+      currentUrl,
     };
   }
   if (details.category === 'risk_control' || details.pageState === 'rate_limited') {
     return {
       state: 'risk_control',
       reason: details.pageState,
-      currentUrl: details.currentUrl,
+      currentUrl,
     };
   }
   if (details.currentUrl || details.pageState) {
     return {
       state: 'unknown',
       reason: details.pageState,
-      currentUrl: details.currentUrl,
+      currentUrl,
     };
   }
   return undefined;

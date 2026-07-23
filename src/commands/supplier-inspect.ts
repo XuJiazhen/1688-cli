@@ -11,6 +11,11 @@ import {
   type ShopCardInfo,
   type SupplierServiceScore,
 } from '../session/offer-evidence.js';
+import type { SupplierQualification } from '../session/supplier-qualification.js';
+import {
+  captureSupplierQualificationForAction,
+  requestSupplierQualificationFromPage,
+} from '../session/qualification-capture.js';
 
 export type { SupplierServiceScore } from '../session/offer-evidence.js';
 
@@ -77,11 +82,13 @@ export interface SupplierInspectResult {
     availableCount: number | null;
     source: 'factory-card-dom' | null;
   };
+  qualification: SupplierQualification | null;
   sources: {
     offerUrl: string | null;
     factoryCardUrl: string | null;
     shopcardCaptured: boolean;
     factoryCardCaptured: boolean;
+    qualificationCaptured: boolean;
   };
   warnings: string[];
 }
@@ -169,6 +176,7 @@ async function executeRaw(
 
   let offerProbe: OfferProbe | null = null;
   let factoryProbe: FactoryProbe | null = null;
+  let qualification: SupplierQualification | null = null;
   let memberId = target.memberId;
 
   if (target.type === 'offerId' && target.offerId) {
@@ -191,10 +199,31 @@ async function executeRaw(
     }
   }
 
+  const qualificationShopUrl =
+    factoryProbe?.factory?.shopUrl ??
+    offerProbe?.seller?.shopUrl ??
+    offerProbe?.shopCard?.url ??
+    null;
+  if (memberId && qualificationShopUrl) {
+    try {
+      qualification = await inspectStoreQualification(
+        ctx,
+        qualificationShopUrl,
+        memberId,
+      );
+      if (!qualification) {
+        warnings.push('Store page did not emit a correlated qualification response.');
+      }
+    } catch (error) {
+      warnings.push(`Qualification enrichment failed: ${errorMessage(error)}`);
+    }
+  }
+
   const result = assembleSupplierInspectResult({
     target: { ...target, memberId: target.memberId ?? memberId ?? null },
     offerProbe,
     factoryProbe,
+    qualification,
     warnings,
   });
 
@@ -207,6 +236,28 @@ async function executeRaw(
   }
 
   return result;
+}
+
+async function inspectStoreQualification(
+  ctx: BrowserContext,
+  shopUrl: string,
+  memberId: string,
+): Promise<SupplierQualification | null> {
+  const page = await ctx.newPage();
+  try {
+    info(`Inspecting registered business scope ${memberId}...`);
+    const result = await captureSupplierQualificationForAction(
+      page,
+      { memberId, timeoutMs: 15_000 },
+      async () => {
+        await goto1688(page, shopUrl, 'supplier shop');
+        await requestSupplierQualificationFromPage(page, memberId);
+      },
+    );
+    return result.qualification;
+  } finally {
+    await page.close().catch(() => {});
+  }
 }
 
 async function inspectOfferTarget(
@@ -312,7 +363,7 @@ async function goto1688(
   }
   if (/punish|sec|risk|nocaptcha/i.test(page.url())) {
     throw new CliError(
-      8,
+      4,
       'RISK_CONTROL',
       '1688 risk control appeared. Retry with `--headed` and complete verification.',
     );
@@ -490,6 +541,7 @@ export function assembleSupplierInspectResult(input: {
   target: SupplierTarget;
   offerProbe: OfferProbe | null;
   factoryProbe: FactoryProbe | null;
+  qualification?: SupplierQualification | null;
   warnings?: string[];
 }): SupplierInspectResult {
   const offerSeller = input.offerProbe?.seller ?? null;
@@ -558,11 +610,13 @@ export function assembleSupplierInspectResult(input: {
       availableCount,
       source: availableCount !== null ? 'factory-card-dom' : null,
     },
+    qualification: input.qualification ?? null,
     sources: {
       offerUrl: input.offerProbe?.offerUrl ?? null,
       factoryCardUrl: input.factoryProbe?.factoryCardUrl ?? null,
       shopcardCaptured: input.offerProbe?.shopcardCaptured ?? false,
       factoryCardCaptured: input.factoryProbe?.factoryCardCaptured ?? false,
+      qualificationCaptured: input.qualification !== undefined && input.qualification !== null,
     },
     warnings: input.warnings ?? [],
   };
@@ -600,6 +654,11 @@ function printSupplierInspect(data: SupplierInspectResult): void {
   }
   if (data.factory.productionService) {
     process.stdout.write(`  products: ${data.factory.productionService}\n`);
+  }
+  if (data.qualification?.registeredBusinessScope.availability === 'available') {
+    process.stdout.write(
+      `  scope:    ${data.qualification.registeredBusinessScope.value}\n`,
+    );
   }
   if (data.offers.availableCount !== null) {
     process.stdout.write(`  offers:   ${data.offers.availableCount}\n`);

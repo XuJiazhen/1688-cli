@@ -496,11 +496,28 @@ CSV table.
     price: number | null,
     multiPrice: number | null,
     stock: number | null,
-    saleCount: number,
+    saleCount: number | null,
+    availability: {
+      price: "available" | "not-present",
+      stock: "available" | "not-present",
+      saleCount: "available" | "not-present",
+    },
     image: string | null,
   }>,
   mainImage: string | null,
   images: string[],
+  media: {
+    availability: "available" | "not-present" | "failed",
+    items: Array<{
+      role: "main" | "sku" | "detail",
+      order: number,
+      originalUrl: string,
+      normalizedUrl: string,
+      sourceField: string,
+    }>,
+    source: EvidenceSource,
+    warnings: Array<{ code: string, message: string, order?: number }>,
+  },
   sources: {
     shopCardResponseObserved: boolean,
     shopCardCaptured: boolean,
@@ -664,6 +681,155 @@ Watch mode emits one object per new message:
 Orders include buyer actions, service entries, and display badges. Preserve
 `actions[]`, `services[]`, and `badges[]` because downstream agents use them to
 decide what follow-up is possible.
+
+## Collection Protocol v1
+
+`collect` and production Browser Workers execute one bounded collection unit.
+The final selection target, rule evaluation, database cache, review pool, and
+`QualifiedSKU` count belong to the business system and are not CLI fields.
+
+```ts
+type CollectionUnit = {
+  schemaVersion: 1,
+  unitId: string,
+  taskId?: string,
+  kind: "search-page" | "store-catalog" | "store-categories"
+      | "store-qualification" | "offer-detail" | "offer-media-manifest",
+  subject: {
+    keyword?: string,
+    offerId?: string,
+    supplier?: { memberId?: string, shopUrl?: string, sourceOfferId?: string },
+  },
+  scope?: {
+    requestedScope?: "page" | "bounded-pages" | "full-scan",
+    categoryId?: string,
+    storeKeyword?: string,
+    sort?: string,
+    cursor?: string,
+    pageSize?: number,
+    maxPagesPerBatch?: number,
+    requestedFacts?: string[],
+  },
+  limits?: { maxItems?: number, deadlineMs?: number },
+}
+```
+
+The result is a versioned, idempotently ingestible batch:
+
+```ts
+type CollectionBatch = {
+  schemaVersion: 1,
+  batchId: string,
+  unitId: string,
+  kind: CollectionUnit["kind"],
+  status: "completed" | "partial" | "blocked" | "failed",
+  startedAt: string,
+  completedAt: string,
+  subject: Record<string, unknown>,
+  scope: Record<string, unknown>,
+  observations: Array<Record<string, unknown>>,
+  completeness: {
+    requestedScope: "page" | "bounded-pages" | "full-scan",
+    state: "complete" | "truncated" | "unknown",
+    observedPages: number[],
+    failedPages: number[],
+    expectedItems?: number,
+    uniqueItems: number,
+  },
+  duplicateObservations: Array<{
+    key: string,
+    firstSource: string,
+    duplicateSource: string,
+  }>,
+  warnings: Array<{ code: string, message: string, details?: object }>,
+  errors: Array<{ code: string, message: string, retryable?: boolean, details?: object }>,
+  checkpoint?: CollectionCheckpoint,
+  actionRequired?: { type: "login" | "risk-control", message: string },
+  rawEvidenceRefs: string[],
+  metrics: Record<string, number>,
+}
+
+type CollectionCheckpoint = {
+  schemaVersion: 1,
+  unitFingerprint: string,
+  kind: CollectionUnit["kind"],
+  subject: Record<string, unknown>,
+  scope: Record<string, unknown>,
+  nextCursor?: string,
+  nextPage?: number,
+  completedPages: number[],
+  seenKeys: string[],
+  pendingKeys: string[],
+  attemptCounts: Record<string, number>,
+  updatedAt: string,
+}
+```
+
+Changing the target keyword, supplier, offer, category, store keyword, sort,
+page size, requested scope, or requested facts changes `unitFingerprint`.
+Changing retry identity, deadline, item limit, or pages per batch does not.
+An incompatible checkpoint fails with `CHECKPOINT_INCOMPATIBLE`.
+
+Field evidence distinguishes a real empty value from unavailable data:
+
+```ts
+type Evidence<T> =
+  | { availability: "available", value: T, source: EvidenceSource }
+  | {
+      availability: "not-present" | "not-collected" | "failed",
+      value: null,
+      source: EvidenceSource,
+      error?: { code: string, message: string },
+    }
+
+type EvidenceSource = {
+  sourceType: "search-payload" | "offer-payload" | "supplier-payload"
+      | "store-catalog" | "page-dom",
+  api?: string,
+  componentKey?: string,
+  fieldPath?: string,
+  sourceRef: string,
+  collectedAt: string,
+  collectorVersion: string,
+  parserVersion: string,
+  rawRef?: string,
+}
+```
+
+Public references and diagnostics must not contain Cookie, Authorization,
+MTOP token, `sign`, or request `data`. Existing authentication errors remain
+`NOT_LOGGED_IN` (exit 3) and `RISK_CONTROL` (exit 4); a batch uses
+`actionRequired` to tell the scheduler what human action is needed.
+
+Kind-specific observations are additive records inside the common batch:
+
+| Kind | Observation payload |
+|---|---|
+| `search-page` | `offerId`, full normalized search `offer`, source page, page/raw rank, remote sort, and collection time |
+| `store-catalog` | `offerId`, normalized store offer, source page/position, query/category/sort metadata, supplier identity, and collection time |
+| `store-categories` | store identity, `offerCount`, category tree/counts, and parsed plus raw `userDefined` state |
+| `store-qualification` | company/business-scope facts as `Evidence`, certificates/images, and certificate-list availability |
+| `offer-detail` | `offerId`, normalized `OfferResult`, and collection time |
+| `offer-media-manifest` | `offerId`, ordered main/SKU/detail media manifest, and collection time |
+
+An empty `certificates` array with `certificateListAvailability: "available"`
+means the returned list contained no certificate items; it does not mean that
+the supplier lacks business registration or other qualification facts.
+Unknown SKU price, stock, or sales remain `null` with `availability` rather
+than becoming zero. Media observations contain URL references only; no image
+bytes are downloaded by this protocol.
+
+The public command accepts inline JSON, `@file`, or stdin, with an optional
+checkpoint and complete-result file:
+
+```bash
+1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
+cat unit.json | 1688 collect - --json
+```
+
+`supplier catalog` is a convenience command that constructs a catalog or
+category `CollectionUnit`; `--full` remains bounded by `--max-pages` and
+`--max-items` in the current invocation.
 
 ## Generated Shape Index
 

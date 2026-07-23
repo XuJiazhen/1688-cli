@@ -1,0 +1,34 @@
+{
+  "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+  "data": {
+    "content": {
+      "offerCount": "1",
+      "offerCategoryDataModel": {
+        "offerCategoryList": [],
+        "userDefined": "false"
+      },
+      "offerList": [
+        {
+          "id": "900000000101",
+          "memberId": "b2b-fixture-ordinary",
+          "subject": "分类筛选工具",
+          "offerImages": [
+            {
+              "imageURI": "https://img.example.test/900000000101.jpg"
+            }
+          ],
+          "offerPrice": "10.00",
+          "quantityBegin": "1",
+          "unit": "件",
+          "offerModel": {
+            "categoryId1": "0",
+            "bookedCount": "0",
+            "agentBookedCount": "0",
+            "quantitySumMonth": "0",
+            "saleQuantity": "0"
+          }
+        }
+      ]
+    }
+  }
+}

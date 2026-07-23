@@ -1,0 +1,27 @@
+{
+  "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+  "data": {
+    "memberId": "b2b-fixture-ordinary",
+    "category": {
+      "offerCategoryList": [
+        {
+          "id": "fixture-category-tools",
+          "name": "工具",
+          "fullName": "工具",
+          "count": "3",
+          "children": [
+            {
+              "id": "fixture-category-hand-tools",
+              "name": "手工具",
+              "fullName": "工具 > 手工具",
+              "count": "2",
+              "children": []
+            }
+          ]
+        }
+      ],
+      "userDefined": "false"
+    }
+  },
+  "ret": ["SUCCESS::调用成功"]
+}

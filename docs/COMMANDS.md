@@ -17,8 +17,10 @@ checkout -> tracking -> post-sale.
 1688 offer <offerId...> --pro     # batch details, bypassing daemon health pause
 1688 compare <offerId...>         # compare offer details for sourcing
 1688 supplier inspect <target>    # supplier/factory trust signals from offerId or b2b-* memberId
+1688 supplier catalog <target>    # bounded store catalog/category collection
 1688 supplier search <keyword...> # supplier discovery from 1688 company search
 1688 supplier research <keyword...> # supplier scoring + inspect enrichment from company search
+1688 collect <unit>               # execute one versioned CollectionUnit
 ```
 
 Research-oriented `search` filters:
@@ -92,6 +94,41 @@ search results. Shared flags:
 
 `supplier search` defaults to `--enrich 0`. `supplier research` defaults to
 `--enrich top:10`.
+
+### Production Collection
+
+`supplier catalog` collects one bounded store batch. The target can be an
+offer ID, `b2b-*` member ID, or 1688 shop URL:
+
+```bash
+1688 supplier catalog 628196518518 --max-pages 1 --json
+1688 supplier catalog https://example.1688.com --categories --json
+1688 supplier catalog https://example.1688.com --category-id 123 --max-pages 2
+1688 supplier catalog https://example.1688.com --keyword 帐篷 --sort tradenumdown
+1688 supplier catalog https://example.1688.com --full --max-pages 3 --max-items 80
+```
+
+`--full` describes the requested scope but does not make one invocation
+unbounded. `--max-pages` and `--max-items` still cap the batch; a partial batch
+returns a checkpoint for the caller to persist and schedule.
+
+`collect` is the stable worker integration entry point. It accepts one
+`CollectionUnit` as inline JSON, `@file`, or stdin (`-`), and always runs
+inline rather than through the five-minute daemon request path:
+
+```bash
+1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
+cat unit.json | 1688 collect - --json
+
+1688 collect '{"schemaVersion":1,"unitId":"tent-search-1","kind":"search-page","subject":{"keyword":"帐篷"},"scope":{"requestedScope":"page","pageSize":60}}' --json
+```
+
+Supported kinds are `search-page`, `store-catalog`, `store-categories`,
+`store-qualification`, `offer-detail`, and `offer-media-manifest`. For
+deterministic development, `--fixture <file>` runs the same collection
+contract without a browser. The result is one `CollectionBatch`; collection
+does not evaluate selection rules or decide when a business task has reached
+its qualified-SKU target. See [JSON_CONTRACTS.md](JSON_CONTRACTS.md#collection-protocol-v1).
 
 ## Pre-Sale Inquiry
 

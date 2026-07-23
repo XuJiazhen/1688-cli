@@ -1,0 +1,44 @@
+{
+  "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+  "data": {
+    "content": {
+      "offerCount": "33",
+      "offerList": [
+        {
+          "id": "900000000004",
+          "memberId": "b2b-fixture-factory",
+          "subject": "电动吹风机",
+          "offerPrice": "45.00",
+          "quantityBegin": "1",
+          "unit": "台",
+          "vagueSaleQuantity": "500+",
+          "thirtySaleQuantity": "55",
+          "bookedCount": "145",
+          "ninetySaleQuantity": "0",
+          "saleQuantity": "0",
+          "offerImages": [
+            {
+              "imageURI": "https://img.example.test/factory-blower.jpg"
+            }
+          ],
+          "offerModel": {
+            "categoryId1": "0"
+          }
+        }
+      ],
+      "offerCategoryDataModel": {
+        "offerCategoryList": [
+          {
+            "id": "fixture-category-factory",
+            "name": "电动吹风机",
+            "fullName": "电动吹风机",
+            "count": "6",
+            "children": []
+          }
+        ],
+        "userDefined": "false"
+      }
+    }
+  },
+  "ret": ["SUCCESS::调用成功"]
+}

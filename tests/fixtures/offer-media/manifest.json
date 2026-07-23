@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-07-22T00:00:00.000Z",
+  "parserVersion": "offer-media-v1",
+  "source": "sanitized-minimal-derivative-of-local-real-capture",
+  "allowedScriptGlobal": "offer_details",
+  "fixtures": {
+    "detail-14.js": "14 ordered detail images",
+    "detail-19.js": "19 ordered detail images"
+  }
+}
