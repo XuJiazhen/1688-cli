@@ -171,7 +171,7 @@ export async function resolveCatalogSupplier(
       ...(supplier.sourceOfferId ? { sourceOfferId: supplier.sourceOfferId } : {}),
     };
   }
-  const target = supplier.memberId ?? supplier.sourceOfferId;
+  const target = supplierInspectionTarget(supplier);
   if (!target) throw new CliError(2, 'BAD_INPUT', 'Supplier reference is incomplete.');
   const inspected = await inspectSupplier(ctx, { target, headed });
   const shopUrl = inspected.supplier.shopUrl;
@@ -187,6 +187,16 @@ export async function resolveCatalogSupplier(
     ...(inspected.supplier.memberId ? { memberId: inspected.supplier.memberId } : {}),
     ...(supplier.sourceOfferId ? { sourceOfferId: supplier.sourceOfferId } : {}),
   };
+}
+
+export function supplierInspectionTarget(
+  supplier: NonNullable<CollectionUnit['subject']['supplier']>,
+): string | null {
+  const memberId = supplier.memberId?.trim();
+  if (memberId && /^b2b-[A-Za-z0-9_-]+$/.test(memberId)) {
+    return memberId;
+  }
+  return supplier.sourceOfferId?.trim() || memberId || null;
 }
 
 export function createPlaywrightCatalogAdapter(

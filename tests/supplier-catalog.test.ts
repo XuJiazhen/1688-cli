@@ -5,6 +5,7 @@ import {
   findCatalogCategoryName,
   normalizeCatalogTarget,
   planCatalogNavigation,
+  supplierInspectionTarget,
 } from '../src/commands/supplier-catalog.js';
 
 describe('supplier catalog command helpers', () => {
@@ -27,6 +28,27 @@ describe('supplier catalog command helpers', () => {
       shopUrl: 'https://shop-example.1688.com/',
     });
     expect(() => normalizeCatalogTarget('seller-login-id')).toThrow(/offerId.*memberId.*shop URL/i);
+  });
+
+  it('falls back to the source offer for member values that cannot be inspected directly', () => {
+    expect(
+      supplierInspectionTarget({
+        memberId: 'seller-login-id',
+        sourceOfferId: '1234567890',
+      }),
+    ).toBe('1234567890');
+    expect(
+      supplierInspectionTarget({
+        memberId: '721241300563',
+        sourceOfferId: '9876543210',
+      }),
+    ).toBe('9876543210');
+    expect(
+      supplierInspectionTarget({
+        memberId: 'b2b-valid-member',
+        sourceOfferId: '9876543210',
+      }),
+    ).toBe('b2b-valid-member');
   });
 
   it('builds all-products, category, and keyword URLs on the resolved shop origin', () => {
