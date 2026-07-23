@@ -146,6 +146,229 @@ describe('incremental search batches', () => {
     });
   });
 
+  it('emits at most pageSize observations and resumes the un-emitted remote-page offers', () => {
+    const boundedUnit = {
+      ...unit,
+      scope: { ...unit.scope, pageSize: 1 },
+    };
+    const remotePage = [offer('1101'), offer('1102'), offer('1103')];
+
+    const first = createSearchPageBatch({
+      unit: boundedUnit,
+      batchId: 'batch-page-subset-1',
+      page: 1,
+      remoteSort: null,
+      offers: remotePage,
+      hasMore: false,
+      startedAt: '2026-07-22T02:10:00Z',
+      collectedAt: '2026-07-22T02:10:01Z',
+      completedAt: '2026-07-22T02:10:02Z',
+    });
+
+    expect(first).toMatchObject({
+      status: 'partial',
+      observations: [{ offerId: '1101', pageRank: 1, rawRank: 1 }],
+      completeness: { state: 'truncated', uniqueItems: 1 },
+      checkpoint: {
+        nextPage: 1,
+        completedPages: [],
+        seenKeys: ['1101'],
+        pendingKeys: ['1102', '1103'],
+      },
+      warnings: [{ code: 'SEARCH_PAGE_EMISSION_TRUNCATED' }],
+      metrics: {
+        capturedOffers: 3,
+        uniqueNewOffers: 1,
+        deferredOffers: 2,
+        emissionLimit: 1,
+      },
+    });
+
+    const second = createSearchPageBatch({
+      unit: boundedUnit,
+      checkpoint: first.checkpoint,
+      batchId: 'batch-page-subset-2',
+      page: 1,
+      remoteSort: null,
+      offers: remotePage,
+      hasMore: false,
+      startedAt: '2026-07-22T02:11:00Z',
+      collectedAt: '2026-07-22T02:11:01Z',
+      completedAt: '2026-07-22T02:11:02Z',
+    });
+    const third = createSearchPageBatch({
+      unit: boundedUnit,
+      checkpoint: second.checkpoint,
+      batchId: 'batch-page-subset-3',
+      page: 1,
+      remoteSort: null,
+      offers: remotePage,
+      hasMore: false,
+      startedAt: '2026-07-22T02:12:00Z',
+      collectedAt: '2026-07-22T02:12:01Z',
+      completedAt: '2026-07-22T02:12:02Z',
+    });
+
+    expect(second).toMatchObject({
+      status: 'partial',
+      observations: [{ offerId: '1102', pageRank: 2, rawRank: 2 }],
+      checkpoint: {
+        nextPage: 1,
+        seenKeys: ['1101', '1102'],
+        pendingKeys: ['1103'],
+      },
+      metrics: {
+        duplicateOffers: 0,
+        replayedOffers: 1,
+      },
+    });
+    expect(third).toMatchObject({
+      status: 'completed',
+      observations: [{ offerId: '1103', pageRank: 3, rawRank: 3 }],
+      completeness: { state: 'complete', uniqueItems: 3 },
+      metrics: {
+        duplicateOffers: 0,
+        replayedOffers: 2,
+      },
+    });
+    expect(third.checkpoint).toBeUndefined();
+  });
+
+  it('uses maxItems as a stricter per-batch observation limit', () => {
+    const batch = createSearchPageBatch({
+      unit: {
+        ...unit,
+        limits: { maxItems: 1 },
+      },
+      batchId: 'batch-max-items',
+      page: 1,
+      remoteSort: null,
+      offers: [offer('1201'), offer('1202')],
+      hasMore: true,
+      startedAt: '2026-07-22T02:20:00Z',
+      collectedAt: '2026-07-22T02:20:01Z',
+      completedAt: '2026-07-22T02:20:02Z',
+    });
+
+    expect(batch.observations.map((item) => item.offerId)).toEqual(['1201']);
+    expect(batch.checkpoint).toMatchObject({
+      nextPage: 1,
+      pendingKeys: ['1202'],
+    });
+    expect(batch.metrics).toMatchObject({
+      emissionLimit: 1,
+      deferredOffers: 1,
+    });
+  });
+
+  it('preserves missing pending offers and does not substitute page-drift arrivals', () => {
+    const boundedUnit = {
+      ...unit,
+      scope: { ...unit.scope, pageSize: 1 },
+    };
+    const first = createSearchPageBatch({
+      unit: boundedUnit,
+      batchId: 'batch-drift-1',
+      page: 1,
+      remoteSort: null,
+      offers: [offer('1301'), offer('1302'), offer('1303')],
+      hasMore: false,
+      startedAt: '2026-07-22T02:25:00Z',
+      collectedAt: '2026-07-22T02:25:01Z',
+      completedAt: '2026-07-22T02:25:02Z',
+    });
+
+    const resumed = createSearchPageBatch({
+      unit: boundedUnit,
+      checkpoint: first.checkpoint,
+      batchId: 'batch-drift-2',
+      page: 1,
+      remoteSort: null,
+      offers: [offer('1301'), offer('1303'), offer('1399')],
+      hasMore: false,
+      startedAt: '2026-07-22T02:26:00Z',
+      collectedAt: '2026-07-22T02:26:01Z',
+      completedAt: '2026-07-22T02:26:02Z',
+    });
+
+    expect(resumed.observations.map((item) => item.offerId)).toEqual(['1303']);
+    expect(resumed).toMatchObject({
+      status: 'partial',
+      completeness: { state: 'truncated' },
+      metrics: {
+        duplicateOffers: 0,
+        replayedOffers: 1,
+        unrecoverablePendingOffers: 1,
+      },
+    });
+    expect(resumed.checkpoint).toBeUndefined();
+    expect(resumed.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'SEARCH_PAGE_CHECKPOINT_DRIFT',
+          details: expect.objectContaining({
+            page: 1,
+            missingPendingOfferIds: ['1302'],
+            unexpectedOfferIds: ['1399'],
+            continuationStopped: true,
+          }),
+        }),
+      ]),
+    );
+    expect(resumed.warnings).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'SEARCH_PAGE_EMISSION_TRUNCATED' }),
+      ]),
+    );
+  });
+
+  it('archives remote page-budget exhaustion instead of checkpointing page 21', () => {
+    const page20Unit = {
+      ...unit,
+      scope: {
+        ...unit.scope,
+        cursor: encodeSearchCursor(20),
+      },
+    };
+    const remotePage = Array.from({ length: 60 }, (_, index) =>
+      offer(String(2000 + index)),
+    );
+
+    const batch = createSearchPageBatch({
+      unit: page20Unit,
+      batchId: 'batch-page-20',
+      page: 20,
+      remoteSort: null,
+      offers: remotePage,
+      hasMore: true,
+      startedAt: '2026-07-22T02:30:00Z',
+      collectedAt: '2026-07-22T02:30:01Z',
+      completedAt: '2026-07-22T02:30:02Z',
+    });
+
+    expect(batch).toMatchObject({
+      status: 'partial',
+      completeness: {
+        requestedScope: 'bounded-pages',
+        state: 'truncated',
+        observedPages: [20],
+        uniqueItems: 60,
+      },
+      warnings: [
+        {
+          code: 'SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED',
+          details: {
+            page: 20,
+            remotePageLimit: 20,
+            remoteHasMore: true,
+          },
+        },
+      ],
+    });
+    expect(batch.observations).toHaveLength(60);
+    expect(batch.checkpoint).toBeUndefined();
+  });
+
   it('keeps unknown sales evidence unknown instead of coercing it to zero', () => {
     const unknownSales = {
       ...offer('2001'),

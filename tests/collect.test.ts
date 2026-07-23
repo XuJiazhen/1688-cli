@@ -8,6 +8,7 @@ import {
 } from '../src/commands/collect.js';
 import type { CollectionUnit } from '../src/collection/contracts.js';
 import { CliError } from '../src/io/errors.js';
+import type { Offer } from '../src/session/search-mtop.js';
 
 const catalogUnit: CollectionUnit = {
   schemaVersion: 1,
@@ -159,5 +160,51 @@ describe('collect entry', () => {
     expect(
       (media.observations[0]?.media as { items: unknown[] }).items,
     ).toHaveLength(14);
+  });
+
+  it('enforces search observation limits through the worker collection entry point', async () => {
+    const searchUnit: CollectionUnit = {
+      schemaVersion: 1,
+      unitId: 'collect-search-bounded',
+      kind: 'search-page',
+      subject: { keyword: '帐篷' },
+      scope: { requestedScope: 'bounded-pages', pageSize: 1 },
+      limits: { maxItems: 1 },
+    };
+    const offers = ['910000000101', '910000000102', '910000000103'].map(
+      (offerId) => ({
+        offerId,
+        title: `脱敏帐篷商品 ${offerId}`,
+        supplier: {
+          memberId: `b2b-${offerId}`,
+          shopUrl: `https://shop-${offerId}.1688.com/`,
+        },
+      }) as Offer,
+    );
+
+    const batch = await executeCollectionUnit({
+      unit: searchUnit,
+      runtime: createFixtureCollectionRuntime({
+        searchPage: {
+          page: 1,
+          offers,
+          hasMore: false,
+          collectedAt: '2026-07-22T05:00:00Z',
+        },
+      }),
+    });
+
+    expect(batch.observations.map((item) => item.offerId)).toEqual([
+      '910000000101',
+    ]);
+    expect(batch).toMatchObject({
+      status: 'partial',
+      completeness: { state: 'truncated', uniqueItems: 1 },
+      checkpoint: {
+        nextPage: 1,
+        completedPages: [],
+        pendingKeys: ['910000000102', '910000000103'],
+      },
+    });
   });
 });

@@ -770,6 +770,27 @@ page size, requested scope, or requested facts changes `unitFingerprint`.
 Changing retry identity, deadline, item limit, or pages per batch does not.
 An incompatible checkpoint fails with `CHECKPOINT_INCOMPATIBLE`.
 
+1688 search transport pages remain fixed at 60 offers. For `search-page`,
+`scope.pageSize` and `limits.maxItems` cap the observations emitted by one
+batch; the stricter value wins. If that cap leaves offers on the captured
+remote page, the batch is `partial`/`truncated` and its checkpoint keeps the
+same `nextPage` plus the un-emitted offer IDs in `pendingKeys`. A resume
+re-fetches that page and emits the next deterministic subset, so advancing
+the checkpoint never discards the rest of a 60-offer response.
+
+When a resumed page no longer contains a pending offer, the batch archives
+`SEARCH_PAGE_CHECKPOINT_DRIFT` as `partial`/`truncated` and deliberately omits
+another checkpoint. This hard stop prevents an unrecoverable pending ID from
+creating an infinite retry loop. Offers already emitted from that same remote
+page are counted in `metrics.replayedOffers`, not as cross-page
+`duplicateObservations` or `metrics.duplicateOffers`.
+
+Search collection has a technical budget of 20 remote pages. If page 20 is
+full and the requested scope would otherwise continue, the batch is an
+archivable terminal `partial`/`truncated` result with warning
+`SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED` and no page-21 checkpoint. This denotes
+a technical collection boundary, not natural exhaustion of 1688 results.
+
 Field evidence distinguishes a real empty value from unavailable data:
 
 ```ts

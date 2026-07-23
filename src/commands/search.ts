@@ -8,6 +8,10 @@ import { withRecovery } from '../session/recovery.js';
 import { clickSearchNextPage } from '../session/search-locators.js';
 import { startSearchOfferCapture } from '../session/search-capture.js';
 import {
+  SEARCH_REMOTE_PAGE_LIMIT,
+  SEARCH_REMOTE_PAGE_SIZE,
+} from '../session/search-limits.js';
+import {
   SEARCH_APP_ID,
   SEARCH_MTOP_API,
   mapOffer,
@@ -118,7 +122,10 @@ export async function execute(
       const sort = args.sort ?? 'relevance';
       const filters = args.filters ?? normalizeFilters({});
       const fetchMax = hasActiveFilters(filters)
-        ? Math.min(Math.max(args.max * 3, PAGE_SIZE), PAGE_SIZE * MAX_PAGES)
+        ? Math.min(
+            Math.max(args.max * 3, SEARCH_REMOTE_PAGE_SIZE),
+            SEARCH_REMOTE_PAGE_SIZE * SEARCH_REMOTE_PAGE_LIMIT,
+          )
         : args.max;
       const offers = await fetchSearch(
         ctx,
@@ -149,8 +156,16 @@ export async function fetchIncrementalSearchPage(
   ctx: BrowserContext,
   args: IncrementalSearchPageArgs,
 ): Promise<IncrementalSearchPageResult> {
-  if (!Number.isInteger(args.page) || args.page < 1 || args.page > MAX_PAGES) {
-    throw new CliError(2, 'BAD_INPUT', `Search page must be between 1 and ${MAX_PAGES}.`);
+  if (
+    !Number.isInteger(args.page) ||
+    args.page < 1 ||
+    args.page > SEARCH_REMOTE_PAGE_LIMIT
+  ) {
+    throw new CliError(
+      2,
+      'BAD_INPUT',
+      `Search page must be between 1 and ${SEARCH_REMOTE_PAGE_LIMIT}.`,
+    );
   }
   const keyword = args.keyword.trim();
   if (!keyword) throw new CliError(2, 'BAD_INPUT', 'Search keyword is required.');
@@ -161,7 +176,7 @@ export async function fetchIncrementalSearchPage(
     ctx,
     keyword,
     args.headed === true,
-    args.page * PAGE_SIZE,
+    args.page * SEARCH_REMOTE_PAGE_SIZE,
     sort,
     args.pageDelayMin ?? 2,
     args.pageDelayMax ?? 4,
@@ -184,10 +199,10 @@ export async function fetchIncrementalSearchPage(
   const pageOffers = captured as Offer[];
   return {
     page: args.page,
-    pageSize: PAGE_SIZE,
+    pageSize: SEARCH_REMOTE_PAGE_SIZE,
     remoteSort: remoteSortType(sort),
     offers: pageOffers,
-    hasMore: pageOffers.length >= PAGE_SIZE,
+    hasMore: pageOffers.length >= SEARCH_REMOTE_PAGE_SIZE,
     collectedAt: collectedAt as string,
   };
 }
@@ -197,7 +212,12 @@ export async function run(keyword: string, opts: SearchOpts): Promise<void> {
   if (!kw) {
     throw new CliError(2, 'BAD_INPUT', 'Search keyword is required.');
   }
-  const max = parsePositiveInt(opts.max, '--max', 20, PAGE_SIZE * MAX_PAGES);
+  const max = parsePositiveInt(
+    opts.max,
+    '--max',
+    20,
+    SEARCH_REMOTE_PAGE_SIZE * SEARCH_REMOTE_PAGE_LIMIT,
+  );
   const sort = normalizeSearchSort(opts.sort);
   const pageDelayMin = parsePositiveInt(opts.pageDelayMin, '--page-delay-min', 2, 120);
   const pageDelayMax = parsePositiveInt(opts.pageDelayMax, '--page-delay-max', 4, 120);
@@ -261,12 +281,10 @@ export { SEARCH_APP_ID, SEARCH_MTOP_API, mapOffer };
 export const SEARCH_WARMUP_URL = 'https://www.1688.com/';
 // 1688 search returns 60 offers per page. `--max` auto-paginates by
 // clicking the in-page "next" arrow (which keeps the search-context
-// `pageId` stable — see fetchSearch for why that matters). MAX_PAGES caps
-// it: each extra page is another click + mtop round-trip and additional WAF
-// exposure. Twenty pages allow a 1,000-result organic snapshot after P4P ads
-// are filtered while retaining a finite upper bound.
-const PAGE_SIZE = 60;
-const MAX_PAGES = 20;
+// `pageId` stable — see fetchSearch for why that matters). The remote-page
+// budget caps it: each extra page is another click + mtop round-trip and
+// additional WAF exposure. Twenty pages allow a 1,000-result organic snapshot
+// after P4P ads are filtered while retaining a finite upper bound.
 
 export { parseMtopJsonp };
 
@@ -289,8 +307,8 @@ async function fetchSearch(
   const baseUrl = buildSearchUrl(keyword, sort);
   const sortType = remoteSortType(sort);
   const pagesWanted = Math.min(
-    Math.max(1, Math.ceil(maxResults / PAGE_SIZE)),
-    MAX_PAGES,
+    Math.max(1, Math.ceil(maxResults / SEARCH_REMOTE_PAGE_SIZE)),
+    SEARCH_REMOTE_PAGE_LIMIT,
   );
 
   // The search capture must only attach AFTER warmup: home/search pages can
@@ -638,7 +656,7 @@ async function fetchSearch(
     //  - zero new items means pagination isn't advancing (bail rather than
     //    spin through identical pages)
     if (allOffers.length >= maxResults) break;
-    if (capturedOffers.length < PAGE_SIZE) break;
+    if (capturedOffers.length < SEARCH_REMOTE_PAGE_SIZE) break;
     if (added === 0) break;
 
     // Configurable pacing makes long search snapshots reproducible and lets

@@ -130,6 +130,16 @@ contract without a browser. The result is one `CollectionBatch`; collection
 does not evaluate selection rules or decide when a business task has reached
 its qualified-SKU target. See [JSON_CONTRACTS.md](JSON_CONTRACTS.md#collection-protocol-v1).
 
+For `search-page`, 1688 still returns fixed 60-offer remote pages.
+`scope.pageSize` and `limits.maxItems` limit only the deterministic subset
+emitted in one batch. A partial-page checkpoint resumes that same remote page
+until every captured offer has been emitted. If a pending offer disappears
+between captures, `SEARCH_PAGE_CHECKPOINT_DRIFT` stops continuation without
+another checkpoint instead of retrying forever. Remote page 20 is the
+technical search budget: a full page there returns a terminal
+`partial`/`truncated` batch with `SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED`, never a
+page-21 checkpoint.
+
 ## Pre-Sale Inquiry
 
 ```bash
