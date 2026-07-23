@@ -1,13 +1,20 @@
 import { readFile } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
 import path from 'node:path';
+import type { Page, Response as PWResponse } from 'playwright';
 import { describe, expect, it } from 'vitest';
 import {
   createFixtureCollectionRuntime,
   executeCollectionUnit,
+  navigateAndResolveQualificationMember,
   type CollectionRuntime,
 } from '../src/commands/collect.js';
 import type { CollectionUnit } from '../src/collection/contracts.js';
 import { CliError } from '../src/io/errors.js';
+import {
+  ALISITE_MODULE_API,
+  STORE_CATEGORIES_COMPONENT_KEY,
+} from '../src/session/alisite-module.js';
 import type { Offer } from '../src/session/search-mtop.js';
 
 const catalogUnit: CollectionUnit = {
@@ -17,6 +24,65 @@ const catalogUnit: CollectionUnit = {
   subject: { supplier: { memberId: 'b2b-fixture-supplier' } },
   scope: { requestedScope: 'page', pageSize: 2, maxPagesPerBatch: 1 },
 };
+
+class QualificationMemberPage extends EventEmitter {
+  readonly navigatedUrls: string[] = [];
+
+  constructor(
+    private readonly categoryPayload: unknown,
+    private readonly resolvedMemberId?: string,
+  ) {
+    super();
+  }
+
+  async goto(url: string): Promise<null> {
+    this.navigatedUrls.push(url);
+    if (this.resolvedMemberId) {
+      this.emit(
+        'response',
+        qualificationMemberResponse(
+          this.categoryPayload,
+          this.resolvedMemberId,
+        ),
+      );
+    }
+    return null;
+  }
+
+  isClosed(): boolean {
+    return false;
+  }
+
+  url(): string {
+    return this.navigatedUrls.at(-1) ?? 'https://fixture-shop.1688.com/';
+  }
+
+  async title(): Promise<string> {
+    return 'Fixture shop';
+  }
+
+  async evaluate(): Promise<string> {
+    return '';
+  }
+}
+
+function qualificationMemberResponse(
+  payload: unknown,
+  memberId: string,
+): PWResponse {
+  const data = {
+    componentKey: STORE_CATEGORIES_COMPONENT_KEY,
+    params: JSON.stringify({ memberId }),
+  };
+  const url =
+    `https://h5api.m.1688.com/h5/${ALISITE_MODULE_API}/1.0/` +
+    `?data=${encodeURIComponent(JSON.stringify(data))}`;
+  return {
+    url: () => url,
+    request: () => ({ postData: () => null }),
+    text: async () => JSON.stringify(payload),
+  } as unknown as PWResponse;
+}
 
 describe('collect entry', () => {
   it('executes one versioned unit and validates the returned batch identity', async () => {
@@ -206,5 +272,65 @@ describe('collect entry', () => {
         pendingKeys: ['910000000102', '910000000103'],
       },
     });
+  });
+
+  it('keeps a valid login-style supplier key after checking the shop page', async () => {
+    const page = new QualificationMemberPage(null);
+
+    await expect(
+      navigateAndResolveQualificationMember(
+        page as unknown as Page,
+        'https://fixture-shop.1688.com/',
+        'fixture-login-name',
+      ),
+    ).resolves.toBe('fixture-login-name');
+    expect(page.navigatedUrls).toEqual([
+      'https://fixture-shop.1688.com/',
+    ]);
+    expect(page.listenerCount('response')).toBe(0);
+  });
+
+  it('keeps a validated b2b supplier identity after checking the shop page', async () => {
+    const page = new QualificationMemberPage(null);
+
+    await expect(
+      navigateAndResolveQualificationMember(
+        page as unknown as Page,
+        'https://fixture-shop.1688.com/',
+        'b2b-fixture-known',
+      ),
+    ).resolves.toBe('b2b-fixture-known');
+    expect(page.navigatedUrls).toEqual([
+      'https://fixture-shop.1688.com/',
+    ]);
+    expect(page.listenerCount('response')).toBe(0);
+  });
+
+  it('resolves a missing or unsafe supplier key from the shop Alisite request', async () => {
+    const payload = JSON.parse(
+      await readFile(
+        path.join(
+          process.cwd(),
+          'tests/fixtures/store-catalog/categories.json',
+        ),
+        'utf8',
+      ),
+    );
+    const page = new QualificationMemberPage(
+      payload,
+      'b2b-fixture-resolved',
+    );
+
+    await expect(
+      navigateAndResolveQualificationMember(
+        page as unknown as Page,
+        'https://fixture-shop.1688.com/',
+        'unsafe/member',
+      ),
+    ).resolves.toBe('b2b-fixture-resolved');
+    expect(page.navigatedUrls).toEqual([
+      'https://fixture-shop.1688.com/',
+    ]);
+    expect(page.listenerCount('response')).toBe(0);
   });
 });

@@ -35,11 +35,24 @@ export interface SupplierQualificationRuntimeRequest {
   };
 }
 
+export const SUPPLIER_MEMBER_KEY_MAX_LENGTH = 128;
+const SUPPLIER_MEMBER_KEY_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+export function isSafeSupplierMemberKey(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length <= SUPPLIER_MEMBER_KEY_MAX_LENGTH &&
+    SUPPLIER_MEMBER_KEY_RE.test(value)
+  );
+}
+
 export function buildSupplierQualificationRuntimeRequest(
   memberId: string,
 ): SupplierQualificationRuntimeRequest {
-  if (!/^b2b-[A-Za-z0-9_-]+$/.test(memberId)) {
-    throw new TypeError('Supplier qualification requires a b2b-* memberId.');
+  if (!isSafeSupplierMemberKey(memberId)) {
+    throw new TypeError(
+      'Supplier qualification requires a safe, non-empty 1688 shop member key.',
+    );
   }
   return {
     api: 'mtop.alibaba.alisite.cbu.server.ModuleAsyncService',

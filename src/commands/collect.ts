@@ -30,6 +30,7 @@ import { buildOfferMediaManifest, parseOfferDetailsScript } from '../session/off
 import { detectPageState } from '../session/page-state.js';
 import {
   captureSupplierQualificationForAction,
+  isSafeSupplierMemberKey,
   requestSupplierQualificationFromPage,
 } from '../session/qualification-capture.js';
 import {
@@ -372,12 +373,12 @@ async function collectQualificationUnit(
   }
 }
 
-async function navigateAndResolveQualificationMember(
+export async function navigateAndResolveQualificationMember(
   page: Page,
   shopUrl: string,
   knownMemberId?: string,
 ): Promise<string> {
-  if (knownMemberId) {
+  if (isSafeSupplierMemberKey(knownMemberId)) {
     await page.goto(shopUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await assertCollectionPageAvailable(page);
     return knownMemberId;
@@ -413,7 +414,9 @@ async function navigateAndResolveQualificationMember(
       '1688 risk control appeared. Retry with `--headed` and complete verification.',
     );
   }
-  const memberId = result.captures[0]?.request.memberId;
+  const memberId = result.captures
+    .map((captured) => captured.request.memberId)
+    .find(isSafeSupplierMemberKey);
   if (result.status !== 'captured' || !memberId) {
     throw new CliError(
       9,

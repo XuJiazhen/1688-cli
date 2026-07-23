@@ -50,6 +50,32 @@ describe('captureSupplierQualificationForAction', () => {
     ).not.toMatch(/cookie|token|sign|authorization/i);
   });
 
+  it.each([
+    ['login key', 'fixtureLogin_01'],
+    ['b2b key', 'b2b-fixture-member'],
+    ['numeric key', '1688000012345'],
+    ['128-character boundary', `a${'b'.repeat(127)}`],
+  ])('accepts a safe %s', (_label, memberId) => {
+    const request = buildSupplierQualificationRuntimeRequest(memberId);
+
+    expect(JSON.parse(request.data.params)).toEqual({ memberId });
+  });
+
+  it.each([
+    ['empty key', ''],
+    ['whitespace', ' '],
+    ['leading punctuation', '-fixture-member'],
+    ['path punctuation', 'fixture/member'],
+    ['query punctuation', 'fixture?member=1'],
+    ['control characters', 'fixture\nmember'],
+    ['non-ASCII characters', '示例会员'],
+    ['more than 128 characters', `a${'b'.repeat(128)}`],
+  ])('rejects %s', (_label, memberId) => {
+    expect(() =>
+      buildSupplierQualificationRuntimeRequest(memberId),
+    ).toThrow(TypeError);
+  });
+
   it('correlates the basic-info response by memberId without exposing request data', async () => {
     const page = new MockPage() as Page & MockPage;
     const result = await captureSupplierQualificationForAction(
