@@ -760,8 +760,76 @@ type CollectionCheckpoint = {
   completedPages: number[],
   seenKeys: string[],
   pendingKeys: string[],
+  pendingItems?: SearchPendingItem[],
   attemptCounts: Record<string, number>,
   updatedAt: string,
+}
+
+type SearchPendingItem = {
+  snapshotVersion: 1,
+  key: string,
+  offer: SearchOfferSnapshot,
+  sourcePage: number,
+  pageRank: number,
+  rawRank: number,
+  remoteSort: string | null,
+  remoteHasMore: boolean,
+  collectedAt: string,
+}
+
+type SearchOfferSnapshot = {
+  offerId: string,
+  title: string,
+  price: { text: string, min: number | null, max: number | null },
+  purchase: {
+    priceTiers: Array<{
+      quantityText: string | null,
+      minimumQuantity: number | null,
+      price: number | null,
+    }>,
+    minimumQuantity: number | null,
+    onePieceEligible: boolean | null,
+  },
+  supplier: {
+    name: string | null,
+    loginId: string | null,
+    memberId: string | null,
+    shopUrl: string | null,
+    years: number | null,
+    badgeImageUrl: string | null,
+    tradeService: {
+      compositeScore: number | null,
+      consultationScore: number | null,
+      logisticsScore: number | null,
+      disputeScore: number | null,
+      returnScore: number | null,
+      goodsScore: number | null,
+      inspectionCreditUrl: string | null,
+      sameDesignUrl: string | null,
+    },
+  },
+  location: { province: string | null, city: string | null },
+  bizType: string | null,
+  verified: { factory: boolean, business: boolean, superFactory: boolean },
+  tags: string[],
+  serviceTags?: string[],
+  productBadges?: string[],
+  specHighlights?: string[],
+  demand?: {
+    orderCountText: string | null,
+    orderCount: number | null,
+    repurchaseRateText: string | null,
+    repurchaseRate: number | null,
+    soldCountText: string | null,
+    soldCount: number | null,
+    shopReturnRateText: string | null,
+    shopReturnRate: number | null,
+  },
+  isP4P: boolean,
+  turnover: string | null,
+  url: string,
+  image: string | null,
+  images: string[],
 }
 ```
 
@@ -774,22 +842,55 @@ An incompatible checkpoint fails with `CHECKPOINT_INCOMPATIBLE`.
 `scope.pageSize` and `limits.maxItems` cap the observations emitted by one
 batch; the stricter value wins. If that cap leaves offers on the captured
 remote page, the batch is `partial`/`truncated` and its checkpoint keeps the
-same `nextPage` plus the un-emitted offer IDs in `pendingKeys`. A resume
-re-fetches that page and emits the next deterministic subset, so advancing
-the checkpoint never discards the rest of a 60-offer response.
+same `nextPage`, the un-emitted offer IDs in `pendingKeys`, and a validated
+snapshot of those offers in `pendingItems`. A resume drains the captured
+snapshot without reloading the dynamic search page. The pending set therefore
+shrinks deterministically until the captured remote page is complete, and only
+then may the checkpoint advance to the next page.
 
-When a resumed page no longer contains a pending offer, the batch archives
-`SEARCH_PAGE_CHECKPOINT_DRIFT` as `partial`/`truncated` and deliberately omits
-another checkpoint. This hard stop prevents an unrecoverable pending ID from
-creating an infinite retry loop. Offers already emitted from that same remote
-page are counted in `metrics.replayedOffers`, not as cross-page
-`duplicateObservations` or `metrics.duplicateOffers`.
+A response containing more than 60 offers is a remote protocol violation.
+The batch returns retryable `SEARCH_REMOTE_PAGE_SIZE_EXCEEDED`, emits no
+observations, and preserves the captured IDs in a readable key-only checkpoint
+instead of generating ranks that cross the remote-page boundary.
+
+`pendingItems` is a closed, versioned persistence format rather than an
+arbitrary copy of browser data. A checkpoint contains at most 60 pending items
+and at most 256 KiB of serialized pending-item JSON. Every item has
+`snapshotVersion: 1`; `key` equals `offer.offerId`; `pageRank` is a unique
+integer from 1 through 60; and `rawRank` equals
+`(sourcePage - 1) * 60 + pageRank`. All items in one checkpoint share
+`sourcePage`, `remoteSort`, `remoteHasMore`, and `collectedAt`, and that source
+page is the checkpoint's current page. Restored items are canonicalized by
+ascending `pageRank` before emission. The snapshot uses exactly the
+`SearchOfferSnapshot` fields above, including required title and supplier
+structure. Unknown keys are rejected at the item and nested offer levels;
+extra authentication, session, Cookie, token, authorization, password, or
+signing metadata keys are rejected explicitly.
+
+If a newly captured page cannot fit that bounded snapshot, the batch emits no
+unsafe subset. It returns retryable
+`SEARCH_PAGE_CHECKPOINT_TOO_LARGE` and preserves every unresolved offer ID in
+a key-only checkpoint so the scheduler can retry without losing continuation.
+An externally supplied snapshot that violates the item-count, byte-size,
+schema, rank, or shared-metadata invariants is incompatible and fails with
+`CHECKPOINT_INCOMPATIBLE`.
+
+Older key-only checkpoints remain compatible. When a reloaded page no longer
+contains a pending offer, the batch archives `SEARCH_PAGE_CHECKPOINT_DRIFT`
+but retains every unresolved key in another checkpoint. A resume that emits
+at least one original pending offer continues normally. A resume that emits
+none returns `SEARCH_PAGE_CHECKPOINT_NO_PROGRESS` as an explicit failed batch
+with the checkpoint intact: the first two consecutive failures are retryable,
+and the third is terminal. New offers that drift into the page never replace
+the original pending set.
 
 Search collection has a technical budget of 20 remote pages. If page 20 is
 full and the requested scope would otherwise continue, the batch is an
-archivable terminal `partial`/`truncated` result with warning
+archivable terminal `completed`/`truncated` result with warning
 `SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED` and no page-21 checkpoint. This denotes
 a technical collection boundary, not natural exhaustion of 1688 results.
+When a small per-batch item cap is used, same-page snapshot batches drain
+first; only the final page-20 drain has this terminal completed result.
 
 Field evidence distinguishes a real empty value from unavailable data:
 
@@ -844,12 +945,26 @@ than becoming zero. Media observations contain URL references only; no image
 bytes are downloaded by this protocol.
 
 The public command accepts inline JSON, `@file`, or stdin, with an optional
-checkpoint and complete-result file:
+checkpoint and complete-result file. Stdin accepts either the legacy naked
+`CollectionUnit` or an envelope containing both unit and checkpoint:
 
 ```bash
 1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
 cat unit.json | 1688 collect - --json
+cat collect-envelope.json | 1688 collect - --json
 ```
+
+```ts
+type CollectInput =
+  | CollectionUnit
+  | { unit: CollectionUnit, checkpoint?: CollectionCheckpoint }
+```
+
+Production adapters use the stdin envelope so large checkpoints are not
+placed in process arguments. Manual inline/`@file` `--checkpoint` input
+remains compatible, including when the unit itself comes from stdin, but a
+checkpoint must not be supplied both in the stdin envelope and through
+`--checkpoint`.
 
 `supplier catalog` is a convenience command that constructs a catalog or
 category `CollectionUnit`; `--full` remains bounded by `--max-pages` and

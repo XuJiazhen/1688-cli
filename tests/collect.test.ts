@@ -6,8 +6,10 @@ import { describe, expect, it } from 'vitest';
 import {
   createFixtureCollectionRuntime,
   createPlaywrightCollectionRuntime,
+  executeCollectCommand,
   executeCollectionUnit,
   navigateAndResolveQualificationMember,
+  parseCollectInput,
   type CollectionRuntime,
 } from '../src/commands/collect.js';
 import type { CollectionUnit } from '../src/collection/contracts.js';
@@ -26,6 +28,46 @@ const catalogUnit: CollectionUnit = {
   subject: { supplier: { memberId: 'b2b-fixture-supplier' } },
   scope: { requestedScope: 'page', pageSize: 2, maxPagesPerBatch: 1 },
 };
+
+function searchOffer(offerId: string): Offer {
+  return {
+    offerId,
+    title: `脱敏帐篷商品 ${offerId}`,
+    price: { text: '', min: null, max: null },
+    purchase: {
+      priceTiers: [],
+      minimumQuantity: null,
+      onePieceEligible: null,
+    },
+    supplier: {
+      name: null,
+      loginId: null,
+      memberId: `b2b-${offerId}`,
+      shopUrl: `https://shop-${offerId}.1688.com/`,
+      years: null,
+      badgeImageUrl: null,
+      tradeService: {
+        compositeScore: null,
+        consultationScore: null,
+        logisticsScore: null,
+        disputeScore: null,
+        returnScore: null,
+        goodsScore: null,
+        inspectionCreditUrl: null,
+        sameDesignUrl: null,
+      },
+    },
+    location: { province: null, city: null },
+    bizType: null,
+    verified: { factory: false, business: false, superFactory: false },
+    tags: [],
+    isP4P: false,
+    turnover: null,
+    url: `https://detail.1688.com/offer/${offerId}.html`,
+    image: null,
+    images: [],
+  };
+}
 
 class QualificationMemberPage extends EventEmitter {
   readonly navigatedUrls: string[] = [];
@@ -162,6 +204,35 @@ function qualificationResponse(
 }
 
 describe('collect entry', () => {
+  it('accepts both the legacy naked unit and the stdin collect envelope', () => {
+    const checkpoint = {
+      schemaVersion: 1,
+      unitFingerprint: `sha256:${'a'.repeat(64)}`,
+      kind: 'store-catalog',
+      subject: catalogUnit.subject,
+      scope: catalogUnit.scope,
+      nextPage: 2,
+      completedPages: [1],
+      seenKeys: ['offer-1'],
+      pendingKeys: ['page:2'],
+      attemptCounts: { 'page:2': 1 },
+      updatedAt: '2026-07-24T00:00:00.000Z',
+    };
+
+    expect(parseCollectInput(catalogUnit)).toEqual({ unit: catalogUnit });
+    expect(parseCollectInput({ unit: catalogUnit, checkpoint })).toEqual({
+      unit: catalogUnit,
+      checkpoint,
+    });
+    expect(parseCollectInput({ unit: catalogUnit }, checkpoint)).toEqual({
+      unit: catalogUnit,
+      checkpoint,
+    });
+    expect(() =>
+      parseCollectInput({ unit: catalogUnit, checkpoint }, checkpoint),
+    ).toThrow(/either the collect envelope or --checkpoint/i);
+  });
+
   it('executes one versioned unit and validates the returned batch identity', async () => {
     const runtime: CollectionRuntime = {
       async collect(unit) {
@@ -314,16 +385,8 @@ describe('collect entry', () => {
       scope: { requestedScope: 'bounded-pages', pageSize: 1 },
       limits: { maxItems: 1 },
     };
-    const offers = ['910000000101', '910000000102', '910000000103'].map(
-      (offerId) => ({
-        offerId,
-        title: `脱敏帐篷商品 ${offerId}`,
-        supplier: {
-          memberId: `b2b-${offerId}`,
-          shopUrl: `https://shop-${offerId}.1688.com/`,
-        },
-      }) as Offer,
-    );
+    const offers = ['910000000101', '910000000102', '910000000103']
+      .map(searchOffer);
 
     const batch = await executeCollectionUnit({
       unit: searchUnit,
@@ -347,6 +410,216 @@ describe('collect entry', () => {
         nextPage: 1,
         completedPages: [],
         pendingKeys: ['910000000102', '910000000103'],
+      },
+    });
+  });
+
+  it('drains a search checkpoint snapshot without touching the browser again', async () => {
+    const searchUnit: CollectionUnit = {
+      schemaVersion: 1,
+      unitId: 'collect-search-snapshot',
+      kind: 'search-page',
+      subject: { keyword: '帐篷' },
+      scope: { requestedScope: 'page', pageSize: 1 },
+    };
+    const offers = ['920000000101', '920000000102', '920000000103']
+      .map(searchOffer);
+    const first = await executeCollectionUnit({
+      unit: searchUnit,
+      runtime: createFixtureCollectionRuntime({
+        searchPage: {
+          page: 1,
+          offers,
+          hasMore: false,
+          collectedAt: '2026-07-24T05:00:00Z',
+        },
+      }),
+    });
+    let browserTouched = false;
+    const browserContext = new Proxy({}, {
+      get() {
+        browserTouched = true;
+        throw new Error('browser must not be touched while draining a snapshot');
+      },
+    }) as BrowserContext;
+
+    const resumed = await executeCollectionUnit({
+      unit: searchUnit,
+      checkpoint: first.checkpoint,
+      runtime: createPlaywrightCollectionRuntime(browserContext, false),
+    });
+
+    expect(browserTouched).toBe(false);
+    expect(resumed).toMatchObject({
+      status: 'partial',
+      observations: [{ offerId: '920000000102', pageRank: 2 }],
+      checkpoint: {
+        nextPage: 1,
+        pendingKeys: ['920000000103'],
+        pendingItems: [{ key: '920000000103' }],
+      },
+    });
+  });
+
+  it('drains a snapshot at the command boundary without dispatching a browser session', async () => {
+    const searchUnit: CollectionUnit = {
+      schemaVersion: 1,
+      unitId: 'collect-command-local-drain',
+      kind: 'search-page',
+      subject: { keyword: '帐篷' },
+      scope: { requestedScope: 'page', pageSize: 1 },
+    };
+    const first = await executeCollectionUnit({
+      unit: searchUnit,
+      runtime: createFixtureCollectionRuntime({
+        searchPage: {
+          page: 1,
+          offers: [
+            searchOffer('925000000101'),
+            searchOffer('925000000102'),
+            searchOffer('925000000103'),
+          ],
+          hasMore: false,
+          collectedAt: '2026-07-24T05:05:00Z',
+        },
+      }),
+    });
+    let dispatchCalls = 0;
+
+    const resumed = await executeCollectCommand(
+      {
+        unit: JSON.stringify({
+          unit: searchUnit,
+          checkpoint: first.checkpoint,
+        }),
+        profile: 'reader-01',
+      },
+      {
+        async dispatchCollect() {
+          dispatchCalls += 1;
+          throw new Error('dispatch must not run while draining a snapshot');
+        },
+        batchId: () => 'batch-command-local-drain',
+        now: sequenceClock(
+          '2026-07-24T05:06:00.000Z',
+          '2026-07-24T05:06:01.000Z',
+        ),
+      },
+    );
+
+    expect(dispatchCalls).toBe(0);
+    expect(resumed).toMatchObject({
+      batchId: 'batch-command-local-drain',
+      status: 'partial',
+      observations: [{ offerId: '925000000102', pageRank: 2 }],
+      checkpoint: {
+        pendingKeys: ['925000000103'],
+        pendingItems: [{ snapshotVersion: 1, key: '925000000103' }],
+      },
+    });
+  });
+
+  it('preserves search continuation identity when collection fails before a batch', async () => {
+    const searchUnit: CollectionUnit = {
+      schemaVersion: 1,
+      unitId: 'collect-search-failure-checkpoint',
+      kind: 'search-page',
+      subject: { keyword: '帐篷' },
+      scope: { requestedScope: 'bounded-pages', pageSize: 1 },
+    };
+    const offers = ['930000000101', '930000000102', '930000000103']
+      .map(searchOffer);
+    const first = await executeCollectionUnit({
+      unit: searchUnit,
+      runtime: createFixtureCollectionRuntime({
+        searchPage: {
+          page: 1,
+          offers,
+          hasMore: true,
+          collectedAt: '2026-07-24T05:10:00Z',
+        },
+      }),
+    });
+    const failedRuntime: CollectionRuntime = {
+      async collect() {
+        throw new Error('simulated transport reset');
+      },
+    };
+
+    const failed = await executeCollectionUnit({
+      unit: searchUnit,
+      checkpoint: first.checkpoint,
+      runtime: failedRuntime,
+      now: sequenceClock(
+        '2026-07-24T05:11:00.000Z',
+        '2026-07-24T05:11:01.000Z',
+      ),
+    });
+    expect(failed).toMatchObject({
+      status: 'failed',
+      errors: [{ code: 'COLLECTION_FAILED', retryable: true }],
+      checkpoint: {
+        nextPage: 1,
+        completedPages: [],
+        seenKeys: ['930000000101'],
+        pendingKeys: ['930000000102', '930000000103'],
+        pendingItems: [
+          { key: '930000000102' },
+          { key: '930000000103' },
+        ],
+        attemptCounts: { 'page:1': 1 },
+        updatedAt: '2026-07-24T05:11:01.000Z',
+      },
+    });
+    expect(failed.checkpoint?.nextCursor).toBe(first.checkpoint?.nextCursor);
+    expect(failed.checkpoint?.pendingKeys).toEqual(
+      first.checkpoint?.pendingKeys,
+    );
+    expect(failed.checkpoint?.pendingItems).toEqual(
+      first.checkpoint?.pendingItems,
+    );
+
+    const freshFailure = await executeCollectionUnit({
+      unit: searchUnit,
+      runtime: failedRuntime,
+      now: sequenceClock(
+        '2026-07-24T05:12:00.000Z',
+        '2026-07-24T05:12:01.000Z',
+      ),
+    });
+    expect(freshFailure).toMatchObject({
+      status: 'failed',
+      checkpoint: {
+        nextPage: 1,
+        completedPages: [],
+        seenKeys: [],
+        pendingKeys: [],
+        attemptCounts: { 'page:1': 1 },
+      },
+    });
+
+    const {
+      pendingItems: _pendingItems,
+      ...checkpointWithoutSnapshot
+    } = first.checkpoint!;
+    const migratedLegacyFailure = await executeCollectionUnit({
+      unit: searchUnit,
+      checkpoint: {
+        ...checkpointWithoutSnapshot,
+        pendingKeys: ['page:1'],
+      },
+      runtime: failedRuntime,
+      now: sequenceClock(
+        '2026-07-24T05:13:00.000Z',
+        '2026-07-24T05:13:01.000Z',
+      ),
+    });
+    expect(migratedLegacyFailure).toMatchObject({
+      status: 'failed',
+      checkpoint: {
+        nextPage: 1,
+        pendingKeys: [],
+        attemptCounts: { 'page:1': 1 },
       },
     });
   });
@@ -442,6 +715,20 @@ describe('collect entry', () => {
     expect(page.listenerCount('response')).toBe(0);
   });
 
+  it('keeps the headed qualification command alive until risk control clears', async () => {
+    const page = new HeadedRiskQualificationPage();
+
+    await expect(
+      navigateAndResolveQualificationMember(
+        page as unknown as Page,
+        'https://fixture-shop.1688.com/',
+        'b2b-fixture-known',
+        true,
+      ),
+    ).resolves.toBe('b2b-fixture-known');
+    expect(page.probeCount).toBeGreaterThanOrEqual(2);
+  });
+
   it('resolves a missing or unsafe supplier key from the shop Alisite request', async () => {
     const payload = JSON.parse(
       await readFile(
@@ -470,3 +757,35 @@ describe('collect entry', () => {
     expect(page.listenerCount('response')).toBe(0);
   });
 });
+
+class HeadedRiskQualificationPage extends EventEmitter {
+  probeCount = 0;
+
+  async goto(): Promise<null> {
+    return null;
+  }
+
+  isClosed(): boolean {
+    return false;
+  }
+
+  url(): string {
+    return this.probeCount < 1
+      ? 'https://punish.1688.com/punish'
+      : 'https://fixture-shop.1688.com/';
+  }
+
+  async title(): Promise<string> {
+    return 'Fixture';
+  }
+
+  async evaluate(): Promise<string> {
+    this.probeCount += 1;
+    return this.probeCount === 1 ? '请完成滑块验证' : 'Fixture shop';
+  }
+}
+
+function sequenceClock(...timestamps: string[]): () => Date {
+  const values = timestamps.map((timestamp) => new Date(timestamp));
+  return () => values.shift() ?? new Date(timestamps.at(-1)!);
+}

@@ -4,7 +4,10 @@ import { emit, info } from '../io/output.js';
 import { CliError } from '../io/errors.js';
 import { encodeGbkPercent } from '../util/encoding.js';
 import { debugTmpPath } from '../util/temp.js';
-import { withRecovery } from '../session/recovery.js';
+import {
+  waitForCollectionPageAvailability,
+  withRecovery,
+} from '../session/recovery.js';
 import { clickSearchNextPage } from '../session/search-locators.js';
 import { startSearchOfferCapture } from '../session/search-capture.js';
 import {
@@ -21,7 +24,7 @@ import {
   type RawOfferItem,
 } from '../session/search-mtop.js';
 import { parseMtopJsonp } from '../session/mtop.js';
-import { sleep, waitWithDeadline } from '../session/wait.js';
+import { sleep } from '../session/wait.js';
 import type { OfferResult, OfferArgs } from './offer.js';
 import {
   applySearchControls,
@@ -504,9 +507,12 @@ async function fetchSearch(
     });
   }
 
-  const isSearchBlocked = () =>
-    !headed &&
-    (/\/punish|x5secdata=/.test(page.url()) || isLoginRedirectUrl(page.url()));
+  const isSearchBlocked = async () => {
+    if (!(await isBlocked(page, 1))) return false;
+    if (!headed) return true;
+    await waitForCollectionPageAvailability(page, { headed: true });
+    return false;
+  };
 
   // Stable strategy: always warm up on the main 1688 homepage before search.
   // Cookie-presence checks can't tell whether the WAF has invalidated the
@@ -532,16 +538,6 @@ async function fetchSearch(
     });
     try {
       await action();
-      if (headed && await isBlocked(page, 1)) {
-        const passed = await waitPastBlocking(page, true);
-        if (!passed) {
-          return await capture.wait({
-            timeoutMs: 1,
-            isClosed: () => page.isClosed(),
-            isBlocked: isSearchBlocked,
-          });
-        }
-      }
       return await capture.wait({
         timeoutMs: headed ? Math.min(timeoutMs, 15000) : timeoutMs,
         isClosed: () => page.isClosed(),
@@ -903,80 +899,6 @@ async function isBlocked(page: Page, retries = 3): Promise<boolean> {
     if (i < retries - 1) await sleep(800);
   }
   return false;
-}
-
-/**
- * Returns true once the page is past any risk-control gate.
- *
- * Detection strategy — be liberal: 1688 reshuffles result-card class names
- * periodically, so we don't bind to specific selectors. We poll for two
- * resilient signals instead:
- *   (1) the page URL is NOT on a punish / verification host
- *   (2) the page has a lot of anchor tags (>= 30) — punish / slider pages
- *       have a few; loaded result pages have dozens to hundreds.
- *
- * Headless: 8s budget. Headed: 3min so the user has time to solve the slider.
- */
-async function waitPastBlocking(
-  page: Page,
-  headed: boolean,
-): Promise<boolean> {
-  if (await isBlocked(page, 1)) {
-    if (!headed) return false;
-    info('Verification page detected — drag the slider in the window.');
-  }
-
-  let lastProgressAt = Date.now();
-  let lastDebugAt = 0;
-  const debug = process.env.BB1688_DEBUG === '1';
-  return waitWithDeadline<boolean>(async ({ now, remainingMs }) => {
-    if (page.isClosed()) {
-      throw new CliError(130, 'CANCELED', 'Browser closed.');
-    }
-
-    const state = await page
-      .evaluate(() => ({
-        url: location.href,
-        title: document.title ?? '',
-        anchorCount: document.querySelectorAll('a').length,
-        bodyLen: (document.body?.innerText ?? '').length,
-      }))
-      .catch(() => null);
-
-    if (debug && state && now - lastDebugAt > 1000) {
-      info(
-        `[poll] url=${state.url.slice(0, 80)} title="${state.title.slice(0, 40)}" anchors=${state.anchorCount} bodyLen=${state.bodyLen}`,
-      );
-      lastDebugAt = now;
-    }
-
-    if (state) {
-      const onPunish = /\/punish|x5secdata=|punish\.1688\.com/.test(state.url);
-      // Lowered thresholds — first paint may have fewer anchors/text than
-      // the fully-hydrated SPA. 10 anchors + 500 chars beats 1688's loading
-      // skeleton (a handful of nav anchors + boilerplate).
-      if (
-        !onPunish &&
-        state.anchorCount >= 15 &&
-        state.bodyLen >= 800
-      ) {
-        return true;
-      }
-    }
-
-    if (headed && now - lastProgressAt > 10000) {
-      info(
-        `Still waiting for results page (${Math.round(remainingMs / 1000)}s left)...`,
-      );
-      lastProgressAt = now;
-    }
-
-    return null;
-  }, {
-    timeoutMs: headed ? 180000 : 8000,
-    intervalMs: 500,
-    onTimeout: () => false,
-  });
 }
 
 function riskControlError(triedHeaded: boolean): CliError {

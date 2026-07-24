@@ -2,7 +2,10 @@ import type { BrowserContext, Page, Response as PWResponse } from 'playwright';
 import { dispatch } from '../session/dispatch.js';
 import { emit, info } from '../io/output.js';
 import { CliError } from '../io/errors.js';
-import { withRecovery } from '../session/recovery.js';
+import {
+  waitForCollectionPageAvailability,
+  withRecovery,
+} from '../session/recovery.js';
 import { sleep } from '../session/wait.js';
 import { parseMtop } from '../session/mtop.js';
 import {
@@ -363,13 +366,9 @@ export async function executeRaw(
         `Failed to load offer page: ${(e as Error).message}`,
       );
     }
-    if (/login\.1688\.com|login\.taobao\.com/.test(page.url())) {
-      throw new CliError(
-        3,
-        'NOT_LOGGED_IN',
-        'Session expired. Run `1688 login`.',
-      );
-    }
+    await waitForCollectionPageAvailability(page, {
+      headed: args.headed === true,
+    });
 
     const [sku, shopCardResponse, consignmentResponse, detailMedia, pageInfo] =
       await Promise.all([

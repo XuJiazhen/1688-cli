@@ -4,7 +4,10 @@ import { emit, info } from '../io/output.js';
 import { CliError } from '../io/errors.js';
 import { parseMtopJsonp } from '../session/mtop.js';
 import { startResponseCapture } from '../session/response-capture.js';
-import { withRecovery } from '../session/recovery.js';
+import {
+  waitForCollectionPageAvailability,
+  withRecovery,
+} from '../session/recovery.js';
 import { sleep } from '../session/wait.js';
 import {
   mapShopCardPayload as mapSharedShopCardPayload,
@@ -180,7 +183,11 @@ async function executeRaw(
   let memberId = target.memberId;
 
   if (target.type === 'offerId' && target.offerId) {
-    offerProbe = await inspectOfferTarget(ctx, target.offerId);
+    offerProbe = await inspectOfferTarget(
+      ctx,
+      target.offerId,
+      args.headed === true,
+    );
     memberId = offerProbe.seller?.memberId ?? memberId;
     if (!memberId && offerProbe.shopCard?.factoryCardUrl) {
       memberId = extractMemberIdFromUrl(offerProbe.shopCard.factoryCardUrl);
@@ -192,7 +199,11 @@ async function executeRaw(
 
   if (memberId) {
     try {
-      factoryProbe = await inspectFactoryCard(ctx, memberId);
+      factoryProbe = await inspectFactoryCard(
+        ctx,
+        memberId,
+        args.headed === true,
+      );
     } catch (error) {
       if (target.type === 'memberId') throw error;
       warnings.push(`Factory-card enrichment failed: ${errorMessage(error)}`);
@@ -210,6 +221,7 @@ async function executeRaw(
         ctx,
         qualificationShopUrl,
         memberId,
+        args.headed === true,
       );
       if (!qualification) {
         warnings.push('Store page did not emit a correlated qualification response.');
@@ -242,6 +254,7 @@ async function inspectStoreQualification(
   ctx: BrowserContext,
   shopUrl: string,
   memberId: string,
+  headed: boolean,
 ): Promise<SupplierQualification | null> {
   const page = await ctx.newPage();
   try {
@@ -250,7 +263,7 @@ async function inspectStoreQualification(
       page,
       { memberId, timeoutMs: 15_000 },
       async () => {
-        await goto1688(page, shopUrl, 'supplier shop');
+        await goto1688(page, shopUrl, 'supplier shop', headed);
         await requestSupplierQualificationFromPage(page, memberId);
       },
     );
@@ -263,6 +276,7 @@ async function inspectStoreQualification(
 async function inspectOfferTarget(
   ctx: BrowserContext,
   offerId: string,
+  headed: boolean,
 ): Promise<OfferProbe> {
   const page = await ctx.newPage();
   const offerUrl = `https://detail.1688.com/offer/${offerId}.html`;
@@ -275,7 +289,7 @@ async function inspectOfferTarget(
 
   try {
     info(`Inspecting supplier from offer ${offerId}...`);
-    await goto1688(page, offerUrl, 'offer page');
+    await goto1688(page, offerUrl, 'offer page', headed);
     await page
       .waitForFunction(
         () => {
@@ -314,6 +328,7 @@ async function inspectOfferTarget(
 async function inspectFactoryCard(
   ctx: BrowserContext,
   memberId: string,
+  headed: boolean,
 ): Promise<FactoryProbe> {
   const page = await ctx.newPage();
   const factoryCardUrl = buildFactoryCardUrl(memberId);
@@ -326,7 +341,7 @@ async function inspectFactoryCard(
 
   try {
     info(`Inspecting factory card ${memberId}...`);
-    await goto1688(page, factoryCardUrl, 'factory card');
+    await goto1688(page, factoryCardUrl, 'factory card', headed);
     await sleep(4000);
     const text = await page
       .evaluate(() => document.body?.innerText ?? '')
@@ -348,6 +363,7 @@ async function goto1688(
   page: Page,
   url: string,
   label: string,
+  headed: boolean,
 ): Promise<void> {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
@@ -358,16 +374,7 @@ async function goto1688(
       `Failed to load ${label}: ${errorMessage(error)}`,
     );
   }
-  if (/login\.1688\.com|login\.taobao\.com/.test(page.url())) {
-    throw new CliError(3, 'NOT_LOGGED_IN', 'Session expired. Run `1688 login`.');
-  }
-  if (/punish|sec|risk|nocaptcha/i.test(page.url())) {
-    throw new CliError(
-      4,
-      'RISK_CONTROL',
-      '1688 risk control appeared. Retry with `--headed` and complete verification.',
-    );
-  }
+  await waitForCollectionPageAvailability(page, { headed });
 }
 
 async function readOfferSellerContext(page: Page): Promise<OfferSupplierData | null> {

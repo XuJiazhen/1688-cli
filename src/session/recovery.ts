@@ -12,8 +12,9 @@ import {
   type FailureTraceSnapshot,
   type RunMeta,
 } from './artifacts.js';
+import { readConfig } from './config.js';
 import { detectPageState, type PageState } from './page-state.js';
-import { sleep } from './wait.js';
+import { sleep, waitWithDeadline } from './wait.js';
 
 export type RecoveryFailureKind =
   | 'not_logged_in'
@@ -86,6 +87,7 @@ interface TraceState {
 }
 
 const MAX_TRACE_ITEMS = 80;
+const DEFAULT_HEADED_VERIFICATION_MS = 3 * 60_000;
 
 function pickPage(ctx: BrowserContext): Page | null {
   const pages = ctx.pages().filter((p) => !p.isClosed());
@@ -411,6 +413,96 @@ export function recoveryDecisionFor(
   }
 }
 
+export function pageStateError(
+  state: PageState,
+  headed = false,
+): CliError | null {
+  if (
+    state.kind !== 'not_logged_in' &&
+    state.kind !== 'risk_challenge' &&
+    state.kind !== 'rate_limited'
+  ) {
+    return null;
+  }
+  const decision = recoveryDecisionFor(state.kind, headed);
+  return new CliError(decision.exitCode, decision.code, decision.message, {
+    category: decision.failureKind,
+    currentUrl: state.url,
+    pageState: state.kind,
+    failureKind: decision.failureKind,
+    recoveryAction: decision.action,
+    recoverHint: decision.recoverHint,
+    retryable: decision.retryable,
+  });
+}
+
+export interface CollectionPageAvailabilityOptions {
+  headed: boolean;
+  signal?: AbortSignal;
+  timeoutMs?: number;
+  intervalMs?: number;
+}
+
+export interface CollectionPageAvailability {
+  recoveredRiskChallenge: boolean;
+}
+
+/**
+ * Keeps a headed collection command alive while the user resolves a slider.
+ * Login expiry and rate limiting remain separate states and never wait here.
+ */
+export async function waitForCollectionPageAvailability(
+  page: Page,
+  options: CollectionPageAvailabilityOptions,
+): Promise<CollectionPageAvailability> {
+  const initialState = await detectPageState(page);
+  const initialError = pageStateError(initialState, options.headed);
+  if (initialState.kind !== 'risk_challenge' || !options.headed) {
+    if (initialError !== null) throw initialError;
+    return { recoveredRiskChallenge: false };
+  }
+
+  const configuredTimeoutMs =
+    options.timeoutMs ??
+    (await readConfig()).timeouts?.headedVerificationMs ??
+    DEFAULT_HEADED_VERIFICATION_MS;
+  info('Verification page detected - complete the slider in the browser window.');
+
+  const resolved = await waitWithDeadline<PageState>(
+    async ({ remainingMs }) => {
+      if (options.signal?.aborted === true) {
+        throw new CliError(
+          9,
+          'COLLECTION_CANCELLED',
+          'Collection was cancelled while waiting for manual verification.',
+          { retryable: true },
+        );
+      }
+      if (page.isClosed()) {
+        throw new CliError(130, 'CANCELED', 'Browser closed.');
+      }
+
+      const state = await detectPageState(page);
+      if (state.kind === 'not_logged_in' || state.kind === 'rate_limited') {
+        throw pageStateError(state, true);
+      }
+      if (state.kind === 'normal_1688_page') return state;
+      if (remainingMs > 0) return null;
+      return state;
+    },
+    {
+      timeoutMs: configuredTimeoutMs,
+      intervalMs: options.intervalMs ?? 500,
+      onTimeout: () => initialState,
+    },
+  );
+
+  if (resolved.kind !== 'normal_1688_page') {
+    throw initialError;
+  }
+  return { recoveredRiskChallenge: true };
+}
+
 async function runRecoveryAction(decision: RecoveryDecision, page: Page | null): Promise<void> {
   switch (decision.action) {
     case 'dismiss_overlay_and_retry':
@@ -455,7 +547,7 @@ function recoveryDetails(
     recoveryAction: baseRecoveryAction ?? decision.action,
     recoverHint:
       baseDetails.recoverHint ?? artifactDetails.recoverHint ?? decision.recoverHint,
-    retryable: baseDetails.retryable ?? false,
+    retryable: baseDetails.retryable ?? decision.retryable,
   };
 }
 

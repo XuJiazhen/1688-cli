@@ -49,6 +49,7 @@ export type AlisiteModuleCaptureWaitStatus =
   | 'timeout'
   | 'aborted'
   | 'risk_control'
+  | 'rate_limited'
   | 'not_logged_in'
   | 'browser_closed'
   | 'stream_closed';
@@ -58,6 +59,7 @@ export interface AlisiteModuleCaptureWaitOptions {
   intervalMs?: number;
   signal?: AbortSignal;
   isBlocked?: () => boolean | Promise<boolean>;
+  isRateLimited?: () => boolean | Promise<boolean>;
   isNotLoggedIn?: () => boolean | Promise<boolean>;
   isClosed?: () => boolean;
 }
@@ -373,6 +375,7 @@ export function startAlisiteModuleCapture(
         if (waitOptions.signal?.aborted) return 'aborted';
         if (allRequiredTargetsSatisfied()) return 'captured';
         if (await waitOptions.isNotLoggedIn?.()) return 'not_logged_in';
+        if (await waitOptions.isRateLimited?.()) return 'rate_limited';
         if (await waitOptions.isBlocked?.()) return 'risk_control';
         if (disposed) return 'stream_closed';
         return null;
@@ -385,6 +388,7 @@ export function startAlisiteModuleCapture(
           if (waitOptions.signal?.aborted) return 'aborted';
           if (allRequiredTargetsSatisfied()) return 'captured';
           if (await waitOptions.isNotLoggedIn?.()) return 'not_logged_in';
+          if (await waitOptions.isRateLimited?.()) return 'rate_limited';
           if (await waitOptions.isBlocked?.()) return 'risk_control';
           if (disposed) return 'stream_closed';
           return 'timeout';

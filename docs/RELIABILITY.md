@@ -51,8 +51,14 @@ Commands should detect and report:
 - closed browser windows
 - empty mtop captures
 - network failures
+- rate limiting, which requires automatic backoff rather than manual slider
+  verification
 
 Use structured `CliError` exit codes so agents can choose the next safe step.
+When a read command is already running with `--headed`, a detected slider
+keeps that command and browser open until it is resolved or
+`timeouts.headedVerificationMs` expires. Login redirects still require the
+separate login flow, and rate limiting still exits for automatic backoff.
 
 ## Probes And Fixtures
 

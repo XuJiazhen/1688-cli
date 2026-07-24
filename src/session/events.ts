@@ -208,7 +208,14 @@ function verificationFromDetails(
       currentUrl,
     };
   }
-  if (details.category === 'risk_control' || details.pageState === 'rate_limited') {
+  if (details.pageState === 'rate_limited' || details.category === 'rate_limited') {
+    return {
+      state: 'rate_limited',
+      reason: details.pageState,
+      currentUrl,
+    };
+  }
+  if (details.category === 'risk_control') {
     return {
       state: 'risk_control',
       reason: details.pageState,

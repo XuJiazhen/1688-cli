@@ -757,7 +757,7 @@ describe('startAlisiteModuleCapture', () => {
     });
   });
 
-  it('surfaces login expiry and risk control without turning them into empty data', async () => {
+  it('keeps login expiry, rate limiting, and risk control distinct', async () => {
     const target = {
       id: 'catalog',
       componentKey: STORE_CATALOG_COMPONENT_KEY,
@@ -785,6 +785,18 @@ describe('startAlisiteModuleCapture', () => {
         isBlocked: () => true,
       }),
     ).toMatchObject({ status: 'risk_control', captures: [] });
+
+    const rateLimited = startAlisiteModuleCapture({
+      page: page(),
+      targets: [target],
+    });
+    expect(
+      await rateLimited.wait({
+        timeoutMs: 50,
+        intervalMs: 1,
+        isRateLimited: () => true,
+      }),
+    ).toMatchObject({ status: 'rate_limited', captures: [] });
   });
 
   it('scopes listeners to waitForAction even when the action fails', async () => {

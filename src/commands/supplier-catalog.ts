@@ -15,6 +15,7 @@ import {
 import { dispatch } from '../session/dispatch.js';
 import { detectPageState } from '../session/page-state.js';
 import { sanitizeEvidenceRef } from '../session/redaction.js';
+import { waitForCollectionPageAvailability } from '../session/recovery.js';
 import { waitWithDeadline } from '../session/wait.js';
 import { execute as inspectSupplier } from './supplier-inspect.js';
 
@@ -149,7 +150,11 @@ export async function execute(
   }
   const resolved = await resolveCatalogSupplier(ctx, unit, args.headed === true);
   const page = await ctx.newPage();
-  const adapter = createPlaywrightCatalogAdapter(page, resolved);
+  const adapter = createPlaywrightCatalogAdapter(
+    page,
+    resolved,
+    args.headed === true,
+  );
   try {
     return await executeCatalogBatch({ unit, checkpoint: args.checkpoint, adapter });
   } finally {
@@ -202,6 +207,7 @@ export function supplierInspectionTarget(
 export function createPlaywrightCatalogAdapter(
   page: Page,
   supplier: ResolvedCatalogSupplier,
+  headed = false,
 ): CatalogPageAdapter {
   const captures = new Map<number, CapturedAlisiteModule>();
   const evidence = new Set<string>();
@@ -252,9 +258,18 @@ export function createPlaywrightCatalogAdapter(
           signal: request.signal,
           isClosed: () => page.isClosed(),
           isNotLoggedIn: async () => (await detectPageState(page)).kind === 'not_logged_in',
+          isRateLimited: async () =>
+            (await detectPageState(page)).kind === 'rate_limited',
           isBlocked: async () => {
             const state = await detectPageState(page);
-            return state.kind === 'risk_challenge' || state.kind === 'rate_limited';
+            if (state.kind === 'risk_challenge' && headed) {
+              await waitForCollectionPageAvailability(page, {
+                headed: true,
+                signal: request.signal,
+              });
+              return false;
+            }
+            return state.kind === 'risk_challenge';
           },
         },
       );
@@ -565,6 +580,20 @@ function captureStatusError(
   }
   if (status === 'risk_control') {
     return new CliError(4, 'RISK_CONTROL', '1688 risk control appeared. Retry with `--headed` and complete verification.');
+  }
+  if (status === 'rate_limited') {
+    return new CliError(
+      9,
+      'RATE_LIMITED',
+      '1688 is rate-limiting this session. Wait a few minutes, then retry at a slower pace.',
+      {
+        category: 'rate_limited',
+        failureKind: 'rate_limited',
+        recoveryAction: 'backoff',
+        retryable: true,
+        diagnostics,
+      },
+    );
   }
   if (status === 'aborted') {
     return new CliError(9, 'COLLECTION_CANCELLED', `Catalog page ${pageNumber} collection was cancelled.`);

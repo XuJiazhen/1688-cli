@@ -16,7 +16,7 @@ place orders. Treat write actions as explicit user-authorized operations.
 | 6 | Chromium missing | Report dependency issue. |
 | 7 | Login wait timeout | Report timeout. |
 | 8 | Login finished but cookies missing | Report login cookie issue. |
-| 9 | Network error | Report or retry only when safe and bounded. |
+| 9 | Transient remote failure, including network errors and rate limiting | Back off and retry only when safe and bounded. Do not open a manual verification window for rate limiting. |
 | 130 | User canceled | Stop. |
 
 ## Login And Logout
@@ -36,6 +36,10 @@ place orders. Treat write actions as explicit user-authorized operations.
   `--headed`.
 - The user must solve the slider manually.
 - Do not silently retry the same blocked command.
+
+Rate limiting is not a slider challenge. A `RATE_LIMITED` error uses exit code
+`9`; wait for the cooldown and retry at a slower pace instead of opening a
+headed browser.
 
 ## Seller Contact
 

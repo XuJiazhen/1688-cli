@@ -220,6 +220,7 @@ describe('collection contracts', () => {
         completedPages: [1, 1],
         seenKeys: ['offer-2', 'offer-1', 'offer-1'],
         pendingKeys: ['offer-3', 'offer-3'],
+        pendingItems: [{ key: 'offer-3', value: { rank: 3 } }],
         attemptCounts: { 'page:2': 1 },
         updatedAt: '2026-07-22T08:30:00+08:00',
       }),
@@ -233,6 +234,7 @@ describe('collection contracts', () => {
       completedPages: [1],
       seenKeys: ['offer-1', 'offer-2'],
       pendingKeys: ['offer-3'],
+      pendingItems: [{ key: 'offer-3', value: { rank: 3 } }],
       attemptCounts: { 'page:2': 1 },
       updatedAt: '2026-07-22T00:30:00.000Z',
     });

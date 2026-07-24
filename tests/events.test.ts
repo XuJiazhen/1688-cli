@@ -79,11 +79,11 @@ describe('command events', () => {
   });
 
   it('builds error events from CliError details', () => {
-    const error = new CliError(4, 'RISK_CONTROL', 'blocked', {
+    const error = new CliError(9, 'RATE_LIMITED', 'limited', {
       artifactDir: '/tmp/artifact',
       currentUrl: 'https://punish.1688.com/',
       pageState: 'rate_limited',
-      category: 'risk_control',
+      category: 'rate_limited',
       retryable: true,
     });
 
@@ -102,11 +102,11 @@ describe('command events', () => {
       phase: 'error',
       status: 'error',
       artifactDir: '/tmp/artifact',
-      errorCode: 'RISK_CONTROL',
+      errorCode: 'RATE_LIMITED',
       pageState: 'rate_limited',
       retryable: true,
       verification: {
-        state: 'risk_control',
+        state: 'rate_limited',
         reason: 'rate_limited',
         currentUrl: 'https://punish.1688.com/',
       },

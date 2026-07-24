@@ -64,6 +64,7 @@ export interface CollectionCheckpoint {
   completedPages: number[];
   seenKeys: string[];
   pendingKeys: string[];
+  pendingItems?: Array<Record<string, unknown>>;
   attemptCounts: Record<string, number>;
   updatedAt: string;
 }
@@ -265,6 +266,13 @@ export function normalizeCollectionCheckpoint(value: unknown): CollectionCheckpo
     ),
     seenKeys: requireUniqueStrings(record.seenKeys, 'CollectionCheckpoint.seenKeys'),
     pendingKeys: requireUniqueStrings(record.pendingKeys, 'CollectionCheckpoint.pendingKeys'),
+    pendingItems:
+      record.pendingItems === undefined
+        ? undefined
+        : requireJsonRecords(
+            record.pendingItems,
+            'CollectionCheckpoint.pendingItems',
+          ),
     attemptCounts: requireAttemptCounts(
       record.attemptCounts,
       'CollectionCheckpoint.attemptCounts',

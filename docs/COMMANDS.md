@@ -119,9 +119,18 @@ inline rather than through the five-minute daemon request path:
 ```bash
 1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
 cat unit.json | 1688 collect - --json
+printf '{"unit":%s,"checkpoint":%s}\n' "$(cat unit.json)" "$(cat checkpoint.json)" \
+  | 1688 collect - --json
 
 1688 collect '{"schemaVersion":1,"unitId":"tent-search-1","kind":"search-page","subject":{"keyword":"帐篷"},"scope":{"requestedScope":"page","pageSize":60}}' --json
 ```
+
+Stdin accepts either the legacy naked `CollectionUnit` or
+`{"unit": CollectionUnit, "checkpoint"?: CollectionCheckpoint}`. Production
+adapters use the envelope so a large checkpoint is carried in stdin rather
+than the process argument vector. Manual inline or `@file` `--checkpoint`
+input remains supported, including with a naked unit on stdin. Supplying a
+checkpoint both in the envelope and with `--checkpoint` is invalid.
 
 Supported kinds are `search-page`, `store-catalog`, `store-categories`,
 `store-qualification`, `offer-detail`, and `offer-media-manifest`. For
@@ -133,11 +142,24 @@ its qualified-SKU target. See [JSON_CONTRACTS.md](JSON_CONTRACTS.md#collection-p
 For `search-page`, 1688 still returns fixed 60-offer remote pages.
 `scope.pageSize` and `limits.maxItems` limit only the deterministic subset
 emitted in one batch. A partial-page checkpoint resumes that same remote page
-until every captured offer has been emitted. If a pending offer disappears
-between captures, `SEARCH_PAGE_CHECKPOINT_DRIFT` stops continuation without
-another checkpoint instead of retrying forever. Remote page 20 is the
-technical search budget: a full page there returns a terminal
-`partial`/`truncated` batch with `SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED`, never a
+from its persisted pending-offer snapshot until every captured offer has been
+emitted. A response above the fixed 60-offer boundary fails retryably with
+`SEARCH_REMOTE_PAGE_SIZE_EXCEEDED` and a readable key-only checkpoint rather
+than producing cross-page ranks. The version-1 snapshot is a strict canonical
+search-offer record: it
+contains at most 60 items and 256 KiB, rejects unknown or
+authentication/session/Cookie/token metadata, and requires consistent page,
+rank, sort, remote-has-more, and collection-time metadata. If a newly captured
+snapshot would exceed those limits, the retryable
+`SEARCH_PAGE_CHECKPOINT_TOO_LARGE` result retains all unresolved IDs in a
+key-only checkpoint rather than emitting a lossy subset.
+
+Older key-only checkpoints retain unresolved IDs across page drift;
+zero-progress resumes fail explicitly and become terminal after three
+consecutive attempts instead of looping or silently dropping continuation.
+Remote page 20 is the technical search budget. Same-page snapshots still
+drain under a small per-batch cap; the final drain returns terminal
+`completed`/`truncated` with `SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED`, never a
 page-21 checkpoint.
 
 ## Pre-Sale Inquiry

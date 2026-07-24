@@ -5,6 +5,8 @@ import { createOfferCollectionBatch } from '../collection/offer-batch.js';
 import { createQualificationBatch } from '../collection/qualification-batch.js';
 import {
   createSearchPageBatch,
+  drainSearchCheckpointSnapshot,
+  encodeSearchCursor,
   planSearchBatch,
 } from '../collection/search-batch.js';
 import { executeCatalogBatch, type CatalogPageAdapter } from '../collection/catalog-batch.js';
@@ -28,6 +30,10 @@ import {
 } from '../session/alisite-module.js';
 import { buildOfferMediaManifest, parseOfferDetailsScript } from '../session/offer-media.js';
 import { detectPageState } from '../session/page-state.js';
+import {
+  pageStateError,
+  waitForCollectionPageAvailability,
+} from '../session/recovery.js';
 import {
   captureSupplierQualificationForAction,
   isSafeSupplierMemberKey,
@@ -78,6 +84,24 @@ export interface ExecuteCollectionUnitOptions {
   now?: () => Date;
 }
 
+export interface ParsedCollectInput {
+  unit: CollectionUnit;
+  checkpoint?: CollectionCheckpoint;
+}
+
+export interface CollectCommandDependencies {
+  dispatchCollect?: (
+    args: CollectArgs,
+    options: {
+      profile?: string;
+      headed?: boolean;
+      noDaemon: true;
+    },
+  ) => Promise<CollectionBatch>;
+  now?: () => Date;
+  batchId?: () => string;
+}
+
 export interface FixtureCatalogPage {
   payload: unknown;
   request?: StoreCatalogRequestMeta;
@@ -105,29 +129,91 @@ export interface CollectionFixture {
 }
 
 export async function run(opts: CollectOpts): Promise<void> {
-  const unit = normalizeCollectionUnit(await readJsonValue(opts.unit, 'CollectionUnit'));
-  const checkpoint = opts.checkpoint
-    ? normalizeCollectionCheckpoint(await readJsonValue(opts.checkpoint, 'CollectionCheckpoint'))
-    : undefined;
-  let data: CollectionBatch;
-  if (opts.fixture) {
-    const fixture = await readFixture(opts.fixture, unit.kind);
-    data = await executeCollectionUnit({
-      unit,
-      checkpoint,
-      runtime: createFixtureCollectionRuntime(fixture),
-    });
-  } else {
-    data = await dispatch<CollectArgs, CollectionBatch>(
-      'collect',
-      { unit, checkpoint, headed: opts.headed },
-      { profile: opts.profile, headed: opts.headed, noDaemon: true },
-    );
-  }
+  const data = await executeCollectCommand(opts);
   if (opts.output) {
     await writeFile(opts.output, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
   }
   emit({ data, human: () => printSummary(data, opts.output) });
+}
+
+export async function executeCollectCommand(
+  opts: CollectOpts,
+  dependencies: CollectCommandDependencies = {},
+): Promise<CollectionBatch> {
+  const input = await readJsonValue(opts.unit, 'CollectionUnit or collect envelope');
+  const explicitCheckpoint = opts.checkpoint
+    ? await readJsonValue(opts.checkpoint, 'CollectionCheckpoint')
+    : undefined;
+  const { unit, checkpoint } = parseCollectInput(input, explicitCheckpoint);
+  if (unit.kind === 'search-page' && checkpoint !== undefined) {
+    const plan = planSearchBatch(unit, checkpoint);
+    if (plan.pendingItems.length > 0) {
+      const now = dependencies.now ?? (() => new Date());
+      const startedAt = now().toISOString();
+      return drainSearchCheckpointSnapshot({
+        unit,
+        checkpoint,
+        batchId: (dependencies.batchId ?? randomUUID)(),
+        startedAt,
+        completedAt: now().toISOString(),
+      });
+    }
+  }
+  if (opts.fixture) {
+    const fixture = await readFixture(opts.fixture, unit.kind);
+    return executeCollectionUnit({
+      unit,
+      checkpoint,
+      runtime: createFixtureCollectionRuntime(fixture),
+    });
+  }
+  const dispatchCollect =
+    dependencies.dispatchCollect ??
+    ((args: CollectArgs, options: {
+      profile?: string;
+      headed?: boolean;
+      noDaemon: true;
+    }) =>
+      dispatch<CollectArgs, CollectionBatch>(
+        'collect',
+        args,
+        options,
+      ));
+  return dispatchCollect(
+    { unit, checkpoint, headed: opts.headed },
+    { profile: opts.profile, headed: opts.headed, noDaemon: true },
+  );
+}
+
+export function parseCollectInput(
+  value: unknown,
+  explicitCheckpoint?: unknown,
+): ParsedCollectInput {
+  const envelope =
+    isPlainRecord(value) && Object.hasOwn(value, 'unit')
+      ? value
+      : undefined;
+  if (
+    envelope?.checkpoint !== undefined &&
+    explicitCheckpoint !== undefined
+  ) {
+    throw new CliError(
+      2,
+      'BAD_INPUT',
+      'CollectionCheckpoint must be supplied in either the collect envelope or --checkpoint, not both.',
+    );
+  }
+  const unit = normalizeCollectionUnit(envelope?.unit ?? value);
+  const checkpointValue =
+    explicitCheckpoint ?? envelope?.checkpoint;
+  const checkpoint =
+    checkpointValue === undefined
+      ? undefined
+      : normalizeCollectionCheckpoint(checkpointValue);
+  return {
+    unit,
+    ...(checkpoint === undefined ? {} : { checkpoint }),
+  };
 }
 
 export async function execute(
@@ -294,6 +380,15 @@ async function collectSearchUnit(
 ): Promise<CollectionBatch> {
   const plan = planSearchBatch(unit, checkpoint);
   const startedAt = new Date().toISOString();
+  if (plan.pendingItems.length > 0) {
+    return drainSearchCheckpointSnapshot({
+      unit,
+      checkpoint: checkpoint!,
+      batchId: randomUUID(),
+      startedAt,
+      completedAt: new Date().toISOString(),
+    });
+  }
   const result = await fetchIncrementalSearchPage(ctx, {
     keyword: unit.subject.keyword!,
     page: plan.page,
@@ -328,19 +423,27 @@ async function collectQualificationUnit(
       page,
       supplier.shopUrl,
       supplier.memberId,
+      headed,
     );
-    const capture = await captureSupplierQualificationForAction(
+    let capture = await captureSupplierQualificationForAction(
       page,
       { memberId, timeoutMs: 15_000 },
       () => requestSupplierQualificationFromPage(page, memberId),
     );
     if (!capture.qualification) {
-      const state = await detectPageState(page);
-      if (state.kind === 'not_logged_in') {
-        throw new CliError(3, 'NOT_LOGGED_IN', 'Session expired. Run `1688 login`.');
+      const availability = await waitForCollectionPageAvailability(page, {
+        headed,
+      });
+      if (availability.recoveredRiskChallenge) {
+        capture = await captureSupplierQualificationForAction(
+          page,
+          { memberId, timeoutMs: 15_000 },
+          () => requestSupplierQualificationFromPage(page, memberId),
+        );
       }
-      if (state.kind === 'risk_challenge' || state.kind === 'rate_limited') {
-        throw new CliError(4, 'RISK_CONTROL', '1688 risk control appeared. Retry with `--headed` and complete verification.');
+      if (!capture.qualification) {
+        const stateError = pageStateError(await detectPageState(page), headed);
+        if (stateError !== null) throw stateError;
       }
     }
     const completedAt = new Date().toISOString();
@@ -382,10 +485,11 @@ export async function navigateAndResolveQualificationMember(
   page: Page,
   shopUrl: string,
   knownMemberId?: string,
+  headed = false,
 ): Promise<string> {
   if (isSafeSupplierMemberKey(knownMemberId)) {
     await page.goto(shopUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-    await assertCollectionPageAvailable(page);
+    await waitForCollectionPageAvailability(page, { headed });
     return knownMemberId;
   }
   const capture = startAlisiteModuleCapture({
@@ -403,9 +507,15 @@ export async function navigateAndResolveQualificationMember(
       timeoutMs: 15_000,
       isClosed: () => page.isClosed(),
       isNotLoggedIn: async () => (await detectPageState(page)).kind === 'not_logged_in',
+      isRateLimited: async () =>
+        (await detectPageState(page)).kind === 'rate_limited',
       isBlocked: async () => {
         const state = await detectPageState(page);
-        return state.kind === 'risk_challenge' || state.kind === 'rate_limited';
+        if (state.kind === 'risk_challenge' && headed) {
+          await waitForCollectionPageAvailability(page, { headed: true });
+          return false;
+        }
+        return state.kind === 'risk_challenge';
       },
     },
   );
@@ -417,6 +527,19 @@ export async function navigateAndResolveQualificationMember(
       4,
       'RISK_CONTROL',
       '1688 risk control appeared. Retry with `--headed` and complete verification.',
+    );
+  }
+  if (result.status === 'rate_limited') {
+    throw new CliError(
+      9,
+      'RATE_LIMITED',
+      '1688 is rate-limiting this session. Wait a few minutes, then retry at a slower pace.',
+      {
+        category: 'rate_limited',
+        failureKind: 'rate_limited',
+        recoveryAction: 'backoff',
+        retryable: true,
+      },
     );
   }
   const memberId = result.captures
@@ -431,22 +554,6 @@ export async function navigateAndResolveQualificationMember(
     );
   }
   return memberId;
-}
-
-async function assertCollectionPageAvailable(
-  page: Page,
-): Promise<void> {
-  const state = await detectPageState(page);
-  if (state.kind === 'not_logged_in') {
-    throw new CliError(3, 'NOT_LOGGED_IN', 'Session expired. Run `1688 login`.');
-  }
-  if (state.kind === 'risk_challenge' || state.kind === 'rate_limited') {
-    throw new CliError(
-      4,
-      'RISK_CONTROL',
-      '1688 risk control appeared. Retry with `--headed` and complete verification.',
-    );
-  }
 }
 
 async function collectOfferUnit(
@@ -489,10 +596,32 @@ function failedCollectionBatch(
         message,
       }
     : undefined;
-  const nextPage = restored?.nextPage ?? (isPageKind(unit.kind) ? 1 : undefined);
+  const nextPage =
+    unit.kind === 'search-page'
+      ? planSearchBatch(unit, restored).page
+      : restored?.nextPage ?? (isPageKind(unit.kind) ? 1 : undefined);
   const pendingKey = nextPage === undefined
     ? `${unit.kind}:${unit.subject.offerId ?? 'subject'}`
     : `page:${nextPage}`;
+  const checkpoint =
+    unit.kind === 'search-page'
+      ? searchFailureCheckpoint(unit, restored, completedAt)
+      : {
+          schemaVersion: 1 as const,
+          unitFingerprint: fingerprintCollectionUnit(unit),
+          kind: unit.kind,
+          subject: { ...unit.subject },
+          scope: { ...(unit.scope ?? {}) },
+          ...(nextPage === undefined ? {} : { nextPage }),
+          completedPages: restored?.completedPages ?? [],
+          seenKeys: restored?.seenKeys ?? [],
+          pendingKeys: [pendingKey],
+          attemptCounts: {
+            ...restored?.attemptCounts,
+            [pendingKey]: (restored?.attemptCounts[pendingKey] ?? 0) + 1,
+          },
+          updatedAt: completedAt.toISOString(),
+        };
   return normalizeCollectionBatch({
     schemaVersion: 1,
     batchId: randomUUID(),
@@ -514,26 +643,43 @@ function failedCollectionBatch(
     duplicateObservations: [],
     warnings: [],
     errors: [{ code, message, retryable: true }],
-    checkpoint: {
-      schemaVersion: 1,
-      unitFingerprint: fingerprintCollectionUnit(unit),
-      kind: unit.kind,
-      subject: { ...unit.subject },
-      scope: { ...(unit.scope ?? {}) },
-      ...(nextPage === undefined ? {} : { nextPage }),
-      completedPages: restored?.completedPages ?? [],
-      seenKeys: restored?.seenKeys ?? [],
-      pendingKeys: [pendingKey],
-      attemptCounts: {
-        ...restored?.attemptCounts,
-        [pendingKey]: (restored?.attemptCounts[pendingKey] ?? 0) + 1,
-      },
-      updatedAt: completedAt.toISOString(),
-    },
+    checkpoint,
     actionRequired,
     rawEvidenceRefs: [],
     metrics: { failedUnits: 1 },
   });
+}
+
+function searchFailureCheckpoint(
+  unit: CollectionUnit,
+  restored: CollectionCheckpoint | undefined,
+  completedAt: Date,
+): CollectionCheckpoint {
+  const plan = planSearchBatch(unit, restored);
+  const page = plan.page;
+  const attemptKey = `page:${page}`;
+  return {
+    schemaVersion: 1,
+    unitFingerprint: fingerprintCollectionUnit(unit),
+    kind: 'search-page',
+    subject: { ...unit.subject },
+    scope: { ...(unit.scope ?? {}) },
+    nextCursor:
+      restored?.nextCursor ??
+      encodeSearchCursor(page),
+    nextPage: page,
+    completedPages: plan.completedPages,
+    seenKeys: plan.seenOfferIds,
+    pendingKeys: plan.pendingOfferIds,
+    ...(plan.pendingItems.length === 0
+      ? {}
+      : { pendingItems: plan.pendingItems }),
+    attemptCounts: {
+      ...restored?.attemptCounts,
+      [attemptKey]: (restored?.attemptCounts[attemptKey] ?? 0) + 1,
+    },
+    updatedAt: completedAt.toISOString(),
+  };
 }
 
 function offerFromMediaFixture(
@@ -604,6 +750,10 @@ async function readJsonValue(input: string, label: string): Promise<unknown> {
   } catch (error) {
     throw new CliError(2, 'BAD_INPUT', `${label} must be valid JSON: ${error instanceof Error ? error.message : String(error)}`);
   }
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 async function readFixture(
