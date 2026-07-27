@@ -15,6 +15,7 @@ import {
 import {
   ALISITE_MODULE_API,
   STORE_CATALOG_COMPONENT_KEY,
+  STORE_CATEGORIES_COMPONENT_KEY,
 } from '../src/session/alisite-module.js';
 
 class RuntimeCatalogPage extends EventEmitter {
@@ -33,6 +34,7 @@ class RuntimeCatalogPage extends EventEmitter {
       | 'schema-changed'
       | 'risk-control'
       | 'risk-control-once'
+      | 'category-risk-control-once'
       | 'none' = 'exact',
     private readonly runtimeAvailable = true,
     private readonly runtimeSettles = true,
@@ -49,6 +51,12 @@ class RuntimeCatalogPage extends EventEmitter {
     );
     this.currentUrl = url;
     this.navigations.push(url);
+    if (
+      this.responseMode === 'category-risk-control-once' &&
+      url === 'https://shop-example.1688.com/'
+    ) {
+      await this.emitCategoryResponse();
+    }
     if (url.includes('/page/offerlist.html')) {
       await this.emitCatalogResponse({
         memberId: 'b2b-fixture-ordinary',
@@ -181,6 +189,41 @@ class RuntimeCatalogPage extends EventEmitter {
               }
             : this.responseMode === 'schema-changed'
             ? { data: { unexpected: true } }
+            : payload,
+        ),
+    } as unknown as PWResponse);
+  }
+
+  private async emitCategoryResponse(): Promise<void> {
+    const payload = JSON.parse(
+      await readFile(
+        new URL('./fixtures/store-catalog/categories.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    const data = {
+      componentKey: STORE_CATEGORIES_COMPONENT_KEY,
+      params: JSON.stringify({
+        memberId: 'b2b-fixture-ordinary',
+      }),
+    };
+    const url =
+      `https://h5api.m.1688.com/h5/${ALISITE_MODULE_API}/1.0/` +
+      `?api=${ALISITE_MODULE_API}&sign=fixture-secret&data=${encodeURIComponent(JSON.stringify(data))}`;
+    const riskControl = this.riskResponseCount++ === 0;
+    this.emit('response', {
+      url: () => url,
+      request: () => ({ postData: () => null }),
+      text: async () =>
+        JSON.stringify(
+          riskControl
+            ? {
+                ret: ['FAIL_SYS_USER_VALIDATE::验证失败'],
+                data: {
+                  url:
+                    'https://punish.1688.com/punish?token=ephemeral-secret',
+                },
+              }
             : payload,
         ),
     } as unknown as PWResponse);
@@ -419,6 +462,42 @@ describe('supplier catalog command helpers', () => {
     ]);
     expect(
       JSON.stringify(adapter.diagnosticsForPage?.(2)),
+    ).not.toContain('ephemeral-secret');
+  });
+
+  it('keeps headed category collection open for an MTOP challenge and retries once', async () => {
+    const mockPage = new RuntimeCatalogPage('category-risk-control-once');
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      true,
+      'auto',
+      { responseMs: 500 },
+    );
+
+    await expect(
+      adapter.collectPage({
+        kind: 'store-categories',
+        page: 1,
+        pageSize: 30,
+        memberId: 'b2b-fixture-ordinary',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'categories',
+      categories: [
+        expect.objectContaining({ id: 'fixture-category-tools' }),
+      ],
+    });
+    expect(mockPage.navigations).toEqual([
+      'https://shop-example.1688.com/',
+      'https://punish.1688.com/punish?token=ephemeral-secret',
+      'https://shop-example.1688.com/',
+    ]);
+    expect(
+      JSON.stringify(adapter.diagnosticsForPage?.(1)),
     ).not.toContain('ephemeral-secret');
   });
 

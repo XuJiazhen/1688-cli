@@ -258,6 +258,36 @@ export function createPlaywrightCatalogAdapter(
     return captured.parsed;
   };
 
+  const manualRiskChallengeOptions = (
+    allowManualRiskChallenge: boolean,
+    request: CatalogPageRequest,
+  ) =>
+    headed && allowManualRiskChallenge
+      ? {
+          onRiskChallenge: async (challengeUrl: string) => {
+            try {
+              await page.goto(challengeUrl, {
+                // Punish pages can keep loading telemetry until the slider is
+                // solved. Waiting for commit leaves the remaining bounded
+                // verification window to the page-state poller.
+                waitUntil: 'commit',
+                timeout: 30_000,
+              });
+              const availability = await waitForCollectionPageAvailability(
+                page,
+                {
+                  headed: true,
+                  signal: request.signal,
+                },
+              );
+              return availability.recoveredRiskChallenge;
+            } catch {
+              return false;
+            }
+          },
+        }
+      : {};
+
   const collectRuntimePage = async (
     request: CatalogPageRequest,
     allowManualRiskChallenge = true,
@@ -307,28 +337,7 @@ export function createPlaywrightCatalogAdapter(
     const capture = startAlisiteModuleCapture({
       page,
       targets: [expected, diagnosticTarget],
-      ...(headed && allowManualRiskChallenge
-        ? {
-            onRiskChallenge: async (challengeUrl: string) => {
-              try {
-                await page.goto(challengeUrl, {
-                  waitUntil: 'domcontentloaded',
-                  timeout: 30_000,
-                });
-                const availability = await waitForCollectionPageAvailability(
-                  page,
-                  {
-                    headed: true,
-                    signal: request.signal,
-                  },
-                );
-                return availability.recoveredRiskChallenge;
-              } catch {
-                return false;
-              }
-            },
-          }
-        : {}),
+      ...manualRiskChallengeOptions(allowManualRiskChallenge, request),
     });
     const responseStartedAt = Date.now();
     let runtimeResultStatus: CatalogPageDiagnostics['runtimeResultStatus'] =
@@ -497,11 +506,13 @@ export function createPlaywrightCatalogAdapter(
   const collectDomPage = async (
     request: CatalogPageRequest,
     fallbackReason?: string,
+    allowManualRiskChallenge = true,
   ): Promise<StoreCatalogParseResult> => {
     const expected = captureTarget(request, supplier);
     const capture = startAlisiteModuleCapture({
       page,
       targets: [expected, ...bootstrapTargets(request, supplier)],
+      ...manualRiskChallengeOptions(allowManualRiskChallenge, request),
     });
     const responseStartedAt = Date.now();
     try {
@@ -561,6 +572,9 @@ export function createPlaywrightCatalogAdapter(
       const captured = result.captures.find(
         (entry) => entry.targetId === expected.id,
       );
+      if (result.status === 'risk_control_recovered') {
+        throw new CatalogManualRiskChallengeRecoveredError();
+      }
       if (result.status !== 'captured' || !captured) {
         throw captureStatusError(
           result.status,
@@ -592,6 +606,24 @@ export function createPlaywrightCatalogAdapter(
         });
       }
       throw error;
+    } finally {
+      capture.dispose();
+    }
+  };
+
+  const collectDomWithPageRebuild = async (
+    request: CatalogPageRequest,
+    fallbackReason?: string,
+  ): Promise<StoreCatalogParseResult> => {
+    try {
+      return await collectDomPage(request, fallbackReason);
+    } catch (error) {
+      if (!(error instanceof CatalogManualRiskChallengeRecoveredError)) {
+        throw error;
+      }
+      currentCatalogPage = null;
+      diagnostics.delete(request.page);
+      return collectDomPage(request, fallbackReason, false);
     }
   };
 
@@ -642,7 +674,7 @@ export function createPlaywrightCatalogAdapter(
   return {
     async collectPage(request) {
       if (request.kind === 'store-categories' || transportMode === 'dom') {
-        return collectDomPage(request);
+        return collectDomWithPageRebuild(request);
       }
       try {
         return await collectRuntimeWithPageRebuild(request);
@@ -654,7 +686,7 @@ export function createPlaywrightCatalogAdapter(
         ) {
           throw error;
         }
-        return collectDomPage(request, error.code);
+        return collectDomWithPageRebuild(request, error.code);
       }
     },
     sourceRefForPage(pageNumber) {
