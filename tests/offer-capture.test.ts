@@ -28,16 +28,21 @@ function diagnostics(
 }
 
 describe('requireSkuSelectorModel', () => {
-  it('rejects a missing SKU selector model as retryable capture failure', () => {
+  it('rejects a missing SKU selector model as a retryable response timeout', () => {
     expect(() => requireSkuSelectorModel(null, diagnostics())).toThrowError(
       expect.objectContaining({
         exitCode: 9,
-        code: 'OFFER_SKU_CAPTURE_INCOMPLETE',
+        code: 'OFFER_SKU_RESPONSE_TIMEOUT',
         details: expect.objectContaining({
           retryable: true,
+          legacyCode: 'OFFER_SKU_CAPTURE_INCOMPLETE',
           matchedCount: 0,
           parsedCount: 0,
           timedOut: true,
+          responseCapture: expect.objectContaining({
+            matchedCount: 0,
+            timedOut: true,
+          }),
         }),
       }),
     );
@@ -160,6 +165,32 @@ describe('SSR SKU selector fallback', () => {
     expect(
       mapContextSkuBizModel({
         skuModel: { skuInfoMap: { invalid: { skuId: '' } } },
+      }),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['empty object', {}],
+    ['empty array', []],
+  ])('treats an explicit %s SKU list as a valid complete empty model', (_label, skuInfoMap) => {
+    expect(
+      mapContextSkuBizModel({
+        skuModel: { skuInfoMap },
+      }),
+    ).toMatchObject({
+      skuInfoMap: {},
+      skuProps: [],
+    });
+  });
+
+  it('rejects a non-empty SSR SKU list when every row is malformed', () => {
+    expect(
+      mapContextSkuBizModel({
+        skuModel: {
+          skuInfoMap: {
+            invalid: { skuId: null },
+          },
+        },
       }),
     ).toBeNull();
   });

@@ -31,7 +31,21 @@ export interface CatalogPageRequest {
 export interface CatalogPageAdapter {
   collectPage(request: CatalogPageRequest): Promise<StoreCatalogParseResult>;
   sourceRefForPage?(page: number): string | undefined;
+  diagnosticsForPage?(page: number): CatalogPageDiagnostics | undefined;
   evidenceRefs?(): string[];
+}
+
+export interface CatalogPageDiagnostics {
+  transport: 'runtime' | 'dom';
+  targetPage: number;
+  catalogRequestCount: number;
+  runtimeReadyMs: number;
+  responseWaitMs: number;
+  parseMs: number;
+  parserVersion: string;
+  memberScopeHash?: string;
+  runtimeResultStatus?: 'parsed' | 'unrecognized' | 'pending' | 'rejected';
+  fallbackReason?: string;
 }
 
 export interface ExecuteCatalogBatchOptions {
@@ -78,14 +92,16 @@ export async function executeCatalogBatch(
   const attemptCounts: Record<string, number> = {
     ...restoredCheckpoint?.attemptCounts,
   };
-  let expectedItems: number | undefined;
-  let expectedPages: number | undefined;
+  let expectedItems = restoredCheckpoint?.expectedItems;
+  let expectedPages = restoredCheckpoint?.expectedPages;
+  let pageCeiling = restoredCheckpoint?.pageCeiling ?? expectedPages;
   let page = restoredCheckpoint?.nextPage ?? 1;
   let requestedPageCount = 0;
   let stoppedByItemLimit = false;
   let stoppedByDeadline = false;
   let categoryItems = 0;
   let actionRequired: CollectionBatch['actionRequired'];
+  const pageDiagnostics = new Map<number, CatalogPageDiagnostics>();
 
   for (let requestedPages = 0; requestedPages < maxPages; requestedPages += 1) {
     if (
@@ -117,6 +133,7 @@ export async function executeCatalogBatch(
         signal: options.signal,
       });
     } catch (error) {
+      rememberPageDiagnostics(options.adapter, page, pageDiagnostics);
       failedPages.push(page);
       if (
         error instanceof CliError &&
@@ -136,7 +153,15 @@ export async function executeCatalogBatch(
           code: error.code,
           message,
           retryable: true,
-          details: { page },
+          details: {
+            page,
+            ...(
+              redactDiagnosticMetadata(error.details) as Record<
+                string,
+                unknown
+              >
+            ),
+          },
         });
       } else {
         const cliError = error instanceof CliError ? error : null;
@@ -162,6 +187,11 @@ export async function executeCatalogBatch(
       }
       break;
     }
+    const diagnostics = rememberPageDiagnostics(
+      options.adapter,
+      page,
+      pageDiagnostics,
+    );
     const expectedResultKind =
       unit.kind === 'store-catalog' ? 'offer-list' : 'categories';
     if (parsed.kind !== expectedResultKind) {
@@ -194,6 +224,7 @@ export async function executeCatalogBatch(
     if (parsed.totalPages !== null) {
       if (expectedPages === undefined) {
         expectedPages = parsed.totalPages;
+        pageCeiling = parsed.totalPages;
       } else if (parsed.totalPages !== expectedPages) {
         warnings.push({
           code: 'TOTAL_PAGES_DRIFT',
@@ -204,7 +235,10 @@ export async function executeCatalogBatch(
             page,
           },
         });
-        expectedPages = Math.max(expectedPages, parsed.totalPages);
+        pageCeiling = Math.max(
+          pageCeiling ?? expectedPages,
+          parsed.totalPages,
+        );
       }
     }
     warnings.push(
@@ -225,6 +259,7 @@ export async function executeCatalogBatch(
           sourceRef:
             options.adapter.sourceRefForPage?.(page) ??
             `store-categories:page:${page}`,
+          ...(diagnostics ?? {}),
         },
         collectedAt,
       });
@@ -264,6 +299,7 @@ export async function executeCatalogBatch(
           sourceRef:
             options.adapter.sourceRefForPage?.(page) ??
             `store-catalog:page:${page}`,
+          ...(diagnostics ?? {}),
         },
         collectedAt,
       });
@@ -271,8 +307,8 @@ export async function executeCatalogBatch(
     if (!pageWasTruncated) completedPages.add(page);
     if (
       (requestedScope === 'page' && completedPages.has(page)) ||
-      (parsed.totalPages !== null &&
-        Array.from({ length: parsed.totalPages }, (_, index) => index + 1).every(
+      (pageCeiling !== undefined &&
+        Array.from({ length: pageCeiling }, (_, index) => index + 1).every(
           (candidate) => completedPages.has(candidate),
         ))
     ) {
@@ -292,7 +328,7 @@ export async function executeCatalogBatch(
       break;
     }
     const nextIncomplete = Array.from(
-      { length: expectedPages ?? page + 1 },
+      { length: pageCeiling ?? page + 1 },
       (_, index) => index + 1,
     ).find((candidate) => !completedPages.has(candidate));
     page = nextIncomplete ?? page + 1;
@@ -300,15 +336,17 @@ export async function executeCatalogBatch(
 
   const completedAt = now();
   const observedPages = [...completedPages].sort((a, b) => a - b);
+  const catalogNaturallyComplete =
+    pageCeiling !== undefined &&
+    Array.from({ length: pageCeiling }, (_, index) => index + 1).every(
+      (page) => completedPages.has(page),
+    );
   const reachedRequestedEnd =
     (requestedScope === 'page' && completedPages.size > 0) ||
-    (expectedPages !== undefined &&
-      Array.from({ length: expectedPages }, (_, index) => index + 1).every(
-        (page) => completedPages.has(page),
-      ));
+    catalogNaturallyComplete;
   if (
     unit.kind === 'store-catalog' &&
-    reachedRequestedEnd &&
+    catalogNaturallyComplete &&
     expectedItems !== undefined &&
     expectedItems !== seenSources.size
   ) {
@@ -324,7 +362,7 @@ export async function executeCatalogBatch(
   const nextPage = reachedRequestedEnd
     ? undefined
     : Array.from(
-        { length: expectedPages ?? observedPages.length + 1 },
+        { length: pageCeiling ?? observedPages.length + 1 },
         (_, index) => index + 1,
       ).find((page) => !observedPages.includes(page));
   const checkpoint =
@@ -337,6 +375,9 @@ export async function executeCatalogBatch(
           subject: { ...unit.subject },
           scope: { ...unit.scope },
           nextPage,
+          expectedItems,
+          expectedPages,
+          pageCeiling,
           completedPages: observedPages,
           seenKeys: [...seenSources.keys()],
           pendingKeys: [`page:${nextPage}`],
@@ -390,8 +431,54 @@ export async function executeCatalogBatch(
       categoryItems,
       duplicateItems: duplicateObservations.length,
       elapsedMs: Math.max(0, completedAt.getTime() - startedAt.getTime()),
+      catalogRuntimePages: [...pageDiagnostics.values()].filter(
+        (entry) => entry.transport === 'runtime',
+      ).length,
+      catalogDomPages: [...pageDiagnostics.values()].filter(
+        (entry) => entry.transport === 'dom',
+      ).length,
+      catalogRequestCount: sumPageDiagnostic(
+        pageDiagnostics,
+        'catalogRequestCount',
+      ),
+      catalogRuntimeReadyMs: sumPageDiagnostic(
+        pageDiagnostics,
+        'runtimeReadyMs',
+      ),
+      catalogResponseWaitMs: sumPageDiagnostic(
+        pageDiagnostics,
+        'responseWaitMs',
+      ),
+      catalogParseMs: sumPageDiagnostic(pageDiagnostics, 'parseMs'),
+      catalogFallbackPages: [...pageDiagnostics.values()].filter(
+        (entry) => entry.fallbackReason !== undefined,
+      ).length,
     },
   });
+}
+
+function rememberPageDiagnostics(
+  adapter: CatalogPageAdapter,
+  page: number,
+  target: Map<number, CatalogPageDiagnostics>,
+): CatalogPageDiagnostics | undefined {
+  const diagnostics = adapter.diagnosticsForPage?.(page);
+  if (diagnostics) target.set(page, diagnostics);
+  return diagnostics;
+}
+
+function sumPageDiagnostic(
+  diagnostics: Map<number, CatalogPageDiagnostics>,
+  field:
+    | 'catalogRequestCount'
+    | 'runtimeReadyMs'
+    | 'responseWaitMs'
+    | 'parseMs',
+): number {
+  return [...diagnostics.values()].reduce(
+    (total, entry) => total + entry[field],
+    0,
+  );
 }
 
 function assertCatalogUnit(

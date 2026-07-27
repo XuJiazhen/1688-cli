@@ -300,6 +300,39 @@ describe('collect entry', () => {
     expect(batch.rawEvidenceRefs).toEqual(['fixture:catalog:page:1']);
   });
 
+  it('attaches an injected requestId to a fixture batch for correlation', async () => {
+    const batch = await executeCollectCommand({
+      unit: JSON.stringify(catalogUnit),
+      fixture: path.join(
+        process.cwd(),
+        'tests/fixtures/store-catalog/page-1.json',
+      ),
+      requestId: 'attempt:fixture-001',
+    });
+
+    expect(batch.sourceRequestId).toBe('attempt:fixture-001');
+    await expect(
+      executeCollectCommand({
+        unit: JSON.stringify(catalogUnit),
+        fixture: path.join(
+          process.cwd(),
+          'tests/fixtures/store-catalog/page-1.json',
+        ),
+        requestId: 'unsafe request id',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_INPUT' });
+    await expect(
+      executeCollectCommand({
+        unit: JSON.stringify(catalogUnit),
+        fixture: path.join(
+          process.cwd(),
+          'tests/fixtures/store-catalog/page-1.json',
+        ),
+        requestId: '..',
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_INPUT' });
+  });
+
   it('turns login and risk-control interruption into a resumable blocked batch', async () => {
     const runtime: CollectionRuntime = {
       async collect() {
@@ -317,6 +350,56 @@ describe('collect entry', () => {
         pendingKeys: ['page:1'],
       },
     });
+  });
+
+  it('retains redacted qualification capture diagnostics at the batch boundary', async () => {
+    const qualificationUnit: CollectionUnit = {
+      schemaVersion: 1,
+      unitId: 'collect-qualification-timeout',
+      kind: 'store-qualification',
+      subject: {
+        supplier: {
+          memberId: 'b2b-fixture-supplier',
+          shopUrl: 'https://fixture.1688.com/',
+        },
+      },
+      scope: { requestedScope: 'page' },
+    };
+    const runtime: CollectionRuntime = {
+      async collect() {
+        throw new CliError(
+          9,
+          'QUALIFICATION_RESPONSE_TIMEOUT',
+          'Qualification response timed out.',
+          {
+            retryable: true,
+            responseCapture: {
+              matchedCount: 1,
+              lastMatchedUrl:
+                'https://h5api.m.1688.com/h5/qualification?api=test&sign=secret&data=secret',
+            },
+          },
+        );
+      },
+    };
+
+    const batch = await executeCollectionUnit({
+      unit: qualificationUnit,
+      runtime,
+    });
+
+    expect(batch.errors[0]).toMatchObject({
+      code: 'QUALIFICATION_RESPONSE_TIMEOUT',
+      retryable: true,
+      details: {
+        responseCapture: {
+          matchedCount: 1,
+          lastMatchedUrl:
+            'https://h5api.m.1688.com/h5/qualification?api=test&sign=%5Bredacted%5D&data=%5Bredacted%5D',
+        },
+      },
+    });
+    expect(JSON.stringify(batch.errors[0])).not.toContain('sign=secret');
   });
 
   it('replays search and media fixtures through the same collection contract', async () => {

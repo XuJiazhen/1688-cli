@@ -10,6 +10,8 @@ export const ALISITE_MODULE_API =
   'mtop.alibaba.alisite.cbu.server.moduleasyncservice';
 export const STORE_CATALOG_COMPONENT_KEY = 'Wp_pc_common_offerlist';
 export const STORE_CATEGORIES_COMPONENT_KEY = 'wp_pc_common_topnav';
+export const STORE_CATALOG_PARSER_VERSION = 'alisite-store-catalog-v1';
+const DEFAULT_RISK_CHALLENGE_RECOVERY_TIMEOUT_MS = 185_000;
 
 export interface AlisiteModuleRequestMeta {
   api: string;
@@ -42,6 +44,8 @@ export interface StartAlisiteModuleCaptureOptions {
   page: Page;
   targets: AlisiteModuleCaptureTarget[];
   maxDiagnosticsEntries?: number;
+  onRiskChallenge?: (challengeUrl: string) => Promise<boolean>;
+  riskChallengeRecoveryTimeoutMs?: number;
 }
 
 export type AlisiteModuleCaptureWaitStatus =
@@ -49,6 +53,7 @@ export type AlisiteModuleCaptureWaitStatus =
   | 'timeout'
   | 'aborted'
   | 'risk_control'
+  | 'risk_control_recovered'
   | 'rate_limited'
   | 'not_logged_in'
   | 'browser_closed'
@@ -70,6 +75,14 @@ export interface AlisiteModuleCaptureFailure {
   targetIds: string[];
   name?: string;
   message: string;
+  payloadSummary?: {
+    rootKeys: string[];
+    dataType: string;
+    dataKeys: string[];
+    contentType: string;
+    contentKeys: string[];
+    retCodes: string[];
+  };
 }
 
 export interface AlisiteModuleCaptureDiagnostics {
@@ -81,6 +94,7 @@ export interface AlisiteModuleCaptureDiagnostics {
   seenCount: number;
   matchedCount: number;
   parsedCount: number;
+  parseMs: number;
   failureCount: number;
   lastSeenUrl?: string;
   lastMatchedUrl?: string;
@@ -252,11 +266,20 @@ export function startAlisiteModuleCapture(
   let endedAt: string | undefined;
   let disposed = false;
   let pageClosed = false;
+  let responseTerminalState:
+    | 'risk_control'
+    | 'risk_control_recovered'
+    | 'rate_limited'
+    | 'not_logged_in'
+    | undefined;
+  let riskChallengeRecoveryPending = false;
+  let riskChallengeRecoveryStarted = false;
   let finalStatus: AlisiteModuleCaptureWaitStatus | undefined;
   let timedOut = false;
   let seenCount = 0;
   let matchedCount = 0;
   let parsedCount = 0;
+  let parseMs = 0;
   let failureCount = 0;
   let lastSeenUrl: string | undefined;
   let lastMatchedUrl: string | undefined;
@@ -273,6 +296,7 @@ export function startAlisiteModuleCapture(
     seenCount,
     matchedCount,
     parsedCount,
+    parseMs,
     failureCount,
     lastSeenUrl,
     lastMatchedUrl,
@@ -288,10 +312,37 @@ export function startAlisiteModuleCapture(
       .filter((target) => target.required !== false)
       .every(targetSatisfied);
 
+  const startRiskChallengeRecovery = (
+    challengeUrl: string,
+  ): 'started' | 'already-started' | 'unavailable' => {
+    if (riskChallengeRecoveryStarted) return 'already-started';
+    if (opts.onRiskChallenge === undefined) return 'unavailable';
+    riskChallengeRecoveryStarted = true;
+    riskChallengeRecoveryPending = true;
+    void Promise.resolve()
+      .then(() => opts.onRiskChallenge!(challengeUrl))
+      .then(
+        (recovered) => {
+          if (disposed || pageClosed) return;
+          riskChallengeRecoveryPending = false;
+          responseTerminalState = recovered
+            ? 'risk_control_recovered'
+            : 'risk_control';
+        },
+        () => {
+          if (disposed || pageClosed) return;
+          riskChallengeRecoveryPending = false;
+          responseTerminalState = 'risk_control';
+        },
+      );
+    return 'started';
+  };
+
   const recordFailure = (
     url: string,
     targets: AlisiteModuleCaptureTarget[],
     error: unknown,
+    payload?: unknown,
   ) => {
     failureCount++;
     const info =
@@ -306,6 +357,9 @@ export function startAlisiteModuleCapture(
       url,
       targetIds: targets.map((target) => target.id),
       ...info,
+      ...(payload === undefined
+        ? {}
+        : { payloadSummary: safePayloadSummary(payload) }),
     });
     if (failures.length > maxDiagnosticsEntries) failures.shift();
   };
@@ -327,8 +381,32 @@ export function startAlisiteModuleCapture(
     if (targets.length === 0) return;
     matchedCount++;
     lastMatchedUrl = sourceRef;
+    const parseStartedAt = Date.now();
+    let payload: unknown;
     try {
-      const payload = parseMtopJsonp(await response.text());
+      payload = parseMtopJsonp(await response.text());
+      if (disposed || pageClosed) return;
+      const payloadState = classifyAlisitePayloadState(payload);
+      if (payloadState !== undefined) {
+        recordFailure(
+          sourceRef,
+          targets,
+          new Error(
+            `Alisite MTOP response reported ${payloadState.replaceAll('_', ' ')}.`,
+          ),
+          payload,
+        );
+        const challengeUrl =
+          payloadState === 'risk_control'
+            ? manualRiskChallengeUrl(payload)
+            : undefined;
+        if (challengeUrl !== undefined) {
+          const recovery = startRiskChallengeRecovery(challengeUrl);
+          if (recovery !== 'unavailable') return;
+        }
+        responseTerminalState = payloadState;
+        return;
+      }
       const parsed = parseStoreCatalogModule(
         payload,
         storeCatalogRequestMeta(request),
@@ -348,7 +426,11 @@ export function startAlisiteModuleCapture(
       lastParsedUrl = sourceRef;
     } catch (error) {
       if (disposed || pageClosed) return;
-      recordFailure(sourceRef, targets, error);
+      recordFailure(sourceRef, targets, error, payload);
+    } finally {
+      if (!disposed && !pageClosed) {
+        parseMs += Math.max(0, Date.now() - parseStartedAt);
+      }
     }
   };
 
@@ -369,28 +451,40 @@ export function startAlisiteModuleCapture(
   const wait = async (
     waitOptions: AlisiteModuleCaptureWaitOptions,
   ): Promise<AlisiteModuleCaptureWaitResult> => {
-    const status = await waitWithDeadline<AlisiteModuleCaptureWaitStatus>(
-      async () => {
+    const currentStatus =
+      async (): Promise<AlisiteModuleCaptureWaitStatus | null> => {
         if (pageClosed || waitOptions.isClosed?.()) return 'browser_closed';
         if (waitOptions.signal?.aborted) return 'aborted';
         if (allRequiredTargetsSatisfied()) return 'captured';
+        if (responseTerminalState !== undefined) return responseTerminalState;
+        if (disposed) return 'stream_closed';
+        if (riskChallengeRecoveryPending) return null;
         if (await waitOptions.isNotLoggedIn?.()) return 'not_logged_in';
         if (await waitOptions.isRateLimited?.()) return 'rate_limited';
         if (await waitOptions.isBlocked?.()) return 'risk_control';
-        if (disposed) return 'stream_closed';
         return null;
-      },
+      };
+    const status = await waitWithDeadline<AlisiteModuleCaptureWaitStatus>(
+      currentStatus,
       {
         timeoutMs: waitOptions.timeoutMs,
         intervalMs: waitOptions.intervalMs ?? 100,
         onTimeout: async () => {
-          if (pageClosed || waitOptions.isClosed?.()) return 'browser_closed';
-          if (waitOptions.signal?.aborted) return 'aborted';
-          if (allRequiredTargetsSatisfied()) return 'captured';
-          if (await waitOptions.isNotLoggedIn?.()) return 'not_logged_in';
-          if (await waitOptions.isRateLimited?.()) return 'rate_limited';
-          if (await waitOptions.isBlocked?.()) return 'risk_control';
-          if (disposed) return 'stream_closed';
+          const terminalStatus = await currentStatus();
+          if (terminalStatus !== null) return terminalStatus;
+          if (riskChallengeRecoveryPending) {
+            return waitWithDeadline<AlisiteModuleCaptureWaitStatus>(
+              currentStatus,
+              {
+                timeoutMs:
+                  opts.riskChallengeRecoveryTimeoutMs ??
+                  DEFAULT_RISK_CHALLENGE_RECOVERY_TIMEOUT_MS,
+                intervalMs: waitOptions.intervalMs ?? 100,
+                onTimeout: async () =>
+                  (await currentStatus()) ?? 'risk_control',
+              },
+            );
+          }
           return 'timeout';
         },
       },
@@ -406,9 +500,10 @@ export function startAlisiteModuleCapture(
     action: () => Promise<TResult>,
     waitOptions: AlisiteModuleCaptureWaitOptions,
   ): Promise<AlisiteModuleCaptureActionResult<TResult>> => {
+    const capturePromise = wait(waitOptions);
     try {
       const actionResult = await action();
-      const result = await wait(waitOptions);
+      const result = await capturePromise;
       return { actionResult, ...result };
     } finally {
       dispose();
@@ -478,6 +573,109 @@ function storeCatalogRequestMeta(
     keyword: request.keywords ?? null,
     sortType: request.sortType ?? null,
   };
+}
+
+function safePayloadSummary(
+  payload: unknown,
+): NonNullable<AlisiteModuleCaptureFailure['payloadSummary']> {
+  const root = recordOrNull(payload);
+  const data = recordOrNull(root?.data);
+  const rawContent = data?.content;
+  const content =
+    recordOrNull(rawContent) ??
+    (typeof rawContent === 'string'
+      ? recordOrNull(parseJsonOrNull(rawContent))
+      : null);
+  const ret = Array.isArray(root?.ret) ? root.ret : [];
+  return {
+    rootKeys: safeObjectKeys(root),
+    dataType: diagnosticValueType(root?.data),
+    dataKeys: safeObjectKeys(data),
+    contentType:
+      typeof rawContent === 'string' && content !== null
+        ? 'json-string'
+        : diagnosticValueType(rawContent),
+    contentKeys: safeObjectKeys(content),
+    retCodes: ret
+      .filter((value): value is string => typeof value === 'string')
+      .map((value) => value.split('::', 1)[0]!.slice(0, 64))
+      .slice(0, 3),
+  };
+}
+
+function classifyAlisitePayloadState(
+  payload: unknown,
+): 'risk_control' | 'rate_limited' | 'not_logged_in' | undefined {
+  const root = recordOrNull(payload);
+  const retCodes = (Array.isArray(root?.ret) ? root.ret : [])
+    .filter((value): value is string => typeof value === 'string')
+    .map((value) => value.split('::', 1)[0]!.toUpperCase());
+  if (
+    retCodes.some(
+      (code) => code.includes('USER_VALIDATE') || code === 'RGV587_ERROR',
+    )
+  ) {
+    return 'risk_control';
+  }
+  if (
+    retCodes.some(
+      (code) =>
+        code.includes('TRAFFIC_LIMIT') ||
+        code.includes('FLOW_LIMIT') ||
+        code.includes('FREQUENCY_LIMIT'),
+    )
+  ) {
+    return 'rate_limited';
+  }
+  if (
+    retCodes.some(
+      (code) =>
+        code.includes('SESSION_EXPIRED') || code.includes('NEED_LOGIN'),
+    )
+  ) {
+    return 'not_logged_in';
+  }
+  return undefined;
+}
+
+function manualRiskChallengeUrl(payload: unknown): string | undefined {
+  const root = recordOrNull(payload);
+  const data = recordOrNull(root?.data);
+  if (typeof data?.url !== 'string') return undefined;
+  try {
+    const url = new URL(data.url);
+    if (url.protocol !== 'https:') return undefined;
+    if (
+      !/(^|\.)(?:1688\.com|taobao\.com|tmall\.com|alibaba\.com)$/i.test(
+        url.hostname,
+      )
+    ) {
+      return undefined;
+    }
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}
+
+function safeObjectKeys(
+  value: Record<string, unknown> | null,
+): string[] {
+  return value === null ? [] : Object.keys(value).sort().slice(0, 32);
+}
+
+function diagnosticValueType(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
+function parseJsonOrNull(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }
 
 export function parseStoreCatalogModule(

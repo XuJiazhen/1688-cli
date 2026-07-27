@@ -38,8 +38,10 @@ import {
   captureSupplierQualificationForAction,
   isSafeSupplierMemberKey,
   requestSupplierQualificationFromPage,
+  requireSupplierQualificationResponse,
 } from '../session/qualification-capture.js';
 import {
+  redactDiagnosticMetadata,
   redactTextForDiagnostics,
   sanitizeEvidenceRef,
 } from '../session/redaction.js';
@@ -51,7 +53,9 @@ import { execute as collectOffer } from './offer.js';
 import { fetchIncrementalSearchPage } from './search.js';
 import {
   execute as collectSupplierCatalog,
+  normalizeCatalogTransport,
   resolveCatalogSupplier,
+  type CatalogTransportMode,
 } from './supplier-catalog.js';
 import { normalizeSearchSort } from './sourcing-utils.js';
 
@@ -60,6 +64,8 @@ export interface CollectOpts {
   checkpoint?: string;
   fixture?: string;
   output?: string;
+  catalogTransport?: string;
+  requestId?: string;
   profile?: string;
   headed?: boolean;
 }
@@ -68,6 +74,8 @@ export interface CollectArgs {
   unit: CollectionUnit;
   checkpoint?: CollectionCheckpoint;
   headed?: boolean;
+  catalogTransport?: CatalogTransportMode;
+  requestId?: string;
 }
 
 export interface CollectionRuntime {
@@ -96,6 +104,7 @@ export interface CollectCommandDependencies {
       profile?: string;
       headed?: boolean;
       noDaemon: true;
+      requestId?: string;
     },
   ) => Promise<CollectionBatch>;
   now?: () => Date;
@@ -140,6 +149,8 @@ export async function executeCollectCommand(
   opts: CollectOpts,
   dependencies: CollectCommandDependencies = {},
 ): Promise<CollectionBatch> {
+  const catalogTransport = normalizeCatalogTransport(opts.catalogTransport);
+  const requestId = normalizeCollectRequestId(opts.requestId);
   const input = await readJsonValue(opts.unit, 'CollectionUnit or collect envelope');
   const explicitCheckpoint = opts.checkpoint
     ? await readJsonValue(opts.checkpoint, 'CollectionCheckpoint')
@@ -150,22 +161,22 @@ export async function executeCollectCommand(
     if (plan.pendingItems.length > 0) {
       const now = dependencies.now ?? (() => new Date());
       const startedAt = now().toISOString();
-      return drainSearchCheckpointSnapshot({
+      return attachSourceRequestId(drainSearchCheckpointSnapshot({
         unit,
         checkpoint,
         batchId: (dependencies.batchId ?? randomUUID)(),
         startedAt,
         completedAt: now().toISOString(),
-      });
+      }), requestId);
     }
   }
   if (opts.fixture) {
     const fixture = await readFixture(opts.fixture, unit.kind);
-    return executeCollectionUnit({
+    return attachSourceRequestId(await executeCollectionUnit({
       unit,
       checkpoint,
       runtime: createFixtureCollectionRuntime(fixture),
-    });
+    }), requestId);
   }
   const dispatchCollect =
     dependencies.dispatchCollect ??
@@ -173,6 +184,7 @@ export async function executeCollectCommand(
       profile?: string;
       headed?: boolean;
       noDaemon: true;
+      requestId?: string;
     }) =>
       dispatch<CollectArgs, CollectionBatch>(
         'collect',
@@ -180,8 +192,19 @@ export async function executeCollectCommand(
         options,
       ));
   return dispatchCollect(
-    { unit, checkpoint, headed: opts.headed },
-    { profile: opts.profile, headed: opts.headed, noDaemon: true },
+    {
+      unit,
+      checkpoint,
+      headed: opts.headed,
+      catalogTransport,
+      ...(requestId === undefined ? {} : { requestId }),
+    },
+    {
+      profile: opts.profile,
+      headed: opts.headed,
+      noDaemon: true,
+      ...(requestId === undefined ? {} : { requestId }),
+    },
   );
 }
 
@@ -220,11 +243,15 @@ export async function execute(
   ctx: BrowserContext,
   args: CollectArgs,
 ): Promise<CollectionBatch> {
-  return executeCollectionUnit({
+  return attachSourceRequestId(await executeCollectionUnit({
     unit: args.unit,
     checkpoint: args.checkpoint,
-    runtime: createPlaywrightCollectionRuntime(ctx, args.headed === true),
-  });
+    runtime: createPlaywrightCollectionRuntime(
+      ctx,
+      args.headed === true,
+      args.catalogTransport ?? 'auto',
+    ),
+  }), args.requestId);
 }
 
 export async function executeCollectionUnit(
@@ -254,6 +281,7 @@ export async function executeCollectionUnit(
 export function createPlaywrightCollectionRuntime(
   ctx: BrowserContext,
   headed: boolean,
+  catalogTransport: CatalogTransportMode = 'auto',
 ): CollectionRuntime {
   return {
     async collect(unit, checkpoint) {
@@ -262,7 +290,12 @@ export function createPlaywrightCollectionRuntime(
           return collectSearchUnit(ctx, unit, checkpoint, headed);
         case 'store-catalog':
         case 'store-categories':
-          return collectSupplierCatalog(ctx, { unit, checkpoint, headed });
+          return collectSupplierCatalog(ctx, {
+            unit,
+            checkpoint,
+            headed,
+            catalogTransport,
+          });
         case 'store-qualification':
           return collectQualificationUnit(ctx, unit, checkpoint, headed);
         case 'offer-detail':
@@ -446,36 +479,22 @@ async function collectQualificationUnit(
         if (stateError !== null) throw stateError;
       }
     }
+    const qualification = requireSupplierQualificationResponse(capture);
     const completedAt = new Date().toISOString();
     const sourceRef = capture.diagnostics.lastParsedUrl
       ? sanitizeEvidenceRef(capture.diagnostics.lastParsedUrl)
       : undefined;
-    const missingSourceRef = capture.diagnostics.lastMatchedUrl
-      ? sanitizeEvidenceRef(capture.diagnostics.lastMatchedUrl)
-      : 'capture:qualification:missing';
-    return capture.qualification
-      ? createQualificationBatch({
-          unit,
-          checkpoint,
-          batchId: randomUUID(),
-          qualification: capture.qualification,
-          requestMemberId: memberId,
-          startedAt,
-          completedAt,
-          sourceRef,
-          rawEvidenceRefs: sourceRef ? [sourceRef] : [],
-        })
-      : createQualificationBatch({
-          unit,
-          checkpoint,
-          batchId: randomUUID(),
-          payload: null,
-          requestMemberId: memberId,
-          collectedAt: completedAt,
-          startedAt,
-          completedAt,
-          sourceRef: missingSourceRef,
-        });
+    return createQualificationBatch({
+      unit,
+      checkpoint,
+      batchId: randomUUID(),
+      qualification,
+      requestMemberId: memberId,
+      startedAt,
+      completedAt,
+      sourceRef,
+      rawEvidenceRefs: sourceRef ? [sourceRef] : [],
+    });
   } finally {
     await page.close().catch(() => {});
   }
@@ -590,6 +609,10 @@ function failedCollectionBatch(
   const completedAt = (now ?? (() => new Date()))();
   const code = error instanceof CliError ? error.code : 'COLLECTION_FAILED';
   const message = redactTextForDiagnostics(error instanceof Error ? error.message : String(error));
+  const retryable =
+    error instanceof CliError && typeof error.details.retryable === 'boolean'
+      ? error.details.retryable
+      : true;
   const actionRequired = code === 'NOT_LOGGED_IN' || code === 'RISK_CONTROL'
     ? {
         type: code === 'NOT_LOGGED_IN' ? ('login' as const) : ('risk-control' as const),
@@ -613,6 +636,9 @@ function failedCollectionBatch(
           subject: { ...unit.subject },
           scope: { ...(unit.scope ?? {}) },
           ...(nextPage === undefined ? {} : { nextPage }),
+          expectedItems: restored?.expectedItems,
+          expectedPages: restored?.expectedPages,
+          pageCeiling: restored?.pageCeiling,
           completedPages: restored?.completedPages ?? [],
           seenKeys: restored?.seenKeys ?? [],
           pendingKeys: [pendingKey],
@@ -642,7 +668,20 @@ function failedCollectionBatch(
     },
     duplicateObservations: [],
     warnings: [],
-    errors: [{ code, message, retryable: true }],
+    errors: [
+      {
+        code,
+        message,
+        retryable,
+        ...(error instanceof CliError
+          ? {
+              details: redactDiagnosticMetadata(
+                error.details,
+              ) as Record<string, unknown>,
+            }
+          : {}),
+      },
+    ],
     checkpoint,
     actionRequired,
     rawEvidenceRefs: [],
@@ -800,6 +839,33 @@ function isContractError(error: unknown): boolean {
     error.code === 'CHECKPOINT_INCOMPATIBLE' ||
     error.code === 'COLLECTION_BATCH_MISMATCH'
   );
+}
+
+function normalizeCollectRequestId(
+  value: string | undefined,
+): string | undefined {
+  if (value === undefined) return undefined;
+  if (
+    value === '.' ||
+    value === '..' ||
+    !/^[A-Za-z0-9._:-]{1,128}$/.test(value)
+  ) {
+    throw new CliError(
+      2,
+      'BAD_INPUT',
+      '--request-id must be a non-traversing identifier containing only letters, numbers, dot, underscore, colon, or hyphen.',
+    );
+  }
+  return value;
+}
+
+function attachSourceRequestId(
+  batch: CollectionBatch,
+  requestId: string | undefined,
+): CollectionBatch {
+  return requestId === undefined
+    ? batch
+    : normalizeCollectionBatch({ ...batch, sourceRequestId: requestId });
 }
 
 function printSummary(batch: CollectionBatch, output?: string): void {

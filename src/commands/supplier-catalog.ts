@@ -1,17 +1,33 @@
+import { createHash } from 'node:crypto';
 import type { BrowserContext, Page } from 'playwright';
-import { executeCatalogBatch, type CatalogPageAdapter, type CatalogPageRequest } from '../collection/catalog-batch.js';
+import {
+  executeCatalogBatch,
+  type CatalogPageAdapter,
+  type CatalogPageDiagnostics,
+  type CatalogPageRequest,
+} from '../collection/catalog-batch.js';
 import { normalizeCollectionUnit, type CollectionBatch, type CollectionCheckpoint, type CollectionUnit } from '../collection/contracts.js';
 import { CliError } from '../io/errors.js';
 import { emit } from '../io/output.js';
 import {
+  ALISITE_MODULE_API,
+  AlisiteSchemaError,
   STORE_CATALOG_COMPONENT_KEY,
   STORE_CATEGORIES_COMPONENT_KEY,
+  STORE_CATALOG_PARSER_VERSION,
+  parseStoreCatalogModule,
   readAlisiteModuleRequestMeta,
   startAlisiteModuleCapture,
   type AlisiteModuleCaptureTarget,
+  type AlisiteModuleCaptureDiagnostics,
   type CapturedAlisiteModule,
   type StoreCatalogCategory,
+  type StoreCatalogParseResult,
 } from '../session/alisite-module.js';
+import {
+  requestStoreCatalogFromPage,
+  waitForStoreCatalogRuntime,
+} from '../session/catalog-runtime.js';
 import { dispatch } from '../session/dispatch.js';
 import { detectPageState } from '../session/page-state.js';
 import { sanitizeEvidenceRef } from '../session/redaction.js';
@@ -21,6 +37,17 @@ import { execute as inspectSupplier } from './supplier-inspect.js';
 
 const DEFAULT_PAGE_SIZE = 30;
 const DEFAULT_SORT = 'wangpu_score';
+const CATALOG_RUNTIME_READY_TIMEOUT_MS = 15_000;
+const CATALOG_RUNTIME_REQUEST_TIMEOUT_MS = 15_000;
+const CATALOG_RESPONSE_TIMEOUT_MS = 20_000;
+
+export type CatalogTransportMode = 'runtime' | 'dom' | 'auto';
+
+export interface CatalogAdapterDeadlineOptions {
+  runtimeReadyMs?: number;
+  runtimeRequestMs?: number;
+  responseMs?: number;
+}
 
 export interface CatalogTarget {
   input: string;
@@ -40,6 +67,7 @@ export interface SupplierCatalogOpts {
   maxPages?: string;
   maxItems?: string;
   full?: boolean;
+  catalogTransport?: string;
   profile?: string;
   headed?: boolean;
 }
@@ -48,6 +76,7 @@ export interface SupplierCatalogArgs {
   unit: CollectionUnit;
   checkpoint?: CollectionCheckpoint;
   headed?: boolean;
+  catalogTransport?: CatalogTransportMode;
 }
 
 export interface ResolvedCatalogSupplier {
@@ -94,6 +123,7 @@ export async function run(opts: SupplierCatalogOpts): Promise<void> {
   const maxPages = positiveInt(opts.maxPages, '--max-pages', 1, 100);
   const pageSize = positiveInt(opts.pageSize, '--page-size', DEFAULT_PAGE_SIZE, 100);
   const maxItems = optionalPositiveInt(opts.maxItems, '--max-items');
+  const catalogTransport = normalizeCatalogTransport(opts.catalogTransport);
   const unit = normalizeCollectionUnit({
     schemaVersion: 1,
     unitId: `supplier-catalog-${Date.now()}`,
@@ -124,7 +154,7 @@ export async function run(opts: SupplierCatalogOpts): Promise<void> {
   });
   const data = await dispatch<SupplierCatalogArgs, CollectionBatch>(
     'supplier-catalog',
-    { unit, headed: opts.headed },
+    { unit, headed: opts.headed, catalogTransport },
     { profile: opts.profile, headed: opts.headed, noDaemon: true },
   );
   emit({
@@ -154,6 +184,7 @@ export async function execute(
     page,
     resolved,
     args.headed === true,
+    args.catalogTransport ?? 'auto',
   );
   try {
     return await executeCatalogBatch({ unit, checkpoint: args.checkpoint, adapter });
@@ -208,18 +239,272 @@ export function createPlaywrightCatalogAdapter(
   page: Page,
   supplier: ResolvedCatalogSupplier,
   headed = false,
+  transportMode: CatalogTransportMode = 'auto',
+  deadlineOptions: CatalogAdapterDeadlineOptions = {},
 ): CatalogPageAdapter {
   const captures = new Map<number, CapturedAlisiteModule>();
+  const diagnostics = new Map<number, CatalogPageDiagnostics>();
   const evidence = new Set<string>();
   let currentCatalogPage: number | null = null;
+  let runtimeInitialized = false;
 
-  return {
-    async collectPage(request) {
-      const expected = captureTarget(request, supplier);
-      const capture = startAlisiteModuleCapture({
-        page,
-        targets: [expected, ...bootstrapTargets(request, supplier)],
+  const saveCapture = (
+    pageNumber: number,
+    captured: CapturedAlisiteModule,
+  ): StoreCatalogParseResult => {
+    const sourceRef = sanitizeEvidenceRef(captured.sourceRef);
+    captures.set(pageNumber, { ...captured, sourceRef });
+    evidence.add(sourceRef);
+    return captured.parsed;
+  };
+
+  const collectRuntimePage = async (
+    request: CatalogPageRequest,
+    allowManualRiskChallenge = true,
+  ): Promise<StoreCatalogParseResult> => {
+    const memberId = supplier.memberId;
+    if (!memberId) {
+      throw new CliError(
+        9,
+        'CATALOG_MTOP_RUNTIME_UNAVAILABLE',
+        'Catalog runtime collection requires a resolved supplier memberId.',
+        {
+          category: 'catalog-runtime',
+          failureKind: 'member-scope-unavailable',
+          recoveryAction: 'use-dom-fallback',
+          retryable: false,
+          fallbackAllowed: true,
+        },
+      );
+    }
+
+    let runtimeReadyMs = 0;
+    if (!runtimeInitialized) {
+      await gotoStore(page, supplier.shopUrl);
+      await waitForCollectionPageAvailability(page, {
+        headed,
+        signal: request.signal,
       });
+      runtimeReadyMs = await waitForStoreCatalogRuntime(page, {
+        timeoutMs:
+          deadlineOptions.runtimeReadyMs ??
+          CATALOG_RUNTIME_READY_TIMEOUT_MS,
+        signal: request.signal,
+      });
+      runtimeInitialized = true;
+    }
+
+    const scopedRequest = { ...request, memberId };
+    const expected = captureTarget(scopedRequest, {
+      ...supplier,
+      memberId,
+    });
+    const diagnosticTarget: AlisiteModuleCaptureTarget = {
+      id: `store-catalog-scope-diagnostic-${request.page}`,
+      componentKey: STORE_CATALOG_COMPONENT_KEY,
+      required: false,
+    };
+    const capture = startAlisiteModuleCapture({
+      page,
+      targets: [expected, diagnosticTarget],
+      ...(headed && allowManualRiskChallenge
+        ? {
+            onRiskChallenge: async (challengeUrl: string) => {
+              try {
+                await page.goto(challengeUrl, {
+                  waitUntil: 'domcontentloaded',
+                  timeout: 30_000,
+                });
+                const availability = await waitForCollectionPageAvailability(
+                  page,
+                  {
+                    headed: true,
+                    signal: request.signal,
+                  },
+                );
+                return availability.recoveredRiskChallenge;
+              } catch {
+                return false;
+              }
+            },
+          }
+        : {}),
+    });
+    const responseStartedAt = Date.now();
+    let runtimeResultStatus: CatalogPageDiagnostics['runtimeResultStatus'] =
+      'pending';
+    let runtimeSettled = false;
+    try {
+      const captureResult = capture.wait(
+        catalogCaptureWaitOptions(
+          page,
+          request,
+          headed,
+          deadlineOptions.responseMs,
+        ),
+      );
+      const runtimeRequest = requestStoreCatalogFromPage(
+        page,
+        {
+          memberId,
+          pageNum: request.page,
+          count: request.pageSize ?? DEFAULT_PAGE_SIZE,
+          catId: request.categoryId,
+          keywords: request.storeKeyword,
+          sortType: request.sort ?? DEFAULT_SORT,
+        },
+        {
+          timeoutMs:
+            deadlineOptions.runtimeRequestMs ??
+            CATALOG_RUNTIME_REQUEST_TIMEOUT_MS,
+          signal: request.signal,
+        },
+      );
+      const runtimeOutcome = runtimeRequest.then(
+        (value) => {
+          runtimeSettled = true;
+          return { kind: 'fulfilled' as const, value };
+        },
+        (error: unknown) => {
+          runtimeSettled = true;
+          return { kind: 'rejected' as const, error };
+        },
+      );
+      const first = await Promise.race([
+        captureResult.then((result) => ({
+          kind: 'capture' as const,
+          result,
+        })),
+        runtimeOutcome,
+      ]);
+      if (first.kind === 'fulfilled') {
+        const parseStartedAt = Date.now();
+        try {
+          const parsed = parseStoreCatalogModule(first.value, {
+            memberId,
+            pageNum: request.page,
+            pageSize: request.pageSize ?? DEFAULT_PAGE_SIZE,
+            categoryId: request.categoryId,
+            keyword: request.storeKeyword,
+            sortType: request.sort ?? DEFAULT_SORT,
+          });
+          runtimeResultStatus = 'parsed';
+          const parseMs = Math.max(0, Date.now() - parseStartedAt);
+          diagnostics.set(request.page, {
+            transport: 'runtime',
+            targetPage: request.page,
+            catalogRequestCount: 1,
+            runtimeReadyMs,
+            responseWaitMs: Math.max(0, Date.now() - responseStartedAt),
+            parseMs,
+            parserVersion: STORE_CATALOG_PARSER_VERSION,
+            memberScopeHash: hashMemberScope(memberId),
+            runtimeResultStatus,
+          });
+          return saveCapture(request.page, {
+            targetId: expected.id,
+            request: {
+              api: ALISITE_MODULE_API,
+              componentKey: STORE_CATALOG_COMPONENT_KEY,
+              memberId,
+              pageNum: request.page,
+              count: request.pageSize ?? DEFAULT_PAGE_SIZE,
+              ...(request.categoryId === undefined
+                ? {}
+                : { catId: request.categoryId }),
+              ...(request.storeKeyword === undefined
+                ? {}
+                : { keywords: request.storeKeyword }),
+              sortType: request.sort ?? DEFAULT_SORT,
+            },
+            parsed,
+            sourceRef: `runtime:store-catalog:${hashMemberScope(memberId)}:page:${request.page}`,
+            collectedAt: new Date().toISOString(),
+          });
+        } catch (error) {
+          if (!(error instanceof AlisiteSchemaError)) throw error;
+          runtimeResultStatus = 'unrecognized';
+        }
+      } else if (first.kind === 'rejected') {
+        runtimeResultStatus = 'rejected';
+        const mayStillProduceResponse =
+          first.error instanceof CliError &&
+          first.error.details.retryable === true;
+        if (
+          capture.diagnostics().matchedCount === 0 &&
+          !mayStillProduceResponse
+        ) {
+          throw first.error;
+        }
+      }
+      const result =
+        first.kind === 'capture' ? first.result : await captureResult;
+      if (result.status === 'risk_control_recovered') {
+        throw new CatalogManualRiskChallengeRecoveredError();
+      }
+      if (first.kind === 'capture' && !runtimeSettled) {
+        // A navigation at the next page tears down a Runtime evaluate that did
+        // not settle after its correlated network response.
+        runtimeInitialized = false;
+        currentCatalogPage = null;
+      }
+      diagnostics.set(request.page, {
+        transport: 'runtime',
+        targetPage: request.page,
+        catalogRequestCount: 1,
+        runtimeReadyMs,
+        responseWaitMs: Math.max(0, Date.now() - responseStartedAt),
+        parseMs: result.diagnostics.parseMs,
+        parserVersion: STORE_CATALOG_PARSER_VERSION,
+        memberScopeHash: hashMemberScope(memberId),
+        runtimeResultStatus,
+      });
+      const captured = result.captures.find(
+        (entry) => entry.targetId === expected.id,
+      );
+      if (result.status !== 'captured' || !captured) {
+        throw captureStatusError(
+          result.status,
+          request.page,
+          result.diagnostics,
+          expected.id,
+          result.captures,
+          diagnosticTarget.id,
+        );
+      }
+      return saveCapture(request.page, captured);
+    } catch (error) {
+      if (!diagnostics.has(request.page)) {
+        const captureDiagnostics = capture.diagnostics();
+        diagnostics.set(request.page, {
+          transport: 'runtime',
+          targetPage: request.page,
+          catalogRequestCount: 1,
+          runtimeReadyMs,
+          responseWaitMs: Math.max(0, Date.now() - responseStartedAt),
+          parseMs: captureDiagnostics.parseMs,
+          parserVersion: STORE_CATALOG_PARSER_VERSION,
+          memberScopeHash: hashMemberScope(memberId),
+          runtimeResultStatus,
+        });
+      }
+      throw error;
+    } finally {
+      capture.dispose();
+    }
+  };
+
+  const collectDomPage = async (
+    request: CatalogPageRequest,
+    fallbackReason?: string,
+  ): Promise<StoreCatalogParseResult> => {
+    const expected = captureTarget(request, supplier);
+    const capture = startAlisiteModuleCapture({
+      page,
+      targets: [expected, ...bootstrapTargets(request, supplier)],
+    });
+    const responseStartedAt = Date.now();
+    try {
       const result = await capture.waitForAction(
         async () => {
           if (request.kind === 'store-categories') {
@@ -253,42 +538,142 @@ export function createPlaywrightCatalogAdapter(
             currentCatalogPage = targetPage;
           }
         },
-        {
-          timeoutMs: 20_000,
-          signal: request.signal,
-          isClosed: () => page.isClosed(),
-          isNotLoggedIn: async () => (await detectPageState(page)).kind === 'not_logged_in',
-          isRateLimited: async () =>
-            (await detectPageState(page)).kind === 'rate_limited',
-          isBlocked: async () => {
-            const state = await detectPageState(page);
-            if (state.kind === 'risk_challenge' && headed) {
-              await waitForCollectionPageAvailability(page, {
-                headed: true,
-                signal: request.signal,
-              });
-              return false;
-            }
-            return state.kind === 'risk_challenge';
-          },
-        },
+        catalogCaptureWaitOptions(
+          page,
+          request,
+          headed,
+          deadlineOptions.responseMs,
+        ),
       );
-      const captured = result.captures.find((entry) => entry.targetId === expected.id);
+      diagnostics.set(request.page, {
+        transport: 'dom',
+        targetPage: request.page,
+        catalogRequestCount: result.diagnostics.matchedCount,
+        runtimeReadyMs: 0,
+        responseWaitMs: Math.max(0, Date.now() - responseStartedAt),
+        parseMs: result.diagnostics.parseMs,
+        parserVersion: STORE_CATALOG_PARSER_VERSION,
+        ...(supplier.memberId
+          ? { memberScopeHash: hashMemberScope(supplier.memberId) }
+          : {}),
+        ...(fallbackReason ? { fallbackReason } : {}),
+      });
+      const captured = result.captures.find(
+        (entry) => entry.targetId === expected.id,
+      );
       if (result.status !== 'captured' || !captured) {
-        throw captureStatusError(result.status, request.page, result.diagnostics);
+        throw captureStatusError(
+          result.status,
+          request.page,
+          result.diagnostics,
+          expected.id,
+          result.captures,
+        );
       }
-      const sourceRef = sanitizeEvidenceRef(captured.sourceRef);
-      captures.set(request.page, { ...captured, sourceRef });
-      evidence.add(sourceRef);
-      return captured.parsed;
+      const parsed = saveCapture(request.page, captured);
+      return fallbackReason
+        ? withCatalogFallbackWarning(parsed, fallbackReason)
+        : parsed;
+    } catch (error) {
+      if (!diagnostics.has(request.page)) {
+        const captureDiagnostics = capture.diagnostics();
+        diagnostics.set(request.page, {
+          transport: 'dom',
+          targetPage: request.page,
+          catalogRequestCount: captureDiagnostics.matchedCount,
+          runtimeReadyMs: 0,
+          responseWaitMs: Math.max(0, Date.now() - responseStartedAt),
+          parseMs: captureDiagnostics.parseMs,
+          parserVersion: STORE_CATALOG_PARSER_VERSION,
+          ...(supplier.memberId
+            ? { memberScopeHash: hashMemberScope(supplier.memberId) }
+            : {}),
+          ...(fallbackReason ? { fallbackReason } : {}),
+        });
+      }
+      throw error;
+    }
+  };
+
+  const collectRuntimeWithPageRebuild = async (
+    request: CatalogPageRequest,
+  ): Promise<StoreCatalogParseResult> => {
+    try {
+      return await collectRuntimePage(request);
+    } catch (error) {
+      if (error instanceof CatalogManualRiskChallengeRecoveredError) {
+        runtimeInitialized = false;
+        currentCatalogPage = null;
+        diagnostics.delete(request.page);
+        return collectRuntimePage(request, false);
+      }
+      if (
+        !(error instanceof CliError) ||
+        error.code !== 'CATALOG_MTOP_RUNTIME_UNAVAILABLE' ||
+        error.details.failureKind !== 'runtime-unavailable'
+      ) {
+        throw error;
+      }
+      runtimeInitialized = false;
+      currentCatalogPage = null;
+      diagnostics.delete(request.page);
+      try {
+        return await collectRuntimePage(request);
+      } catch (retryError) {
+        if (!diagnostics.has(request.page)) {
+          diagnostics.set(request.page, {
+            transport: 'runtime',
+            targetPage: request.page,
+            catalogRequestCount: 0,
+            runtimeReadyMs: 0,
+            responseWaitMs: 0,
+            parseMs: 0,
+            parserVersion: STORE_CATALOG_PARSER_VERSION,
+            ...(supplier.memberId
+              ? { memberScopeHash: hashMemberScope(supplier.memberId) }
+              : {}),
+          });
+        }
+        throw retryError;
+      }
+    }
+  };
+
+  return {
+    async collectPage(request) {
+      if (request.kind === 'store-categories' || transportMode === 'dom') {
+        return collectDomPage(request);
+      }
+      try {
+        return await collectRuntimeWithPageRebuild(request);
+      } catch (error) {
+        if (
+          transportMode !== 'auto' ||
+          !(error instanceof CliError) ||
+          error.details.fallbackAllowed !== true
+        ) {
+          throw error;
+        }
+        return collectDomPage(request, error.code);
+      }
     },
     sourceRefForPage(pageNumber) {
       return captures.get(pageNumber)?.sourceRef;
+    },
+    diagnosticsForPage(pageNumber) {
+      return diagnostics.get(pageNumber);
     },
     evidenceRefs() {
       return [...evidence];
     },
   };
+}
+
+class CatalogManualRiskChallengeRecoveredError extends Error {
+  constructor() {
+    super('Catalog manual risk challenge recovered.');
+    this.name = 'CatalogManualRiskChallengeRecoveredError';
+  }
 }
 
 export function catalogSortInteraction(sort: string | undefined): {
@@ -342,6 +727,55 @@ export function planCatalogNavigation(
       (_, index) => `next:${index + 2}`,
     ),
   ];
+}
+
+function catalogCaptureWaitOptions(
+  page: Page,
+  request: CatalogPageRequest,
+  headed: boolean,
+  timeoutMs = CATALOG_RESPONSE_TIMEOUT_MS,
+) {
+  return {
+    timeoutMs,
+    signal: request.signal,
+    isClosed: () => page.isClosed(),
+    isNotLoggedIn: async () =>
+      (await detectPageState(page)).kind === 'not_logged_in',
+    isRateLimited: async () =>
+      (await detectPageState(page)).kind === 'rate_limited',
+    isBlocked: async () => {
+      const state = await detectPageState(page);
+      if (state.kind === 'risk_challenge' && headed) {
+        await waitForCollectionPageAvailability(page, {
+          headed: true,
+          signal: request.signal,
+        });
+        return false;
+      }
+      return state.kind === 'risk_challenge';
+    },
+  };
+}
+
+function withCatalogFallbackWarning(
+  parsed: StoreCatalogParseResult,
+  fallbackReason: string,
+): StoreCatalogParseResult {
+  return {
+    ...parsed,
+    warnings: [
+      ...parsed.warnings,
+      {
+        code: 'CATALOG_DOM_FALLBACK',
+        fieldPath: '$transport',
+        message: `Catalog collection used the DOM fallback after ${fallbackReason}.`,
+      },
+    ],
+  };
+}
+
+function hashMemberScope(memberId: string): string {
+  return `sha256:${createHash('sha256').update(memberId).digest('hex')}`;
 }
 
 function captureTarget(
@@ -499,15 +933,30 @@ async function catalogActionAndResponse(
     },
     { timeout: 20_000 },
   );
+  let actionCompleted = false;
   try {
     await action();
+    actionCompleted = true;
     await response;
   } catch (error) {
     await response.catch(() => {});
     throw new CliError(
       9,
-      'CAPTURE_TIMEOUT',
+      actionCompleted
+        ? 'CATALOG_RESPONSE_TIMEOUT'
+        : 'CATALOG_DOM_CONTROL_MISSING',
       `Store ${label} did not produce the expected catalog response: ${errorMessage(error)}`,
+      {
+        category: 'catalog-dom',
+        failureKind: actionCompleted
+          ? 'response-timeout'
+          : 'control-missing',
+        recoveryAction: actionCompleted ? 'retry-later' : 'inspect-page-template',
+        retryable: actionCompleted,
+        ...(actionCompleted
+          ? {}
+          : { legacyCode: 'CATALOG_NEXT_PAGE_MISSING' }),
+      },
     );
   }
 }
@@ -545,7 +994,18 @@ async function clickCatalogNextPage(page: Page): Promise<void> {
       return;
     }
   }
-  throw new CliError(9, 'CATALOG_NEXT_PAGE_MISSING', 'Could not find the supplier catalog next-page control.');
+  throw new CliError(
+    9,
+    'CATALOG_DOM_CONTROL_MISSING',
+    'Could not find the supplier catalog next-page control.',
+    {
+      category: 'catalog-dom',
+      failureKind: 'control-missing',
+      recoveryAction: 'inspect-page-template',
+      retryable: false,
+      legacyCode: 'CATALOG_NEXT_PAGE_MISSING',
+    },
+  );
 }
 
 async function clickAndWaitForCatalogPage(
@@ -566,20 +1026,61 @@ async function clickAndWaitForCatalogPage(
     },
     { timeout: 20_000 },
   );
-  await clickCatalogNextPage(page);
-  await response;
+  try {
+    await clickCatalogNextPage(page);
+    await response;
+  } catch (error) {
+    await response.catch(() => {});
+    if (error instanceof CliError) throw error;
+    throw new CliError(
+      9,
+      'CATALOG_RESPONSE_TIMEOUT',
+      `Catalog DOM navigation did not produce page ${targetPage}.`,
+      {
+        category: 'catalog-dom',
+        failureKind: 'response-timeout',
+        recoveryAction: 'retry-later',
+        retryable: true,
+      },
+    );
+  }
 }
 
 function captureStatusError(
   status: string,
   pageNumber: number,
-  diagnostics: unknown,
+  diagnostics: AlisiteModuleCaptureDiagnostics,
+  expectedTargetId: string,
+  captures: CapturedAlisiteModule[],
+  diagnosticTargetId?: string,
 ): CliError {
   if (status === 'not_logged_in') {
-    return new CliError(3, 'NOT_LOGGED_IN', 'Session expired. Run `1688 login`.');
+    return new CliError(
+      3,
+      'NOT_LOGGED_IN',
+      'Session expired. Run `1688 login`.',
+      {
+        category: 'authentication',
+        failureKind: 'not-logged-in',
+        recoveryAction: 'login',
+        retryable: true,
+        diagnostics,
+      },
+    );
   }
   if (status === 'risk_control') {
-    return new CliError(4, 'RISK_CONTROL', '1688 risk control appeared. Retry with `--headed` and complete verification.');
+    return new CliError(
+      4,
+      'RISK_CONTROL',
+      '1688 risk control appeared. Retry with `--headed` and complete verification.',
+      {
+        category: 'risk-control',
+        failureKind: 'risk-control',
+        recoveryAction: 'verify-headed',
+        retryable: true,
+        diagnostics,
+      },
+    );
   }
   if (status === 'rate_limited') {
     return new CliError(
@@ -601,12 +1102,75 @@ function captureStatusError(
   if (status === 'browser_closed') {
     return new CliError(9, 'PAGE_CLOSED', `Catalog page ${pageNumber} closed before capture completed.`);
   }
+  if (
+    diagnostics.failures.some((failure) =>
+      failure.targetIds.includes(expectedTargetId),
+    )
+  ) {
+    return new CliError(
+      9,
+      'CATALOG_RESPONSE_SCHEMA_CHANGED',
+      `Catalog page ${pageNumber} matched the requested scope but could not be parsed.`,
+      {
+        category: 'catalog-response',
+        failureKind: 'schema-changed',
+        recoveryAction: 'inspect-capture-fixture',
+        retryable: false,
+        diagnostics,
+      },
+    );
+  }
+  const mismatchedCaptures = diagnosticTargetId
+    ? captures.filter(
+        (captured) => captured.targetId === diagnosticTargetId,
+      )
+    : [];
+  if (mismatchedCaptures.length > 0) {
+    return new CliError(
+      9,
+      'CATALOG_RESPONSE_SCOPE_MISMATCH',
+      `Catalog page ${pageNumber} observed catalog responses, but none matched the requested scope.`,
+      {
+        category: 'catalog-response',
+        failureKind: 'scope-mismatch',
+        recoveryAction: 'inspect-request-correlation',
+        retryable: false,
+        observedScopes: mismatchedCaptures
+          .slice(-3)
+          .map((captured) => safeCatalogScopeSummary(captured.request)),
+        diagnostics,
+      },
+    );
+  }
   return new CliError(
     9,
-    'CAPTURE_TIMEOUT',
+    'CATALOG_RESPONSE_TIMEOUT',
     `Catalog page ${pageNumber} did not produce a correlated Alisite response.`,
-    { diagnostics },
+    {
+      category: 'catalog-response',
+      failureKind: 'response-timeout',
+      recoveryAction: 'retry-later',
+      retryable: true,
+      diagnostics,
+    },
   );
+}
+
+function safeCatalogScopeSummary(
+  request: CapturedAlisiteModule['request'],
+): Record<string, unknown> {
+  return {
+    ...(request.memberId
+      ? { memberScopeHash: hashMemberScope(request.memberId) }
+      : {}),
+    pageNum: request.pageNum ?? null,
+    count: request.count ?? null,
+    catId: request.catId ?? null,
+    keywordHash: request.keywords
+      ? `sha256:${createHash('sha256').update(request.keywords).digest('hex')}`
+      : null,
+    sortType: request.sortType ?? null,
+  };
 }
 
 function catalogTargetFromUrl(input: string): CatalogTarget | null {
@@ -651,6 +1215,24 @@ function canonicalShopUrl(raw: string): string {
 
 function isShopHost(hostname: string): boolean {
   return !/^(?:www|s|detail|login|passport|h5api|trade|order|cart|factory)\.1688\.com$/i.test(hostname);
+}
+
+export function normalizeCatalogTransport(
+  value: string | undefined,
+): CatalogTransportMode {
+  const normalized = value?.trim().toLowerCase() ?? 'auto';
+  if (
+    normalized === 'runtime' ||
+    normalized === 'dom' ||
+    normalized === 'auto'
+  ) {
+    return normalized;
+  }
+  throw new CliError(
+    2,
+    'BAD_INPUT',
+    '--catalog-transport must be runtime, dom, or auto.',
+  );
 }
 
 function positiveInt(raw: string | undefined, name: string, fallback: number, max: number): number {

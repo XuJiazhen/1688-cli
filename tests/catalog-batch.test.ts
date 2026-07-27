@@ -180,6 +180,32 @@ describe('executeCatalogBatch', () => {
     expect(batch.checkpoint).toBeUndefined();
   });
 
+  it('does not compare a requested single page with the full-store offerCount', async () => {
+    const batch = await executeCatalogBatch({
+      unit: unit({
+        scope: {
+          requestedScope: 'page',
+          pageSize: 2,
+          maxPagesPerBatch: 1,
+        },
+      }),
+      adapter: {
+        async collectPage() {
+          return offerPage(1, ['101', '102'], {
+            offerCount: 10,
+            totalPages: 5,
+          });
+        },
+      },
+      now: () => new Date('2026-07-22T00:00:00.000Z'),
+    });
+
+    expect(batch.status).toBe('completed');
+    expect(batch.warnings).not.toContainEqual(
+      expect.objectContaining({ code: 'OFFER_COUNT_UNIQUE_MISMATCH' }),
+    );
+  });
+
   it('deduplicates offers, warns on count drift, and checkpoints a truncated catalog', async () => {
     const adapter: CatalogPageAdapter = {
       async collectPage(request) {
@@ -295,6 +321,116 @@ describe('executeCatalogBatch', () => {
     expect(resumed.checkpoint).toBeUndefined();
   });
 
+  it('scans seven pages with seven requests and never replays completed checkpoint pages', async () => {
+    const requestedPages: number[] = [];
+    const collectionUnit = unit({
+      scope: {
+        requestedScope: 'full-scan',
+        pageSize: 2,
+        maxPagesPerBatch: 3,
+        sort: 'wangpu_score',
+      },
+    });
+    const adapter: CatalogPageAdapter = {
+      async collectPage(request) {
+        requestedPages.push(request.page);
+        return offerPage(
+          request.page,
+          [String(100 + request.page)],
+          { offerCount: 14, totalPages: 7 },
+        );
+      },
+    };
+
+    const first = await executeCatalogBatch({
+      unit: collectionUnit,
+      adapter,
+      now: () => new Date('2026-07-22T00:00:00.000Z'),
+    });
+    const resumed = await executeCatalogBatch({
+      unit: {
+        ...collectionUnit,
+        scope: {
+          ...collectionUnit.scope,
+          maxPagesPerBatch: 4,
+        },
+      },
+      checkpoint: first.checkpoint,
+      adapter,
+      now: () => new Date('2026-07-22T00:01:00.000Z'),
+    });
+
+    expect(requestedPages).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(first.checkpoint).toMatchObject({
+      nextPage: 4,
+      completedPages: [1, 2, 3],
+    });
+    expect(resumed.completeness).toMatchObject({
+      state: 'complete',
+      observedPages: [1, 2, 3, 4, 5, 6, 7],
+    });
+    expect(resumed.checkpoint).toBeUndefined();
+  });
+
+  it('retains first-page cardinality across continuation drift', async () => {
+    const collectionUnit = unit({
+      scope: {
+        requestedScope: 'full-scan',
+        pageSize: 2,
+        maxPagesPerBatch: 1,
+      },
+    });
+    const adapter: CatalogPageAdapter = {
+      async collectPage(request) {
+        return request.page === 1
+          ? offerPage(1, ['101', '102'], {
+              offerCount: 6,
+              totalPages: 3,
+            })
+          : offerPage(2, ['103', '104'], {
+              offerCount: 4,
+              totalPages: 2,
+            });
+      },
+    };
+
+    const first = await executeCatalogBatch({
+      unit: collectionUnit,
+      adapter,
+      now: () => new Date('2026-07-22T00:00:00.000Z'),
+    });
+    const resumed = await executeCatalogBatch({
+      unit: collectionUnit,
+      checkpoint: first.checkpoint,
+      adapter,
+      now: () => new Date('2026-07-22T00:01:00.000Z'),
+    });
+
+    expect(first.checkpoint).toMatchObject({
+      expectedItems: 6,
+      expectedPages: 3,
+      pageCeiling: 3,
+    });
+    expect(resumed.status).toBe('partial');
+    expect(resumed.completeness).toMatchObject({
+      state: 'truncated',
+      expectedItems: 6,
+      observedPages: [1, 2],
+    });
+    expect(resumed.checkpoint).toMatchObject({
+      nextPage: 3,
+      expectedItems: 6,
+      expectedPages: 3,
+      pageCeiling: 3,
+    });
+    expect(resumed.warnings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'OFFER_COUNT_DRIFT' }),
+        expect.objectContaining({ code: 'TOTAL_PAGES_DRIFT' }),
+      ]),
+    );
+  });
+
   it('rejects a checkpoint whose collection fingerprint no longer matches', async () => {
     const first = await executeCatalogBatch({
       unit: unit({
@@ -402,6 +538,39 @@ describe('executeCatalogBatch', () => {
             lastSeenUrl:
               'https://h5api.m.1688.com/h5/catalog/1.0/?api=catalog&sign=%5Bredacted%5D&data=%5Bredacted%5D',
           },
+        },
+      },
+    ]);
+  });
+
+  it('preserves deterministic DOM-control failure semantics in the batch', async () => {
+    const batch = await executeCatalogBatch({
+      unit: unit(),
+      adapter: {
+        async collectPage() {
+          throw new CliError(
+            9,
+            'CATALOG_DOM_CONTROL_MISSING',
+            'The next-page control is missing.',
+            {
+              retryable: false,
+              legacyCode: 'CATALOG_NEXT_PAGE_MISSING',
+            },
+          );
+        },
+      },
+      now: () => new Date('2026-07-22T00:00:00.000Z'),
+    });
+
+    expect(batch.errors).toEqual([
+      {
+        code: 'CATALOG_DOM_CONTROL_MISSING',
+        message: 'The next-page control is missing.',
+        retryable: false,
+        details: {
+          page: 1,
+          retryable: false,
+          legacyCode: 'CATALOG_NEXT_PAGE_MISSING',
         },
       },
     ]);

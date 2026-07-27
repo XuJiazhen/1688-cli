@@ -18,6 +18,7 @@ export interface DispatchOpts {
   headed?: boolean;
   profile?: string;
   noDaemon?: boolean;
+  requestId?: string;
 }
 
 type Executor<TArgs, TData> = (
@@ -121,7 +122,16 @@ export async function dispatch<TArgs, TData>(
   opts: DispatchOpts = {},
 ): Promise<TData> {
   const profile = defaultProfileName(opts.profile);
-  const requestId = makeRequestId();
+  const requestId = opts.requestId ?? makeRequestId();
+  if (
+    requestId === '.' ||
+    requestId === '..' ||
+    !/^[A-Za-z0-9._:-]{1,128}$/.test(requestId)
+  ) {
+    throw new TypeError(
+      'Dispatch requestId must be a non-traversing identifier containing only letters, numbers, dot, underscore, colon, or hyphen.',
+    );
+  }
   const startedAt = Date.now();
   await appendEventBestEffort(
     startEvent({ requestId, cmd: name, profile }),

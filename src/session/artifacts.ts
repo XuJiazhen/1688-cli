@@ -63,10 +63,17 @@ function pickPage(ctx: BrowserContext): Page | null {
 }
 
 function requestId(meta: RunMeta): string {
-  return (
+  const id =
     meta.requestId ??
-    `${new Date().toISOString().replace(/[:.]/g, '-')}-${safeName(meta.cmd)}`
-  );
+    `${new Date().toISOString().replace(/[:.]/g, '-')}-${safeName(meta.cmd)}`;
+  if (
+    id === '.' ||
+    id === '..' ||
+    !/^[A-Za-z0-9._:-]{1,128}$/.test(id)
+  ) {
+    throw new TypeError('Failure artifact requestId is not a safe path segment.');
+  }
+  return id;
 }
 
 function categoryForPageState(kind: string): string | undefined {
@@ -136,6 +143,7 @@ export async function captureFailureArtifact(
   const dir = path.join(runsDir(), id);
   await fs.mkdir(dir, { recursive: true });
 
+  const shaped = errorShape(error);
   const page = pickPage(ctx);
   const pageState =
     options.pageState !== undefined
@@ -143,19 +151,35 @@ export async function captureFailureArtifact(
       : page
         ? await detectPageState(page).catch(() => null)
         : null;
+  const suppressChallengeEvidence =
+    shaped.code === 'RISK_CONTROL' ||
+    shaped.code === 'COLLECTION_CANCELLED' ||
+    pageState?.kind === 'risk_challenge';
+  const persistedPageState =
+    pageState === null
+      ? null
+      : {
+          ...pageState,
+          url: suppressChallengeEvidence
+            ? '[redacted-url]'
+            : redactUrlForDiagnostics(pageState.url),
+        };
   const recovery = options.recovery;
   const details: CliErrorDetails = {
     artifactDir: dir,
   };
 
   if (pageState) {
-    details.currentUrl = redactUrlForDiagnostics(pageState.url);
+    details.currentUrl = persistedPageState?.url;
     details.pageState = pageState.kind;
     details.category = categoryForPageState(pageState.kind);
     details.recoverHint = recoverHintForPageState(pageState.kind);
     details.retryable =
       pageState.kind === 'rate_limited' || pageState.kind === 'unknown';
-    await writeJson(path.join(dir, 'page-state.json'), pageState).catch(() => {});
+    await writeJson(
+      path.join(dir, 'page-state.json'),
+      persistedPageState,
+    ).catch(() => {});
   }
 
   if (recovery) {
@@ -186,7 +210,11 @@ export async function captureFailureArtifact(
     }
   }
 
-  if (page && !page.isClosed()) {
+  if (
+    page &&
+    !page.isClosed() &&
+    !suppressChallengeEvidence
+  ) {
     await page
       .screenshot({ path: path.join(dir, 'screenshot.png'), fullPage: true })
       .catch(() => {});
@@ -194,7 +222,6 @@ export async function captureFailureArtifact(
     if (html) await fs.writeFile(path.join(dir, 'page.html'), html);
   }
 
-  const shaped = errorShape(error);
   const responseCapture = shaped.details?.responseCapture;
   if (responseCapture) {
     await writeJson(path.join(dir, 'response-capture.json'), responseCapture).catch(
@@ -208,7 +235,7 @@ export async function captureFailureArtifact(
     command: meta.cmd,
     args: meta.args,
     error: shaped,
-    pageState,
+    pageState: persistedPageState,
     recovery,
     traceSummary: traceSummary(options.trace),
   });

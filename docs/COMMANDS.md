@@ -106,11 +106,20 @@ offer ID, `b2b-*` member ID, or 1688 shop URL:
 1688 supplier catalog https://example.1688.com --category-id 123 --max-pages 2
 1688 supplier catalog https://example.1688.com --keyword 帐篷 --sort tradenumdown
 1688 supplier catalog https://example.1688.com --full --max-pages 3 --max-items 80
+1688 supplier catalog 628196518518 --catalog-transport runtime --max-pages 2 --json
 ```
 
 `--full` describes the requested scope but does not make one invocation
 unbounded. `--max-pages` and `--max-items` still cap the batch; a partial batch
 returns a checkpoint for the caller to persist and schedule.
+
+Store-offer pages default to `--catalog-transport auto`. The CLI loads the
+shop once, asks that page's MTOP Runtime for the exact `pageNum`, and therefore
+resumes `checkpoint.nextPage=N` without replaying pages 1 through N-1.
+`runtime` disables DOM fallback; `dom` preserves the legacy UI path for
+diagnosis and rollback. `auto` rebuilds the loaded page once when the Runtime
+is unavailable, then falls back only for an explicitly allowed error. Store
+category snapshots continue to use their bounded DOM capture.
 
 `collect` is the stable worker integration entry point. It accepts one
 `CollectionUnit` as inline JSON, `@file`, or stdin (`-`), and always runs
@@ -121,6 +130,8 @@ inline rather than through the five-minute daemon request path:
 cat unit.json | 1688 collect - --json
 printf '{"unit":%s,"checkpoint":%s}\n' "$(cat unit.json)" "$(cat checkpoint.json)" \
   | 1688 collect - --json
+cat unit.json | 1688 collect - --catalog-transport auto \
+  --request-id worker-attempt-42 --json
 
 1688 collect '{"schemaVersion":1,"unitId":"tent-search-1","kind":"search-page","subject":{"keyword":"帐篷"},"scope":{"requestedScope":"page","pageSize":60}}' --json
 ```
@@ -131,6 +142,10 @@ adapters use the envelope so a large checkpoint is carried in stdin rather
 than the process argument vector. Manual inline or `@file` `--checkpoint`
 input remains supported, including with a naked unit on stdin. Supplying a
 checkpoint both in the envelope and with `--checkpoint` is invalid.
+`--request-id` accepts a caller-owned correlation identifier and returns it as
+`CollectionBatch.sourceRequestId`; it also identifies the CLI event and
+artifact directory. It must contain at most 128 letters, digits, `.`, `_`,
+`:`, or `-`.
 
 Supported kinds are `search-page`, `store-catalog`, `store-categories`,
 `store-qualification`, `offer-detail`, and `offer-media-manifest`. For

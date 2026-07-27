@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildSupplierQualificationRuntimeRequest,
   captureSupplierQualificationForAction,
+  requestSupplierQualificationFromPage,
+  requireSupplierQualificationResponse,
 } from '../src/session/qualification-capture.js';
 import { ALISITE_MODULE_API } from '../src/session/alisite-module.js';
 
@@ -93,6 +95,70 @@ describe('captureSupplierQualificationForAction', () => {
     });
     expect(JSON.stringify(result.diagnostics)).not.toContain('secret');
     expect(JSON.stringify(result.diagnostics)).not.toContain('b2b-target');
+    expect(page.listenerCount('response')).toBe(0);
+  });
+
+  it('passes the runtime-ready timeout in the Playwright options position', async () => {
+    const calls: unknown[][] = [];
+    const page = {
+      waitForFunction: async (...args: unknown[]) => {
+        calls.push(args);
+      },
+      evaluate: async () => undefined,
+    };
+
+    await requestSupplierQualificationFromPage(
+      page as unknown as Page,
+      'b2b-target',
+      { runtimeReadyTimeoutMs: 7, requestTimeoutMs: 7 },
+    );
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.[1]).toBeUndefined();
+    expect(calls[0]?.[2]).toEqual({ timeout: 7 });
+  });
+
+  it('bounds a Runtime Promise that never settles', async () => {
+    const page = {
+      waitForFunction: async () => undefined,
+      evaluate: async () => new Promise<never>(() => {}),
+    };
+
+    await expect(
+      requestSupplierQualificationFromPage(
+        page as unknown as Page,
+        'b2b-target',
+        { runtimeReadyTimeoutMs: 5, requestTimeoutMs: 5 },
+      ),
+    ).rejects.toMatchObject({
+      code: 'QUALIFICATION_REQUEST_REJECTED',
+      details: expect.objectContaining({
+        retryable: true,
+        timeoutMs: 5,
+      }),
+    });
+  });
+
+  it('turns a missing correlated response into a bounded structured timeout', async () => {
+    const page = new MockPage() as Page & MockPage;
+    const result = await captureSupplierQualificationForAction(
+      page,
+      { memberId: 'b2b-target', timeoutMs: 5 },
+      async () => undefined,
+    );
+
+    expect(() => requireSupplierQualificationResponse(result)).toThrowError(
+      expect.objectContaining({
+        code: 'QUALIFICATION_RESPONSE_TIMEOUT',
+        details: expect.objectContaining({
+          retryable: true,
+          responseCapture: expect.objectContaining({
+            timedOut: true,
+            matchedCount: 0,
+          }),
+        }),
+      }),
+    );
     expect(page.listenerCount('response')).toBe(0);
   });
 });

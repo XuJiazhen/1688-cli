@@ -799,6 +799,218 @@ describe('startAlisiteModuleCapture', () => {
     ).toMatchObject({ status: 'rate_limited', captures: [] });
   });
 
+  it('classifies MTOP validation responses without persisting the challenge URL', async () => {
+    const mockPage = page();
+    const capture = startAlisiteModuleCapture({
+      page: mockPage,
+      targets: [{
+        id: 'catalog',
+        componentKey: STORE_CATALOG_COMPONENT_KEY,
+        request: { pageNum: 1 },
+      }],
+    });
+    mockPage.emitResponse(
+      response(
+        alisiteUrl({ pageNum: 1 }),
+        {
+          ret: ['FAIL_SYS_USER_VALIDATE::验证失败', 'RGV587_ERROR::SM'],
+          data: { url: 'https://challenge.example/?token=must-not-persist' },
+        },
+      ),
+    );
+
+    const result = await capture.wait({ timeoutMs: 50, intervalMs: 1 });
+
+    expect(result).toMatchObject({
+      status: 'risk_control',
+      captures: [],
+      diagnostics: {
+        failureCount: 1,
+        failures: [{
+          payloadSummary: {
+            dataKeys: ['url'],
+            retCodes: ['FAIL_SYS_USER_VALIDATE', 'RGV587_ERROR'],
+          },
+        }],
+      },
+    });
+    expect(JSON.stringify(result)).not.toContain('must-not-persist');
+  });
+
+  it('passes an allowlisted challenge URL only to the ephemeral recovery callback', async () => {
+    const mockPage = page();
+    const challengeUrls: string[] = [];
+    const capture = startAlisiteModuleCapture({
+      page: mockPage,
+      targets: [{
+        id: 'catalog',
+        componentKey: STORE_CATALOG_COMPONENT_KEY,
+        request: { pageNum: 1 },
+      }],
+      onRiskChallenge: async (challengeUrl) => {
+        challengeUrls.push(challengeUrl);
+        return true;
+      },
+    });
+    mockPage.emitResponse(
+      response(
+        alisiteUrl({ pageNum: 1 }),
+        {
+          ret: ['FAIL_SYS_USER_VALIDATE::验证失败'],
+          data: {
+            url: 'https://punish.1688.com/punish?token=ephemeral-secret',
+          },
+        },
+      ),
+    );
+
+    const result = await capture.wait({ timeoutMs: 50, intervalMs: 1 });
+
+    expect(result.status).toBe('risk_control_recovered');
+    expect(challengeUrls).toEqual([
+      'https://punish.1688.com/punish?token=ephemeral-secret',
+    ]);
+    expect(JSON.stringify(result.diagnostics)).not.toContain(
+      'ephemeral-secret',
+    );
+  });
+
+  it('bounds a pending risk recovery and invokes it at most once', async () => {
+    const mockPage = page();
+    let callbackCount = 0;
+    const capture = startAlisiteModuleCapture({
+      page: mockPage,
+      targets: [{
+        id: 'catalog',
+        componentKey: STORE_CATALOG_COMPONENT_KEY,
+        request: { pageNum: 1 },
+      }],
+      onRiskChallenge: async () => {
+        callbackCount++;
+        return new Promise<boolean>(() => {});
+      },
+      riskChallengeRecoveryTimeoutMs: 5,
+    });
+    const wait = capture.wait({ timeoutMs: 5, intervalMs: 1 });
+    const riskResponse = () =>
+      response(alisiteUrl({ pageNum: 1 }), {
+        ret: ['FAIL_SYS_USER_VALIDATE::验证失败'],
+        data: { url: 'https://punish.1688.com/punish?token=ephemeral' },
+      });
+    mockPage.emitResponse(riskResponse());
+    mockPage.emitResponse(riskResponse());
+
+    await expect(wait).resolves.toMatchObject({ status: 'risk_control' });
+    expect(callbackCount).toBe(1);
+    expect(mockPage.listenerCount('response')).toBe(0);
+    expect(mockPage.listenerCount('close')).toBe(0);
+  });
+
+  it('ignores duplicate risk responses while one recovery can still succeed', async () => {
+    const mockPage = page();
+    let callbackCount = 0;
+    const capture = startAlisiteModuleCapture({
+      page: mockPage,
+      targets: [{
+        id: 'catalog',
+        componentKey: STORE_CATALOG_COMPONENT_KEY,
+        request: { pageNum: 1 },
+      }],
+      onRiskChallenge: async () => {
+        callbackCount++;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return true;
+      },
+      riskChallengeRecoveryTimeoutMs: 50,
+    });
+    const wait = capture.wait({ timeoutMs: 5, intervalMs: 1 });
+    const riskResponse = () =>
+      response(alisiteUrl({ pageNum: 1 }), {
+        ret: ['FAIL_SYS_USER_VALIDATE::验证失败'],
+        data: { url: 'https://punish.1688.com/punish?token=ephemeral' },
+      });
+    mockPage.emitResponse(riskResponse());
+    mockPage.emitResponse(riskResponse());
+
+    await expect(wait).resolves.toMatchObject({
+      status: 'risk_control_recovered',
+    });
+    expect(callbackCount).toBe(1);
+  });
+
+  it.each(['close', 'abort'] as const)(
+    'ends a pending risk recovery on page %s',
+    async (termination) => {
+      const mockPage = page();
+      const controller = new AbortController();
+      const capture = startAlisiteModuleCapture({
+        page: mockPage,
+        targets: [{
+          id: 'catalog',
+          componentKey: STORE_CATALOG_COMPONENT_KEY,
+          request: { pageNum: 1 },
+        }],
+        onRiskChallenge: async () => new Promise<boolean>(() => {}),
+        riskChallengeRecoveryTimeoutMs: 100,
+      });
+      const wait = capture.wait({
+        timeoutMs: 5,
+        intervalMs: 1,
+        signal: controller.signal,
+      });
+      mockPage.emitResponse(
+        response(alisiteUrl({ pageNum: 1 }), {
+          ret: ['FAIL_SYS_USER_VALIDATE::验证失败'],
+          data: { url: 'https://punish.1688.com/punish?token=ephemeral' },
+        }),
+      );
+      await new Promise((resolve) => setTimeout(resolve, 2));
+      if (termination === 'close') mockPage.emitClose();
+      else controller.abort();
+
+      await expect(wait).resolves.toMatchObject({
+        status: termination === 'close' ? 'browser_closed' : 'aborted',
+      });
+      expect(mockPage.listenerCount('response')).toBe(0);
+      expect(mockPage.listenerCount('close')).toBe(0);
+    },
+  );
+
+  it('does not start risk recovery from a response that settles after disposal', async () => {
+    const mockPage = page();
+    let releasePayload!: (value: unknown) => void;
+    const payload = new Promise<unknown>((resolve) => {
+      releasePayload = resolve;
+    });
+    let callbackCount = 0;
+    const capture = startAlisiteModuleCapture({
+      page: mockPage,
+      targets: [{
+        id: 'catalog',
+        componentKey: STORE_CATALOG_COMPONENT_KEY,
+        request: { pageNum: 1 },
+      }],
+      onRiskChallenge: async () => {
+        callbackCount++;
+        return true;
+      },
+    });
+    mockPage.emitResponse(response(alisiteUrl({ pageNum: 1 }), payload));
+    capture.dispose();
+    releasePayload({
+      ret: ['FAIL_SYS_USER_VALIDATE::验证失败'],
+      data: { url: 'https://punish.1688.com/punish?token=ephemeral' },
+    });
+    await new Promise((resolve) => setTimeout(resolve, 1));
+
+    expect(callbackCount).toBe(0);
+    expect(capture.diagnostics()).toMatchObject({
+      disposed: true,
+      failureCount: 0,
+      parseMs: 0,
+    });
+  });
+
   it('scopes listeners to waitForAction even when the action fails', async () => {
     const mockPage = page();
     const target = {
@@ -840,5 +1052,43 @@ describe('startAlisiteModuleCapture', () => {
     ).rejects.toThrow('navigation failed');
     expect(mockPage.listenerCount('response')).toBe(0);
     expect(mockPage.listenerCount('close')).toBe(0);
+  });
+
+  it('starts the capture deadline before a slow action settles', async () => {
+    const mockPage = page();
+    const capture = startAlisiteModuleCapture({
+      page: mockPage,
+      targets: [{
+        id: 'catalog',
+        componentKey: STORE_CATALOG_COMPONENT_KEY,
+        request: { pageNum: 1 },
+      }],
+    });
+    let releaseAction!: () => void;
+    const actionGate = new Promise<void>((resolve) => {
+      releaseAction = resolve;
+    });
+
+    const pending = capture.waitForAction(
+      async () => {
+        await actionGate;
+        return 'finished';
+      },
+      { timeoutMs: 5, intervalMs: 1 },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 15));
+
+    expect(capture.diagnostics()).toMatchObject({
+      finalStatus: 'timeout',
+      timedOut: true,
+      disposed: true,
+    });
+    expect(mockPage.listenerCount('response')).toBe(0);
+    expect(mockPage.listenerCount('close')).toBe(0);
+    releaseAction();
+    await expect(pending).resolves.toMatchObject({
+      actionResult: 'finished',
+      status: 'timeout',
+    });
   });
 });

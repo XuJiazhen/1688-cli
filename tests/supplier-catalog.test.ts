@@ -1,12 +1,203 @@
+import { readFile } from 'node:fs/promises';
+import { EventEmitter } from 'node:events';
+import type { Page, Response as PWResponse } from 'playwright';
 import { describe, expect, it } from 'vitest';
 import {
   buildStoreCatalogUrl,
   catalogSortInteraction,
+  createPlaywrightCatalogAdapter,
   findCatalogCategoryName,
+  normalizeCatalogTransport,
   normalizeCatalogTarget,
   planCatalogNavigation,
   supplierInspectionTarget,
 } from '../src/commands/supplier-catalog.js';
+import {
+  ALISITE_MODULE_API,
+  STORE_CATALOG_COMPONENT_KEY,
+} from '../src/session/alisite-module.js';
+
+class RuntimeCatalogPage extends EventEmitter {
+  readonly runtimeRequests: unknown[] = [];
+  readonly navigations: string[] = [];
+  private currentUrl = 'about:blank';
+  private closed = false;
+  private riskResponseCount = 0;
+  private challengeProbeCount = 0;
+  private readonly pendingRuntimeRejects = new Set<(error: Error) => void>();
+
+  constructor(
+    private readonly responseMode:
+      | 'exact'
+      | 'scope-mismatch'
+      | 'schema-changed'
+      | 'risk-control'
+      | 'risk-control-once'
+      | 'none' = 'exact',
+    private readonly runtimeAvailable = true,
+    private readonly runtimeSettles = true,
+    private readonly runtimeResult: unknown = {
+      ret: ['SUCCESS::调用成功'],
+    },
+  ) {
+    super();
+  }
+
+  async goto(url: string): Promise<null> {
+    this.rejectPendingRuntimeEvaluations(
+      new Error('Execution context was destroyed by navigation.'),
+    );
+    this.currentUrl = url;
+    this.navigations.push(url);
+    if (url.includes('/page/offerlist.html')) {
+      await this.emitCatalogResponse({
+        memberId: 'b2b-fixture-ordinary',
+        appdata: {
+          pageNum: 1,
+          count: 30,
+          catId: null,
+          keywords: null,
+          sortType: 'wangpu_score',
+        },
+      });
+    }
+    return null;
+  }
+
+  url(): string {
+    return this.currentUrl;
+  }
+
+  async title(): Promise<string> {
+    return 'Fixture supplier';
+  }
+
+  isClosed(): boolean {
+    return this.closed;
+  }
+
+  get pendingRuntimeEvaluationCount(): number {
+    return this.pendingRuntimeRejects.size;
+  }
+
+  async close(): Promise<void> {
+    this.closed = true;
+    this.rejectPendingRuntimeEvaluations(
+      new Error('Target page was closed.'),
+    );
+  }
+
+  async waitForFunction(): Promise<void> {
+    if (!this.runtimeAvailable) {
+      throw new Error('Runtime unavailable in fixture.');
+    }
+  }
+
+  async evaluate(_callback: unknown, request?: unknown): Promise<unknown> {
+    if (request === undefined) {
+      if (this.currentUrl.includes('punish.1688.com')) {
+        this.challengeProbeCount += 1;
+        if (this.challengeProbeCount < 3) return '请完成滑块验证';
+        this.currentUrl = 'https://shop-example.1688.com/';
+      }
+      return '';
+    }
+    this.runtimeRequests.push(request);
+    const runtimeRequest = request as {
+      data: { componentKey: string; params: string };
+    };
+    const params = JSON.parse(runtimeRequest.data.params) as {
+      memberId: string;
+      appdata: Record<string, unknown>;
+    };
+    const appdata = {
+      ...params.appdata,
+      ...(this.responseMode === 'scope-mismatch'
+        ? { pageNum: Number(params.appdata.pageNum) + 1 }
+        : {}),
+    };
+    if (this.responseMode !== 'none') {
+      await this.emitCatalogResponse({
+        memberId: params.memberId,
+        appdata,
+      });
+    }
+    if (!this.runtimeSettles) {
+      return new Promise<never>((_resolve, reject) => {
+        const rejectPending = (error: Error) => {
+          this.pendingRuntimeRejects.delete(rejectPending);
+          reject(error);
+        };
+        this.pendingRuntimeRejects.add(rejectPending);
+      });
+    }
+    return this.runtimeResult;
+  }
+
+  private rejectPendingRuntimeEvaluations(error: Error): void {
+    for (const reject of [...this.pendingRuntimeRejects]) {
+      reject(error);
+    }
+  }
+
+  private async emitCatalogResponse(params: {
+    memberId: string;
+    appdata: Record<string, unknown>;
+  }): Promise<void> {
+    const payload = JSON.parse(
+      await readFile(
+        new URL('./fixtures/store-catalog/ordinary-store.json', import.meta.url),
+        'utf8',
+      ),
+    );
+    const data = {
+      componentKey: STORE_CATALOG_COMPONENT_KEY,
+      params: JSON.stringify({
+        memberId: params.memberId,
+        appdata: params.appdata,
+      }),
+    };
+    const url =
+      `https://h5api.m.1688.com/h5/${ALISITE_MODULE_API}/1.0/` +
+      `?api=${ALISITE_MODULE_API}&sign=fixture-secret&data=${encodeURIComponent(JSON.stringify(data))}`;
+    const riskControl =
+      this.responseMode === 'risk-control' ||
+      (this.responseMode === 'risk-control-once' &&
+        this.riskResponseCount++ === 0);
+    this.emit('response', {
+      url: () => url,
+      request: () => ({ postData: () => null }),
+      text: async () =>
+        JSON.stringify(
+          riskControl
+            ? {
+                ret: ['FAIL_SYS_USER_VALIDATE::验证失败'],
+                data: {
+                  url:
+                    this.responseMode === 'risk-control-once'
+                      ? 'https://punish.1688.com/punish?token=ephemeral-secret'
+                      : 'https://challenge.invalid/?token=secret',
+                },
+              }
+            : this.responseMode === 'schema-changed'
+            ? { data: { unexpected: true } }
+            : payload,
+        ),
+    } as unknown as PWResponse);
+  }
+
+  locator(): never {
+    throw new Error('Runtime collection must not query a DOM locator.');
+  }
+
+  getByRole(): never {
+    throw new Error('Runtime collection must not query a DOM role.');
+  }
+
+  getByText(): never {
+    throw new Error('Runtime collection must not query DOM text.');
+  }
+}
 
 describe('supplier catalog command helpers', () => {
   it('normalizes offer, member, and shop URL targets without using loginId as identity', () => {
@@ -75,6 +266,380 @@ describe('supplier catalog command helpers', () => {
       'next:4',
     ]);
     expect(planCatalogNavigation(4, true)).toEqual(['next:4']);
+  });
+
+  it('collects a resumed page with one Runtime request and no DOM replay', async () => {
+    const mockPage = new RuntimeCatalogPage();
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      false,
+      'runtime',
+    );
+
+    const parsed = await adapter.collectPage({
+      kind: 'store-catalog',
+      page: 4,
+      pageSize: 30,
+      memberId: 'b2b-fixture-ordinary',
+      sort: 'wangpu_score',
+    });
+
+    expect(parsed.page.pageNum).toBe(4);
+    expect(mockPage.navigations).toEqual([
+      'https://shop-example.1688.com/',
+    ]);
+    expect(mockPage.runtimeRequests).toHaveLength(1);
+    expect(
+      JSON.parse(
+        (
+          mockPage.runtimeRequests[0] as {
+            data: { params: string };
+          }
+        ).data.params,
+      ),
+    ).toMatchObject({
+      memberId: 'b2b-fixture-ordinary',
+      appdata: { pageNum: 4 },
+    });
+    expect(adapter.diagnosticsForPage?.(4)).toMatchObject({
+      transport: 'runtime',
+      targetPage: 4,
+      catalogRequestCount: 1,
+      parserVersion: 'alisite-store-catalog-v1',
+    });
+    expect(JSON.stringify(adapter.diagnosticsForPage?.(4))).not.toContain(
+      'b2b-fixture-ordinary',
+    );
+    expect(JSON.stringify(parsed)).not.toContain('fixture-secret');
+  });
+
+  it.each([
+    ['scope-mismatch', 'CATALOG_RESPONSE_SCOPE_MISMATCH'],
+    ['schema-changed', 'CATALOG_RESPONSE_SCHEMA_CHANGED'],
+  ] as const)(
+    'classifies a %s Runtime response without DOM fallback',
+    async (responseMode, code) => {
+      const mockPage = new RuntimeCatalogPage(responseMode);
+      const adapter = createPlaywrightCatalogAdapter(
+        mockPage as unknown as Page,
+        {
+          shopUrl: 'https://shop-example.1688.com/',
+          memberId: 'b2b-fixture-ordinary',
+        },
+        false,
+        'runtime',
+        { responseMs: 100 },
+      );
+
+      await expect(
+        adapter.collectPage({
+          kind: 'store-catalog',
+          page: 2,
+          pageSize: 30,
+          memberId: 'b2b-fixture-ordinary',
+          sort: 'wangpu_score',
+        }),
+      ).rejects.toMatchObject({ code });
+      expect(mockPage.runtimeRequests).toHaveLength(1);
+      expect(mockPage.navigations).toEqual([
+        'https://shop-example.1688.com/',
+      ]);
+    },
+  );
+
+  it('classifies an MTOP validation response as risk control', async () => {
+    const mockPage = new RuntimeCatalogPage('risk-control');
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      false,
+      'runtime',
+      { responseMs: 50 },
+    );
+
+    await expect(
+      adapter.collectPage({
+        kind: 'store-catalog',
+        page: 1,
+        pageSize: 30,
+        memberId: 'b2b-fixture-ordinary',
+      }),
+    ).rejects.toMatchObject({
+      code: 'RISK_CONTROL',
+      exitCode: 4,
+      details: {
+        retryable: true,
+        diagnostics: {
+          failures: [{
+            payloadSummary: {
+              retCodes: ['FAIL_SYS_USER_VALIDATE'],
+            },
+          }],
+        },
+      },
+    });
+  });
+
+  it('keeps headed Runtime collection open for an MTOP challenge and retries once', async () => {
+    const mockPage = new RuntimeCatalogPage('risk-control-once');
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      true,
+      'runtime',
+      { runtimeRequestMs: 500, responseMs: 500 },
+    );
+
+    await expect(
+      adapter.collectPage({
+        kind: 'store-catalog',
+        page: 2,
+        pageSize: 30,
+        memberId: 'b2b-fixture-ordinary',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'offer-list',
+      page: { pageNum: 2 },
+    });
+    expect(mockPage.runtimeRequests).toHaveLength(2);
+    expect(mockPage.navigations).toEqual([
+      'https://shop-example.1688.com/',
+      'https://punish.1688.com/punish?token=ephemeral-secret',
+      'https://shop-example.1688.com/',
+    ]);
+    expect(
+      JSON.stringify(adapter.diagnosticsForPage?.(2)),
+    ).not.toContain('ephemeral-secret');
+  });
+
+  it('classifies a missing correlated Runtime response before process timeout', async () => {
+    const mockPage = new RuntimeCatalogPage('none');
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      false,
+      'runtime',
+      { responseMs: 5 },
+    );
+
+    await expect(
+      adapter.collectPage({
+        kind: 'store-catalog',
+        page: 2,
+        pageSize: 30,
+        memberId: 'b2b-fixture-ordinary',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CATALOG_RESPONSE_TIMEOUT',
+      details: { retryable: true },
+    });
+    expect(mockPage.runtimeRequests).toHaveLength(1);
+  });
+
+  it('uses a correlated response even when the Runtime Promise never settles', async () => {
+    const mockPage = new RuntimeCatalogPage('exact', true, false);
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      false,
+      'runtime',
+      { runtimeRequestMs: 500, responseMs: 500 },
+    );
+
+    await expect(
+      adapter.collectPage({
+        kind: 'store-catalog',
+        page: 2,
+        pageSize: 30,
+        memberId: 'b2b-fixture-ordinary',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'offer-list',
+      page: { pageNum: 2 },
+    });
+    expect(mockPage.runtimeRequests).toHaveLength(1);
+  });
+
+  it('rebuilds the page before another request after an unsettled Runtime fulfillment', async () => {
+    const mockPage = new RuntimeCatalogPage('exact', true, false);
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      false,
+      'runtime',
+      { runtimeRequestMs: 500, responseMs: 500 },
+    );
+
+    await adapter.collectPage({
+      kind: 'store-catalog',
+      page: 1,
+      pageSize: 30,
+      memberId: 'b2b-fixture-ordinary',
+    });
+    expect(mockPage.pendingRuntimeEvaluationCount).toBe(1);
+    await adapter.collectPage({
+      kind: 'store-catalog',
+      page: 2,
+      pageSize: 30,
+      memberId: 'b2b-fixture-ordinary',
+    });
+
+    expect(mockPage.runtimeRequests).toHaveLength(2);
+    expect(mockPage.navigations).toEqual([
+      'https://shop-example.1688.com/',
+      'https://shop-example.1688.com/',
+    ]);
+    expect(mockPage.pendingRuntimeEvaluationCount).toBe(1);
+    await mockPage.close();
+    expect(mockPage.pendingRuntimeEvaluationCount).toBe(0);
+  });
+
+  it('parses a valid Runtime fulfillment when no network event is observable', async () => {
+    const payload = JSON.parse(
+      await readFile(
+        new URL(
+          './fixtures/store-catalog/ordinary-store.json',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    );
+    const mockPage = new RuntimeCatalogPage(
+      'none',
+      true,
+      true,
+      payload,
+    );
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      false,
+      'runtime',
+      { responseMs: 500 },
+    );
+
+    await expect(
+      adapter.collectPage({
+        kind: 'store-catalog',
+        page: 3,
+        pageSize: 30,
+        memberId: 'b2b-fixture-ordinary',
+      }),
+    ).resolves.toMatchObject({
+      kind: 'offer-list',
+      page: { pageNum: 3 },
+    });
+    expect(adapter.diagnosticsForPage?.(3)).toMatchObject({
+      transport: 'runtime',
+      catalogRequestCount: 1,
+      runtimeResultStatus: 'parsed',
+    });
+    expect(adapter.sourceRefForPage?.(3)).toMatch(
+      /^runtime:store-catalog:sha256:[a-f0-9]{64}:page:3$/,
+    );
+  });
+
+  it('falls back to DOM only when auto mode explicitly allows it', async () => {
+    const mockPage = new RuntimeCatalogPage('exact', false);
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      false,
+      'auto',
+      { runtimeReadyMs: 5, responseMs: 20 },
+    );
+
+    const parsed = await adapter.collectPage({
+      kind: 'store-catalog',
+      page: 1,
+      pageSize: 30,
+      memberId: 'b2b-fixture-ordinary',
+      sort: 'wangpu_score',
+    });
+
+    expect(mockPage.runtimeRequests).toEqual([]);
+    expect(mockPage.navigations).toEqual([
+      'https://shop-example.1688.com/',
+      'https://shop-example.1688.com/',
+      'https://shop-example.1688.com/page/offerlist.html?sortType=wangpu_score&charset=utf8',
+    ]);
+    expect(parsed.warnings).toContainEqual(
+      expect.objectContaining({
+        code: 'CATALOG_DOM_FALLBACK',
+      }),
+    );
+    expect(adapter.diagnosticsForPage?.(1)).toMatchObject({
+      transport: 'dom',
+      fallbackReason: 'CATALOG_MTOP_RUNTIME_UNAVAILABLE',
+    });
+  });
+
+  it('rebuilds the loaded page once before explicit Runtime mode fails', async () => {
+    const mockPage = new RuntimeCatalogPage('exact', false);
+    const adapter = createPlaywrightCatalogAdapter(
+      mockPage as unknown as Page,
+      {
+        shopUrl: 'https://shop-example.1688.com/',
+        memberId: 'b2b-fixture-ordinary',
+      },
+      false,
+      'runtime',
+      { runtimeReadyMs: 5 },
+    );
+
+    await expect(
+      adapter.collectPage({
+        kind: 'store-catalog',
+        page: 2,
+        pageSize: 30,
+        memberId: 'b2b-fixture-ordinary',
+      }),
+    ).rejects.toMatchObject({
+      code: 'CATALOG_MTOP_RUNTIME_UNAVAILABLE',
+    });
+    expect(mockPage.navigations).toEqual([
+      'https://shop-example.1688.com/',
+      'https://shop-example.1688.com/',
+    ]);
+    expect(adapter.diagnosticsForPage?.(2)).toMatchObject({
+      transport: 'runtime',
+      targetPage: 2,
+      catalogRequestCount: 0,
+    });
+  });
+
+  it('validates the explicit catalog transport mode', () => {
+    expect(normalizeCatalogTransport(undefined)).toBe('auto');
+    expect(normalizeCatalogTransport('RUNTIME')).toBe('runtime');
+    expect(normalizeCatalogTransport('dom')).toBe('dom');
+    expect(() => normalizeCatalogTransport('other')).toThrow(
+      /runtime, dom, or auto/,
+    );
   });
 
   it('maps stable sort values and category ids to page interactions', () => {

@@ -21,6 +21,30 @@ describe('classifyPageState', () => {
     expect(recoverHintForPageState(state.kind)).toMatch(/--headed/);
   });
 
+  it('detects canvas-based challenge pages from their URL', () => {
+    expect(
+      classifyPageState({
+        url: 'https://punish.1688.com/punish?x5secdata=secret',
+        title: '1688',
+        text: '',
+      }),
+    ).toMatchObject({
+      kind: 'risk_challenge',
+      indicators: ['risk-url'],
+    });
+  });
+
+  it('detects the English Captcha Interception page seen in offer artifacts', () => {
+    const state = classifyPageState({
+      url: 'https://detail.1688.com/offer/123.html',
+      title: 'Captcha Interception',
+      text: '',
+    });
+
+    expect(state.kind).toBe('risk_challenge');
+    expect(state.indicators).toContain('risk-text');
+  });
+
   it('detects rate limiting before normal 1688 pages', () => {
     const state = classifyPageState({
       url: 'https://s.1688.com/selloffer/offer_search.htm',

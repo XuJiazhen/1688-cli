@@ -240,6 +240,37 @@ describe('collection contracts', () => {
     });
   });
 
+  it('rejects checkpoint page ceilings that cannot cover known catalog progress', () => {
+    const checkpoint = {
+      schemaVersion: 1,
+      unitFingerprint: `sha256:${'a'.repeat(64)}`,
+      kind: 'store-catalog',
+      subject: { supplier: { memberId: 'member-2' } },
+      scope: { requestedScope: 'full-scan' },
+      nextPage: 4,
+      expectedPages: 7,
+      completedPages: [1, 2, 3],
+      seenKeys: [],
+      pendingKeys: [],
+      attemptCounts: {},
+      updatedAt: '2026-07-22T00:30:00.000Z',
+    };
+
+    expect(() =>
+      normalizeCollectionCheckpoint({
+        ...checkpoint,
+        pageCeiling: 1,
+      }),
+    ).toThrow(/pageCeiling must cover/);
+    expect(() =>
+      normalizeCollectionCheckpoint({
+        ...checkpoint,
+        expectedPages: undefined,
+        pageCeiling: 4,
+      }),
+    ).toThrow(/pageCeiling requires expectedPages/);
+  });
+
   it('rejects a checkpoint when its collection semantics do not match the unit', () => {
     const unit = normalizeCollectionUnit({
       schemaVersion: 1,

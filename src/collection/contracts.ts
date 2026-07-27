@@ -61,6 +61,9 @@ export interface CollectionCheckpoint {
   scope: Record<string, unknown>;
   nextCursor?: string;
   nextPage?: number;
+  expectedItems?: number;
+  expectedPages?: number;
+  pageCeiling?: number;
   completedPages: number[];
   seenKeys: string[];
   pendingKeys: string[];
@@ -109,6 +112,7 @@ export interface CollectionBatch {
   schemaVersion: typeof COLLECTION_SCHEMA_VERSION;
   batchId: string;
   unitId: string;
+  sourceRequestId?: string;
   kind: CollectionKind;
   status: CollectionBatchStatus;
   startedAt: string;
@@ -252,7 +256,7 @@ export function normalizeCollectionCheckpoint(value: unknown): CollectionCheckpo
     invalid('CollectionCheckpoint.unitFingerprint must be a sha256 fingerprint.');
   }
 
-  return omitUndefined({
+  const checkpoint = omitUndefined({
     schemaVersion: COLLECTION_SCHEMA_VERSION,
     unitFingerprint,
     kind: requireEnum(record.kind, COLLECTION_KINDS, 'CollectionCheckpoint.kind'),
@@ -260,6 +264,18 @@ export function normalizeCollectionCheckpoint(value: unknown): CollectionCheckpo
     scope: requireJsonRecord(record.scope, 'CollectionCheckpoint.scope'),
     nextCursor: optionalString(record.nextCursor, 'CollectionCheckpoint.nextCursor'),
     nextPage: optionalPositiveInteger(record.nextPage, 'CollectionCheckpoint.nextPage'),
+    expectedItems: optionalNonNegativeInteger(
+      record.expectedItems,
+      'CollectionCheckpoint.expectedItems',
+    ),
+    expectedPages: optionalPositiveInteger(
+      record.expectedPages,
+      'CollectionCheckpoint.expectedPages',
+    ),
+    pageCeiling: optionalPositiveInteger(
+      record.pageCeiling,
+      'CollectionCheckpoint.pageCeiling',
+    ),
     completedPages: requireUniquePositiveIntegers(
       record.completedPages,
       'CollectionCheckpoint.completedPages',
@@ -279,6 +295,29 @@ export function normalizeCollectionCheckpoint(value: unknown): CollectionCheckpo
     ),
     updatedAt: requireTimestamp(record.updatedAt, 'CollectionCheckpoint.updatedAt'),
   });
+  if (
+    checkpoint.pageCeiling !== undefined &&
+    checkpoint.expectedPages === undefined
+  ) {
+    invalid(
+      'CollectionCheckpoint.pageCeiling requires expectedPages.',
+    );
+  }
+  if (
+    checkpoint.pageCeiling !== undefined &&
+    (
+      checkpoint.pageCeiling < (checkpoint.expectedPages ?? 0) ||
+      checkpoint.pageCeiling < (checkpoint.nextPage ?? 0) ||
+      checkpoint.completedPages.some(
+        (page) => page > checkpoint.pageCeiling!,
+      )
+    )
+  ) {
+    invalid(
+      'CollectionCheckpoint.pageCeiling must cover expectedPages, nextPage, and completedPages.',
+    );
+  }
+  return checkpoint;
 }
 
 export function assertCheckpointCompatible(
@@ -327,6 +366,10 @@ export function normalizeCollectionBatch(value: unknown): CollectionBatch {
     schemaVersion: COLLECTION_SCHEMA_VERSION,
     batchId: requireString(record.batchId, 'CollectionBatch.batchId'),
     unitId: requireString(record.unitId, 'CollectionBatch.unitId'),
+    sourceRequestId: optionalString(
+      record.sourceRequestId,
+      'CollectionBatch.sourceRequestId',
+    ),
     kind,
     status: requireEnum(
       record.status,

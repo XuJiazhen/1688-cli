@@ -187,6 +187,31 @@ describe('startResponseCapture', () => {
     expect(mockPage.listenerCount('response')).toBe(0);
   });
 
+  it('cancels its response deadline when the action fails immediately', async () => {
+    vi.useFakeTimers();
+    try {
+      const mockPage = page();
+      const capture = startResponseCapture({
+        page: mockPage,
+        timeoutMs: 15_000,
+        matcher: /api/,
+        parse: async () => ({ ok: true }),
+      });
+
+      await expect(
+        capture.waitForAction(async () => {
+          throw new Error('action failed');
+        }),
+      ).rejects.toThrow('action failed');
+      await Promise.resolve();
+
+      expect(mockPage.listenerCount('response')).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('records parser errors', async () => {
     const mockPage = page();
     const capture = startResponseCapture({
@@ -397,6 +422,37 @@ describe('startResponseCapture', () => {
     expect(mockPage.listenerCount('response')).toBe(0);
   });
 
+  it('starts the response deadline before a slow action settles', async () => {
+    const mockPage = page();
+    const capture = startResponseCapture({
+      page: mockPage,
+      timeoutMs: 5,
+      matcher: /api/,
+      parse: async () => ({ ok: true }),
+    });
+    let releaseAction!: () => void;
+    const actionGate = new Promise<void>((resolve) => {
+      releaseAction = resolve;
+    });
+
+    const pending = capture.waitForAction(async () => {
+      await actionGate;
+      return 'finished';
+    });
+    await new Promise((resolve) => setTimeout(resolve, 15));
+
+    expect(capture.diagnostics()).toMatchObject({
+      timedOut: true,
+      disposed: true,
+    });
+    expect(mockPage.listenerCount('response')).toBe(0);
+    releaseAction();
+    await expect(pending).resolves.toMatchObject({
+      actionResult: 'finished',
+      response: null,
+    });
+  });
+
   it('disposes and rethrows when waitForAction actions fail', async () => {
     const mockPage = page();
     const capture = startResponseCapture({
@@ -416,6 +472,36 @@ describe('startResponseCapture', () => {
     expect(capture.diagnostics()).toMatchObject({
       disposed: true,
       timedOut: false,
+    });
+  });
+
+  it('ignores late parser rejection after a failed action disposes the capture', async () => {
+    const mockPage = page();
+    let rejectParse!: (error: Error) => void;
+    const parseResult = new Promise<{ ok: true }>((_resolve, reject) => {
+      rejectParse = reject;
+    });
+    const capture = startResponseCapture({
+      page: mockPage,
+      timeoutMs: 50,
+      matcher: /api/,
+      parse: async () => parseResult,
+    });
+
+    await expect(
+      capture.waitForAction(async () => {
+        mockPage.emitResponse(response('https://example.com/api'));
+        await Promise.resolve();
+        throw new Error('click failed');
+      }),
+    ).rejects.toThrow('click failed');
+
+    rejectParse(new Error('late parser failure'));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(capture.diagnostics()).toMatchObject({
+      disposed: true,
+      failureCount: 0,
     });
   });
 

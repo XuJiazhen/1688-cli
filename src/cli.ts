@@ -130,6 +130,11 @@ supplier
   .option('--max-pages <n>', 'Maximum pages in this batch', '1')
   .option('--max-items <n>', 'Maximum unique offers in this batch')
   .option('--full', 'Request a resumable full scan, still bounded by --max-pages')
+  .option(
+    '--catalog-transport <mode>',
+    'Catalog transport: runtime, dom, or auto',
+    'auto',
+  )
   .option('--profile <name>', 'Profile name (default: default)')
   .option('--headed', 'Open a window (fallback for risk control)')
   .action(async (target, opts) => {
@@ -212,6 +217,12 @@ program
   .option('--checkpoint <value>', 'CollectionCheckpoint JSON or @file')
   .option('--fixture <file>', 'Replay a sanitized fixture without a browser')
   .option('--output <file>', 'Write the complete CollectionBatch JSON to a file')
+  .option(
+    '--catalog-transport <mode>',
+    'Catalog transport: runtime, dom, or auto',
+    'auto',
+  )
+  .option('--request-id <id>', 'Correlation ID for collection events')
   .option('--profile <name>', 'Profile name (default: default)')
   .option('--headed', 'Open a window (fallback for risk control)')
   .action(async (unit, opts) => {

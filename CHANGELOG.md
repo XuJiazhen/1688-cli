@@ -5,6 +5,24 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Added exact-page Store Catalog collection through the loaded shop's MTOP
+  Runtime, with `runtime`, `dom`, and default `auto` transport modes,
+  checkpoint-direct resume, sanitized per-page diagnostics, and additive
+  `CollectionBatch.sourceRequestId` correlation.
+
+### Fixed
+- Bounded Store Catalog, Offer SKU, and supplier qualification waits below the
+  outer process timeout; classified schema, scope, response, and DOM-control
+  failures with stable scheduler-facing errors.
+- Preferred a correlated Catalog network response over a page Runtime Promise
+  that may never settle, and classified MTOP user-validation responses as
+  risk control without persisting their challenge URL.
+- Recognized English captcha pages as risk control and accepted explicit empty
+  SSR SKU maps as complete empty selector models.
+- Ensured cancelled or timed-out POSIX collection processes terminate their
+  descendant process group through the root CLI adapter.
+
 ## [0.1.47] - 2026-06-27
 
 ### Fixed

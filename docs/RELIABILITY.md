@@ -67,6 +67,56 @@ behavior, selectors, and mtop payloads. They are not stable automated tests.
 
 Stable behavior belongs in `tests/` with fixtures where possible.
 
+## Catalog Transport
+
+`store-catalog` defaults to the page Runtime transport. The adapter loads the
+shop once, starts a scope-correlated response listener, and invokes
+`window.lib.mtop.request` for the exact target page. The page owns cookies,
+tokens, and request signing. The CLI neither accepts nor persists those
+materials.
+
+The supported modes are:
+
+- `runtime`: exact-page Runtime requests only.
+- `dom`: the legacy filter/sort/pagination UI path for diagnosis or rollback.
+- `auto`: Runtime first; rebuild the loaded page once when the Runtime is
+  unavailable, then use DOM only when the structured error explicitly permits
+  fallback.
+
+Runtime success never triggers DOM work. Schema changes, scope mismatches, and
+missing DOM controls are deterministic protocol failures rather than reasons
+to rotate through every Profile. Runtime request, correlated response, and
+page-state waits have bounded deadlines. A catalog checkpoint starts directly
+at `nextPage`; completed pages are not replayed. It carries the first observed
+item/page cardinality plus a non-decreasing page ceiling so continuation
+batches can report drift without completing early.
+
+The correlated network response and a valid Runtime fulfillment both use the
+same parser; the network response remains available when the page Runtime's
+Promise does not settle. Before another page request, the adapter reloads a
+page whose prior Runtime evaluation remained pending. MTOP validation return codes such as
+`FAIL_SYS_USER_VALIDATE` and `RGV587_ERROR` become `RISK_CONTROL`, not parser
+or request failures. Diagnostics retain only return codes and payload key/type
+summaries; the validation URL is never persisted.
+
+Catalog observations and batch metrics report transport, target page, request
+count, Runtime readiness, response wait, parse time, parser version, fallback
+count/reason, Runtime fulfillment status, and a hashed member scope.
+Diagnostics must remain non-replayable.
+
+Offer SKU and supplier qualification response waits are also bounded below the
+outer process deadline. An explicit empty SSR SKU model is a valid empty
+model; a captcha page is a risk-control state, not an empty product. Missing
+correlated responses return `OFFER_SKU_RESPONSE_TIMEOUT` or
+`QUALIFICATION_RESPONSE_TIMEOUT` with capture diagnostics.
+
+When an external adapter cancels or times out `collect`, the process runner
+terminates the POSIX process group so Chromium descendants cannot retain
+stdio and delay the authoritative terminal result. The caller-supplied
+request ID is preserved in CLI errors and successful batches.
+The Browser Worker reuses one request ID through initial collection, headed
+intervention, and its one login recovery retry.
+
 ## Live-Service Boundaries
 
 `pnpm test:unit` is the deterministic default. `pnpm test` also runs live

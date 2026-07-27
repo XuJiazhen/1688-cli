@@ -412,16 +412,20 @@ export function requireSkuSelectorModel(
   if (model !== null) return model;
   throw new CliError(
     9,
-    'OFFER_SKU_CAPTURE_INCOMPLETE',
-    'Required SKU selector response was not captured.',
+    'OFFER_SKU_RESPONSE_TIMEOUT',
+    'The offer page did not produce a usable SKU response or page model.',
     {
-      category: 'offer-capture',
+      category: 'timeout',
+      failureKind: 'response-timeout',
+      recoveryAction: 'retry-later',
       retryable: true,
+      legacyCode: 'OFFER_SKU_CAPTURE_INCOMPLETE',
       matchedCount: diagnostics.matchedCount,
       parsedCount: diagnostics.parsedCount,
       emptyResultCount: diagnostics.emptyResultCount,
       failureCount: diagnostics.failureCount,
       timedOut: diagnostics.timedOut,
+      responseCapture: diagnostics,
     },
   );
 }
@@ -490,8 +494,13 @@ function mapContextSkuCandidate(
   rawTradeModel: unknown,
 ): SkuBizModel | null {
   const source = asRecord(candidate);
-  const rawSkuInfoMap = asRecord(source?.skuInfoMap);
-  if (!source || !rawSkuInfoMap) return null;
+  if (!source || !Object.hasOwn(source, 'skuInfoMap')) return null;
+  const rawSkuInfoValue = source.skuInfoMap;
+  const rawSkuInfoMap = asRecord(rawSkuInfoValue);
+  const explicitlyEmptySkuList =
+    (rawSkuInfoMap !== null && Object.keys(rawSkuInfoMap).length === 0) ||
+    (Array.isArray(rawSkuInfoValue) && rawSkuInfoValue.length === 0);
+  if (!rawSkuInfoMap && !explicitlyEmptySkuList) return null;
 
   const trade = asRecord(rawTradeModel);
   const tradeSkus = new Map<string, Record<string, unknown>>();
@@ -507,7 +516,7 @@ function mapContextSkuCandidate(
   rememberTradeSkus(trade?.skuMap);
 
   const skuInfoMap: NonNullable<SkuBizModel['skuInfoMap']> = {};
-  for (const [key, value] of Object.entries(rawSkuInfoMap)) {
+  for (const [key, value] of Object.entries(rawSkuInfoMap ?? {})) {
     const row = asRecord(value);
     const skuId = scalarString(row?.skuId);
     if (!row || !skuId) continue;
@@ -525,7 +534,12 @@ function mapContextSkuCandidate(
     };
     skuInfoMap[key] = mapped;
   }
-  if (Object.keys(skuInfoMap).length === 0) return null;
+  if (
+    Object.keys(skuInfoMap).length === 0 &&
+    !explicitlyEmptySkuList
+  ) {
+    return null;
+  }
 
   const skuProps = Array.isArray(source.skuProps)
     ? source.skuProps.flatMap((value) => {

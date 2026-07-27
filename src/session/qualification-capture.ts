@@ -1,4 +1,5 @@
 import type { Page, Response as PWResponse } from 'playwright';
+import { CliError } from '../io/errors.js';
 import { parseMtopJsonp } from './mtop.js';
 import {
   readAlisiteModuleRequestMeta,
@@ -12,10 +13,16 @@ import {
   startResponseCapture,
   type ResponseCaptureDiagnostics,
 } from './response-capture.js';
+import { withTimeout } from './wait.js';
 
 export interface SupplierQualificationCaptureOptions {
   memberId?: string;
   timeoutMs?: number;
+}
+
+export interface SupplierQualificationRuntimeOptions {
+  runtimeReadyTimeoutMs?: number;
+  requestTimeoutMs?: number;
 }
 
 export interface SupplierQualificationCaptureResult<TResult> {
@@ -70,31 +77,86 @@ export function buildSupplierQualificationRuntimeRequest(
 export async function requestSupplierQualificationFromPage(
   page: Page,
   memberId: string,
+  options: SupplierQualificationRuntimeOptions = {},
 ): Promise<void> {
   const request = buildSupplierQualificationRuntimeRequest(memberId);
-  await page.waitForFunction(
-    () => {
-      const win = window as unknown as {
-        lib?: { mtop?: { request?: unknown } };
-      };
-      return typeof win.lib?.mtop?.request === 'function';
-    },
-    { timeout: 15_000 },
-  );
-  await page.evaluate(async (runtimeRequest) => {
-    const win = window as unknown as {
-      lib?: {
-        mtop?: {
-          request?: (input: typeof runtimeRequest) => Promise<unknown>;
+  const runtimeReadyTimeoutMs = options.runtimeReadyTimeoutMs ?? 15_000;
+  const requestTimeoutMs = options.requestTimeoutMs ?? 15_000;
+  try {
+    await page.waitForFunction(
+      () => {
+        const win = window as unknown as {
+          lib?: { mtop?: { request?: unknown } };
         };
-      };
-    };
-    const requestFn = win.lib?.mtop?.request;
-    if (typeof requestFn !== 'function') {
-      throw new Error('1688 page MTOP runtime is unavailable.');
+        return typeof win.lib?.mtop?.request === 'function';
+      },
+      undefined,
+      { timeout: runtimeReadyTimeoutMs },
+    );
+  } catch {
+    throw new CliError(
+      9,
+      'QUALIFICATION_MTOP_RUNTIME_UNAVAILABLE',
+      'The loaded 1688 shop page did not expose its MTOP runtime.',
+      {
+        category: 'qualification-runtime',
+        failureKind: 'runtime-unavailable',
+        recoveryAction: 'rebuild-page',
+        retryable: true,
+        timeoutMs: runtimeReadyTimeoutMs,
+      },
+    );
+  }
+
+  const requestTimeout = Symbol('qualification-runtime-timeout');
+  try {
+    const outcome = await withTimeout(
+      page.evaluate(async (runtimeRequest) => {
+        const win = window as unknown as {
+          lib?: {
+            mtop?: {
+              request?: (input: typeof runtimeRequest) => Promise<unknown>;
+            };
+          };
+        };
+        const requestFn = win.lib?.mtop?.request;
+        if (typeof requestFn !== 'function') {
+          throw new Error('1688 page MTOP runtime is unavailable.');
+        }
+        await requestFn.call(win.lib?.mtop, runtimeRequest);
+      }, request),
+      {
+        timeoutMs: requestTimeoutMs,
+        fallback: requestTimeout,
+      },
+    );
+    if (outcome === requestTimeout) {
+      throw new Error('Qualification runtime request timed out.');
     }
-    await requestFn.call(win.lib?.mtop, runtimeRequest);
-  }, request);
+  } catch (error) {
+    if (
+      error instanceof CliError &&
+      error.code === 'QUALIFICATION_REQUEST_REJECTED'
+    ) {
+      throw error;
+    }
+    throw new CliError(
+      9,
+      'QUALIFICATION_REQUEST_REJECTED',
+      'The 1688 page MTOP runtime rejected the qualification request.',
+      {
+        category: 'qualification-runtime',
+        failureKind: 'request-rejected',
+        recoveryAction: 'retry-later',
+        retryable: true,
+        timeoutMs: requestTimeoutMs,
+        cause:
+          error instanceof Error
+            ? error.name
+            : 'UnknownRuntimeRequestFailure',
+      },
+    );
+  }
 }
 
 export async function captureSupplierQualificationForAction<TResult>(
@@ -128,6 +190,24 @@ export async function captureSupplierQualificationForAction<TResult>(
     qualification: result.response,
     diagnostics: result.diagnostics,
   };
+}
+
+export function requireSupplierQualificationResponse(
+  result: SupplierQualificationCaptureResult<unknown>,
+): SupplierQualification {
+  if (result.qualification) return result.qualification;
+  throw new CliError(
+    9,
+    'QUALIFICATION_RESPONSE_TIMEOUT',
+    'The qualification request did not produce a correlated response.',
+    {
+      category: 'timeout',
+      failureKind: 'response-timeout',
+      recoveryAction: 'retry-later',
+      retryable: true,
+      responseCapture: result.diagnostics,
+    },
+  );
 }
 
 function responsePostData(response: PWResponse): string | null {

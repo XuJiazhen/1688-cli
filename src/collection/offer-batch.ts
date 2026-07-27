@@ -3,6 +3,7 @@ import type { OfferResult } from '../commands/offer.js';
 import { CliError } from '../io/errors.js';
 import type { OfferMediaManifest } from '../session/offer-media.js';
 import {
+  redactDiagnosticMetadata,
   redactTextForDiagnostics,
   sanitizeEvidenceRef,
 } from '../session/redaction.js';
@@ -170,7 +171,20 @@ function createFailedBatch(
     },
     duplicateObservations: [],
     warnings: [],
-    errors: [{ code, message, retryable }],
+    errors: [
+      {
+        code,
+        message,
+        retryable,
+        ...(error instanceof CliError
+          ? {
+              details: redactDiagnosticMetadata(
+                error.details,
+              ) as Record<string, unknown>,
+            }
+          : {}),
+      },
+    ],
     actionRequired,
     rawEvidenceRefs: sanitizeEvidenceRefs(input.rawEvidenceRefs ?? []),
     metrics: { capturedOffers: 0, failedOffers: 1 },

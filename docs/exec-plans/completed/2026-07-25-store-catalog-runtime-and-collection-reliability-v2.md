@@ -1,6 +1,6 @@
 # Plan 1/2：1688 CLI 目录直采与采集可靠性修复
 
-- 状态：`active`
+- 状态：`completed`
 - 顺序：两阶段实施方案中的第一阶段，必须先于业务系统吞吐优化实施
 - 建立日期：2026-07-25
 - 适用范围：`1688-cli`、CLI Adapter、Browser Worker 的采集边界
@@ -161,7 +161,7 @@ Store Catalog 终态失败不代表此前成功页全部丢失；本轮归档了
 现有 fixture 足以验证解析，却不能覆盖：
 
 - 四类真实店铺当前页面 Runtime；
-- 三个 Profile 的当前登录会话；
+- 当前两个已授权 Profile 的登录会话；
 - 首页、第二页和末页直接请求；
 - Runtime 不可用时的 DOM 降级；
 - 页面变化后的错误分类和 artifact。
@@ -178,7 +178,7 @@ Store Catalog 终态失败不代表此前成功页全部丢失；本轮归档了
 4. 将请求、关联、解析、页面和外部进程失败拆成可行动的稳定错误码。
 5. Offer Detail 与 Store Qualification 不再出现无诊断的 600 秒悬挂。
 6. 保持 `CollectionUnit -> CollectionBatch`、字段可用性、完整度、证据和幂等合同兼容。
-7. 建立四类店铺、三个 Profile 的受控 Live Gate。
+7. 建立四类店铺、当前两个已授权 Profile 的受控 Live Gate。
 
 ### 5.2 非目标
 
@@ -286,6 +286,7 @@ page 1 success
 | 错误码 | 含义 | 默认上层动作 |
 | --- | --- | --- |
 | `CATALOG_MTOP_RUNTIME_UNAVAILABLE` | 页面未提供 MTOP Runtime | 重建 Page 一次；`auto` 可降级 DOM |
+| `CATALOG_REQUEST_INVALID` | 目录请求 scope 不满足 Runtime 合同 | 修复 Work Unit；不得换 Profile 或降级 DOM |
 | `CATALOG_REQUEST_REJECTED` | Runtime 请求同步或异步拒绝 | 保存诊断；仅瞬时分类可重试 |
 | `CATALOG_RESPONSE_TIMEOUT` | 请求已发出但期限内无目标响应 | 退避后有限换 Profile |
 | `CATALOG_RESPONSE_SCOPE_MISMATCH` | 看见响应但目标 scope 不一致 | 不盲目重试，保留匹配摘要 |
@@ -338,66 +339,71 @@ CollectionBatch 继续保存 immutable `startedAt/completedAt`、scope、完整�
 
 ### 阶段 0：冻结基线并建立失败反馈回路
 
-- [ ] 将本方案中的统计与机器可读报告逐项核对；
-- [ ] 为“请求第 2 页却必须点击下一页”增加红色回归测试；
-- [ ] 为 Runtime 未加载、目标响应迟到、scope 不匹配、parser 失败增加 response mock；
-- [ ] 为 Offer Detail 和 Qualification 归档失败建立脱敏分类，不复制凭据；
-- [ ] 记录现有 DOM 路径在 fixture 和受控页面上的请求次数。
+- [x] 将本方案中的统计与机器可读报告逐项核对；
+- [x] 为“请求第 2 页却必须点击下一页”增加红色回归测试；
+- [x] 为 Runtime 未加载、目标响应迟到、scope 不匹配、parser 失败增加 response mock；
+- [x] 为 Offer Detail 和 Qualification 归档失败建立脱敏分类，不复制凭据；
+- [x] 记录现有 DOM 路径在 fixture 和受控页面上的请求次数。
 
 退出条件：至少有一条快速、确定、可由 agent 无人值守运行的测试能在旧实现上捕获重复导航问题。
 
 ### 阶段 1：实现 Runtime Catalog Transport
 
-- [ ] 新增 Store Catalog Runtime Request 类型和纯构造器；
-- [ ] 复用 Qualification 的页面 Runtime 调用模式；
-- [ ] 捕获先于请求，关联使用现有 Alisite matcher；
-- [ ] Runtime 返回、网络响应和 parser 统一进入 `CatalogPageAdapter`；
-- [ ] 加入 `runtime/dom/auto` 传输选择；
-- [ ] 维持 fixture adapter 与 Playwright adapter 同形合同；
-- [ ] 更新 JSON 合同、命令说明、可靠性和 MTOP playbook。
+- [x] 新增 Store Catalog Runtime Request 类型和纯构造器；
+- [x] 复用 Qualification 的页面 Runtime 调用模式；
+- [x] 捕获先于请求，关联使用现有 Alisite matcher；
+- [x] Runtime 返回、网络响应和 parser 统一进入 `CatalogPageAdapter`；
+- [x] 加入 `runtime/dom/auto` 传输选择；
+- [x] 维持 fixture adapter 与 Playwright adapter 同形合同；
+- [x] 更新 JSON 合同、命令说明、可靠性和 MTOP playbook。
 
 退出条件：离线测试证明请求第 N 页只构造一次 page N Runtime 请求，且不调用 next-page locator。
 
 ### 阶段 2：checkpoint 与降级路径
 
-- [ ] checkpoint 从新 Page 直接恢复 `nextPage`；
-- [ ] 验证换 Profile 后不依赖前一浏览器内存；
-- [ ] 降级只对允许错误发生，并记录原因；
-- [ ] DOM 降级保留现有分类、关键词和排序动作；
-- [ ] 防止 Runtime 已成功后又执行 DOM，造成重复请求；
-- [ ] 校验取消、deadline 和 Page 清理。
+- [x] checkpoint 从新 Page 直接恢复 `nextPage`；
+- [x] 验证换 Profile 后不依赖前一浏览器内存；
+- [x] 降级只对允许错误发生，并记录原因；
+- [x] DOM 降级保留现有分类、关键词和排序动作；
+- [x] 防止 Runtime 已成功后又执行 DOM，造成重复请求；
+- [x] 校验取消、deadline 和 Page 清理。
 
 退出条件：7 页 fixture/replay 只产生 7 次目录页请求，重放 checkpoint 不采已完成页。
 
 ### 阶段 3：Offer Detail、Qualification 与进程终态
 
-- [ ] 复现 `OFFER_SKU_CAPTURE_INCOMPLETE` 的主要类别；
-- [ ] 修复已证明的 listener、页面模型或懒加载问题；
-- [ ] Qualification 不再依赖 600 秒进程级 timeout 结束；
-- [ ] CLI Adapter 在取消和 timeout 后能生成权威结构化终态；
-- [ ] Browser Worker 能区分 CLI 失败与终态数据库协调失败；
-- [ ] 验证所有 listener、Page 和子进程在结束后释放。
+- [x] 复现 `OFFER_SKU_CAPTURE_INCOMPLETE` 的主要类别；
+- [x] 修复已证明的 listener、页面模型或懒加载问题；
+- [x] Qualification 不再依赖 600 秒进程级 timeout 结束；
+- [x] CLI Adapter 在取消和 timeout 后能生成权威结构化终态；
+- [x] Browser Worker 能区分 CLI 失败与终态数据库协调失败；
+- [x] 验证所有 listener、Page 和子进程在结束后释放。
 
 退出条件：相关回归测试先红后绿，且没有通过延长总 timeout 掩盖问题。
 
 ### 阶段 4：错误映射与上层兼容
 
-- [ ] CLI 错误码、category、retryable 和 actionRequired 完整测试；
-- [ ] CLI Adapter 对新增错误保持结构化解析；
-- [ ] Browser Worker 将错误原样提交业务调度层；
-- [ ] 不在 CLI 内实现无限重试或跨 Profile 调度；
-- [ ] 更新本方案与后续 Plan 2 的错误矩阵。
+- [x] CLI 错误码、category、retryable 和 actionRequired 完整测试；
+- [x] CLI Adapter 对新增错误保持结构化解析；
+- [x] Browser Worker 将错误原样提交业务调度层；
+- [x] 不在 CLI 内实现无限重试或跨 Profile 调度；
+- [x] 更新本方案与后续 Plan 2 的错误矩阵。
 
 退出条件：每个新增错误都有确定性的 CLI、Adapter 和 Browser Worker 合同测试。
 
 ### 阶段 5：受控 Live Gate
 
-使用仍有效、已授权的三个 Profile。开始前执行 doctor；遇到登录或风险验证按现有人工边界处理，不静默循环。
+使用仍有效、已授权的两个 Profile。开始前执行 doctor；遇到登录或风险验证按现有人工边界处理，不静默循环。
+
+实现后的只读入口为仓库根目录的 `pnpm live-gate:plan1`。默认在请求间
+等待 1500 ms，并把脱敏 Batch、`summary.json` 和 `report.md` 写入
+`var/live-gates/`；可用 `PLAN1_LIVE_GATE_DELAY_MS` 增加间隔，不得用它
+关闭 CLI 自身的有界 deadline。
 
 测试矩阵：
 
 - 店铺形态：普通、实力商家、源头旗舰、超级工厂；
-- Profile：`default`、`collector-2`、`collector-3`；
+- Profile：`default`、`collector-2`；
 - 页：第一页、第二页、末页；
 - scope：默认、分类、关键词、至少一种排序；
 - 路径：Runtime 主路径、一次受控 DOM 降级；
@@ -463,15 +469,15 @@ git diff --check
 
 ### 8.4 主执行者自检
 
-- [ ] 没有未解释的 timeout 增大；
-- [ ] 没有在同一 Profile 内增加并行浏览器操作；
-- [ ] 没有把技术失败写成业务 `needs_evidence` 或拒绝；
-- [ ] 没有改变 Store/SPU/SKU 规范身份；
-- [ ] 没有重复请求已完成 checkpoint 页；
-- [ ] 没有在成功 Runtime 请求后重复执行 DOM；
-- [ ] 没有泄露原始敏感接口材料；
-- [ ] 所有新错误在 Plan 2 中都有明确调度策略；
-- [ ] 所有验证结果和残余风险已回填本计划。
+- [x] 没有未解释的 timeout 增大；
+- [x] 没有在同一 Profile 内增加并行浏览器操作；
+- [x] 没有把技术失败写成业务 `needs_evidence` 或拒绝；
+- [x] 没有改变 Store/SPU/SKU 规范身份；
+- [x] 没有重复请求已完成 checkpoint 页；
+- [x] 没有在成功 Runtime 请求后重复执行 DOM；
+- [x] 没有泄露原始敏感接口材料；
+- [x] 所有新错误在 Plan 2 中都有明确调度策略；
+- [x] 所有验证结果和残余风险已回填本计划。
 
 ## 9. 验收指标
 
@@ -490,7 +496,7 @@ git diff --check
 - Catalog 页面请求放大系数从 O(P²) 降为 O(P)；
 - 受控矩阵首 Attempt 成功率不低于 95%；
 - Offer Detail 和 Store Qualification 不出现只能靠 600 秒总进程 timeout 结束的等待；
-- 确定性 schema/scope 错误不会在三个 Profile 上盲目重复。
+- 确定性 schema/scope 错误不会在多个 Profile 上盲目重复。
 
 ### 9.3 性能
 
@@ -529,7 +535,7 @@ Plan 2 开始前，本方案必须交付：
 - 新错误码、retryable 和 actionRequired 矩阵；
 - `transport/page/requestCount/latency` 观测字段；
 - `requestedFacts` 的兼容保留；
-- 四类店铺和三 Profile Live Gate 原始结果；
+- 四类店铺和两个已授权 Profile 的 Live Gate 原始结果；
 - CLI 版本、变更说明、测试报告和残余风险。
 
 Plan 2 不得依赖 DOM 下一页作为正常证据采集路径，也不得在上层重新实现 MTOP、页面定位器或 CLI 内部重试。
@@ -540,7 +546,7 @@ Plan 2 不得依赖 DOM 下一页作为正常证据采集路径，也不得在�
 
 1. 阶段 0-5 全部完成；
 2. 默认 CLI Gate 和根仓库集成 Gate 通过，或环境阻断有完整证据；
-3. 四类店铺、三个 Profile 的 Live Gate 达标；
+3. 四类店铺、两个已授权 Profile 的 Live Gate 达标；
 4. Store Catalog Runtime 主路径已启用且可回滚；
 5. Offer Detail、Qualification 长尾失败已有复现、修复和回归测试；
 6. 错误合同已被 CLI Adapter 和 Browser Worker 接收；
@@ -552,13 +558,79 @@ Plan 2 不得依赖 DOM 下一页作为正常证据采集路径，也不得在�
 ## 13. 进度记录
 
 - [x] 2026-07-25：根据第二轮正式运行报告建立方案和基线。
-- [ ] 阶段 0：反馈回路与红色回归测试。
-- [ ] 阶段 1：Runtime Catalog Transport。
-- [ ] 阶段 2：checkpoint 直接恢复与 DOM 降级。
-- [ ] 阶段 3：Offer Detail、Qualification 和进程终态。
-- [ ] 阶段 4：错误合同与上层兼容。
-- [ ] 阶段 5：四类店铺、三 Profile Live Gate。
-- [ ] 独立审查、自检与完成归档。
+- [x] 阶段 0：反馈回路与红色回归测试。
+- [x] 阶段 1：Runtime Catalog Transport。
+- [x] 阶段 2：checkpoint 直接恢复与 DOM 降级。
+- [x] 阶段 3：Offer Detail、Qualification 和进程终态。
+- [x] 阶段 4：错误合同与上层兼容。
+- [x] 阶段 5：四类店铺、两个已授权 Profile Live Gate。
+- [x] 独立审查与离线自检。
+- [x] 完成归档。
+
+2026-07-25 实施记录：
+
+- 红色回归覆盖新 Page 请求第 N 页时的单次 Runtime 调用、7 页只发
+  7 次请求、checkpoint 不重采完成页，以及 Runtime Promise 不结束但
+  网络响应已关联的情形；
+- 历史 Offer artifact 的脱敏分类为 57 个 bundle：37 个英文
+  `Captcha Interception` 页面，20 个有效详情页上的显式空
+  `skuInfoMap`；两类均已有回归修复；
+- Qualification 的 Playwright timeout 参数位置和永不结束的 Runtime
+  Promise 已复现，现由独立 deadline 返回结构化错误；
+- CLI、Adapter、Worker、Attempt 与 CollectionBatch 的 requestId
+  已贯通；同一 WorkUnit Attempt 的普通采集、人工干预和登录恢复复用
+  同一 requestId；冻结错误矩阵见
+  [Collection CLI Error Matrix](../../../../docs/runbooks/collection-cli-error-matrix.md)；
+- 三路独立审查已完成。审查发现的 checkpoint 跨批基线丢失、Batch
+  诊断丢失、requestId 目录逃逸、顽固后代进程、悬挂 heartbeat、
+  排队取消、Runtime fulfillment 丢弃和 Live Gate 默认路径缺口均已
+  修复并加入回归测试。第二轮复核补充的 checkpoint `pageCeiling`
+  跨字段约束、heartbeat 服务端 statement timeout、悬挂 Runtime
+  上下文释放、capture 结束后的迟到 parser、Worker 动态 retryable
+  矩阵和 Live Gate 策略自测也已收口；
+- Live Gate runner 现先执行两个已授权 Profile 的 `doctor --no-launch`，
+  再执行四店 Runtime smoke、默认 `auto` 全扫描/scope/跨 Profile
+  矩阵和显式 DOM rollback；敏感诊断在写盘前阻断，且只对
+  `errors[0].retryable=true` 的瞬时错误重试；
+- 第一轮 Live Gate 原始输出位于
+  `var/live-gates/plan1-2026-07-25T15-32-58-724Z/`。普通店铺和实力商家
+  在三个 Profile 上完成 6 次完整扫描，共 33 个目标页、33 次 Runtime
+  请求，`responseWaitMs` P50/P95 为 446/601 ms，
+  `CATALOG_NEXT_PAGE_MISSING=0`，且 `offerCount=uniqueItems`
+  分别闭合为 98 和 199；
+- 同一轮后半段三个 Profile 均收到 MTOP
+  `FAIL_SYS_USER_VALIDATE / RGV587_ERROR`。该响应最初暴露了
+  Runtime Promise 悬挂和错误误分类，现已修复为网络响应优先并返回
+  `RISK_CONTROL`，不再当成 schema/request failure。最终矩阵按人工
+  边界完成验证后恢复，没有静默循环；
+- 离线最终 Gate：CLI `agent-verify` 通过 48 个文件、396 个测试，
+  CLI build 通过；根仓库 typecheck/build 通过，完整测试通过 26 个文件、
+  254 个测试并按配置跳过 78 个集成测试；PostgreSQL 集成套件在本地
+  VS1 数据库单独通过 20 个测试，包含 heartbeat 行锁超时与连接恢复。
+  根仓库 `docs:check` 仍只报告变更前已存在的 14 个失效链接，本次新增
+  文档和链接不在失败列表中；两个仓库的 `git diff --check` 均通过。
+- 最终受控 Live Gate 输出位于
+  `var/live-gates/plan1-final-two-profiles-pass/`。`default` 与
+  `collector-2` doctor 均正常；四类店铺、完整扫描、分类、关键词、
+  排序、跨 Profile checkpoint、显式 Runtime 和一次 DOM rollback
+  共 51 个用例全部首 Attempt 成功，首 Attempt/最终成功率均为 100%。
+  其中 46 个 `auto` 用例全部走 Runtime，4 个显式 Runtime 页的请求数
+  与目标页数均为 4，`CATALOG_NEXT_PAGE_MISSING=0`；
+- 两个 Profile 上的 8 次完整扫描分别闭合为普通店 98/98、实力商家
+  199/199、源头旗舰 67/67、超级工厂 34/34。51 个目标页的
+  `catalogResponseWaitMs` P50/P95 为 412/567 ms；52 个 JSON 结果经
+  结构化敏感字段扫描与查询串扫描，未发现 Cookie、token、sign、
+  验证 URL 或完整请求头；
+- 当前严格 runner 复验输出位于
+  `var/live-gates/plan1-final-verified/`，复用并重新校验上述 51 个
+  已通过用例，doctor、矩阵覆盖、CLI / schema / parser 版本、
+  Profile、transport、page、requestId 和 checkpoint 约束均通过；
+- 最终离线 Gate 在加入 headed MTOP 风控恢复与 Live Gate resume
+  覆盖后重新执行：CLI `agent-verify` 通过 48 个文件、407 个测试并
+  完成 build；根仓库 typecheck/build 通过，完整测试通过 26 个文件、
+  258 个测试并按配置跳过 78 个集成测试；PostgreSQL 集成套件再次
+  通过 20 个测试。根仓库 `docs:check` 仍仅报告同一组变更前已存在的
+  14 个失效链接，两个仓库的 `git diff --check` 通过。
 
 ## 14. 决策记录
 
@@ -567,3 +639,20 @@ Plan 2 不得依赖 DOM 下一页作为正常证据采集路径，也不得在�
 - 2026-07-25：页面 MTOP Runtime 负责登录态、Cookie 和签名；CLI 不接受或保存调用方提供的可重放凭据。
 - 2026-07-25：DOM 翻页降级保留用于回滚和诊断，但不再作为生产主路径。
 - 2026-07-25：第三轮真实任务被本方案与 Plan 2 的共同 Gate 阻断。
+- 2026-07-25：Runtime Promise 与已关联网络响应分离；网络响应先完成时
+  不等待可能永不结束的页面 Promise。有效 Runtime fulfillment 与网络
+  响应都进入同一 parser，事实解析仍保持单一入口。
+- 2026-07-25：MTOP `FAIL_SYS_USER_VALIDATE / RGV587_ERROR` 属于
+  `RISK_CONTROL`，只保存 ret code 与 payload key 摘要，不持久化验证 URL。
+- 2026-07-26：用户确认当前只有两个账号；Live Gate 的授权 Profile
+  冻结为 `default` 和 `collector-2`。四类店铺、scope、完整扫描、
+  Runtime/DOM 与跨 Profile checkpoint 的覆盖不缩减，`collector-3`
+  不再作为 Plan 1 或 Plan 2 的前置条件。
+- 2026-07-26：headed 模式收到 MTOP 风控响应时，只在内存中使用经
+  1688/淘宝/天猫/阿里域名白名单校验的验证 URL，等待人工完成后重建
+  页面并对同一目录页重试一次；URL 和可重放凭据不得进入 Batch、
+  diagnostics 或 Live Gate 结果。
+- 2026-07-26：Live Gate 允许从版本、parser 和 Profile 完全一致的
+  先前结果中复用已成功用例；复用前重新校验 requestId、unitId、
+  transport、目标页和敏感字段，从而避免人工风控解除后重复请求已经
+  完成的 checkpoint 页。

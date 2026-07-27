@@ -350,6 +350,43 @@ describe('createOfferCollectionBatch', () => {
     });
   });
 
+  it('retains redacted response diagnostics on a failed offer batch', () => {
+    const batch = createOfferCollectionBatch({
+      unit: unit('offer-detail'),
+      outcome: {
+        status: 'failed',
+        error: new CliError(
+          9,
+          'OFFER_SKU_RESPONSE_TIMEOUT',
+          'Offer SKU response timed out.',
+          {
+            retryable: true,
+            responseCapture: {
+              matchedCount: 1,
+              lastMatchedUrl:
+                'https://h5api.m.1688.com/h5/offer?api=test&sign=secret&data=secret',
+            },
+          },
+        ),
+      },
+      startedAt: NOW,
+      completedAt: NOW,
+    });
+
+    expect(batch.errors[0]).toMatchObject({
+      code: 'OFFER_SKU_RESPONSE_TIMEOUT',
+      retryable: true,
+      details: {
+        responseCapture: {
+          matchedCount: 1,
+          lastMatchedUrl:
+            'https://h5api.m.1688.com/h5/offer?api=test&sign=%5Bredacted%5D&data=%5Bredacted%5D',
+        },
+      },
+    });
+    expect(JSON.stringify(batch.errors[0])).not.toContain('sign=secret');
+  });
+
   it.each([
     ['NOT_LOGGED_IN', 3, 'login'],
     ['RISK_CONTROL', 4, 'risk-control'],

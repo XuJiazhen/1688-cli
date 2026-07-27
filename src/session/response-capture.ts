@@ -3,7 +3,6 @@ import {
   redactTextForDiagnostics,
   redactUrlForDiagnostics,
 } from './redaction.js';
-import { withTimeout } from './wait.js';
 
 export type ResponseMatcher = RegExp | ((response: PWResponse) => boolean);
 export type ResponseParser<T> = (
@@ -88,6 +87,10 @@ export function startResponseCapture<T>(
   const captured = new Promise<T>((resolve) => {
     resolveCaptured = resolve;
   });
+  let resolveDisposed!: () => void;
+  const disposedSignal = new Promise<null>((resolve) => {
+    resolveDisposed = () => resolve(null);
+  });
 
   const remember = <TEntry>(entries: TEntry[], entry: TEntry) => {
     entries.push(entry);
@@ -120,6 +123,7 @@ export function startResponseCapture<T>(
     disposed = true;
     endedAt ??= new Date().toISOString();
     opts.page.off('response', onResponse);
+    resolveDisposed();
   };
 
   const matches = (response: PWResponse): boolean => {
@@ -145,6 +149,7 @@ export function startResponseCapture<T>(
     lastMatchedUrl = diagnosticUrl;
     try {
       const value = await opts.parse(response);
+      if (settled || disposed) return;
       if (!value) {
         emptyResultCount++;
         remember(emptyResults, {
@@ -153,13 +158,13 @@ export function startResponseCapture<T>(
         });
         return;
       }
-      if (settled || disposed) return;
       parsedCount++;
       lastParsedUrl = diagnosticUrl;
       settled = true;
       endedAt = new Date().toISOString();
       resolveCaptured(value);
     } catch (e) {
+      if (settled || disposed) return;
       recordFailure('parse', diagnosticUrl, e);
     }
   };
@@ -187,24 +192,32 @@ export function startResponseCapture<T>(
 
   return {
     wait() {
-      waitPromise ??= withTimeout(captured, {
-        timeoutMs: opts.timeoutMs,
-        fallback: null,
-      })
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      waitPromise ??= Promise.race([
+        captured,
+        disposedSignal,
+        new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), opts.timeoutMs);
+        }),
+      ])
         .then((value) => {
-          if (value === null && !settled) {
+          if (value === null && !settled && !disposed) {
             timedOut = true;
             endedAt = new Date().toISOString();
           }
           return value;
         })
-        .finally(dispose);
+        .finally(() => {
+          if (timer) clearTimeout(timer);
+          dispose();
+        });
       return waitPromise;
     },
     async waitForAction<TResult>(action: () => Promise<TResult>) {
+      const responsePromise = this.wait();
       try {
         const actionResult = await action();
-        const response = await this.wait();
+        const response = await responsePromise;
         return {
           actionResult,
           response,
