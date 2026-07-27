@@ -84,7 +84,7 @@ CLI 命令是该 Module 的一个调用入口；未来云端 Browser Worker 可�
 
 ## 真实数据依据
 
-`/Users/jiazhenxu/Codes/open-source/1688/1688tojd/1688 StoreCatalog Collector/` 是用户在已登录的真实 1688 页面中手动操作后保存的真实请求、响应和页面数据，不是推测性接口说明。本目录是解析器、受控探测和 fixture 的证据依据。
+`/Users/jiazhenxu/Codes/open-source/1688/1688tojd/docs/1688接口采集/raw/` 是用户在已登录的真实 1688 页面中手动操作后保存的真实请求、响应和页面数据，不是推测性接口说明。本目录是解析器、受控探测和 fixture 的证据依据。
 
 当前真实样本覆盖：
 
@@ -556,7 +556,7 @@ CLI 只记录采集阶段物理用量。最终合格 SKU、漏斗通过率、AI/
 - 2026-07-22：品牌上限默认 5、关联品类组上限默认 3 等参数由业务规则中心配置，不硬编码进 CLI。
 - 2026-07-22：`certList` 为空不阻断资质采集，经营范围以 `businessInfo.companyBusinessLine` 为主要事实。
 - 2026-07-22：初始采集只保存媒体 URL、角色和顺序；AI 需要时延迟抓取，进入审核/待上架或触发图片动作时再永久物化。
-- 2026-07-22：将 `1688 StoreCatalog Collector/` 认定为真实线上抓取证据，但因登录态和主体隐私只保留在本地；版本库只保存脱敏最小 fixture。
+- 2026-07-22：将现位于 `docs/1688接口采集/raw/` 的资料认定为真实线上抓取证据，但因登录态和主体隐私只保留在本地；版本库只保存脱敏最小 fixture。
 - 2026-07-22：优先使用页面实际使用的 `Wp_pc_common_offerlist`，通过 API、`componentKey` 和请求元数据关联响应，避免绑定某一种店铺首页 DOM。
 - 2026-07-22：沿用 `NOT_LOGGED_IN`、`RISK_CONTROL` 和退出码 3/4，不引入第二套登录/风控错误名。
 - 2026-07-22：一次 CLI 调用执行有界 CollectionUnit；完整选品任务和持续补量循环由业务系统编排。

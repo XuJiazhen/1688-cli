@@ -52,7 +52,7 @@
 - [300 SKU 正式任务性能报告](../../../../var/formal-300/62dab788-3a4b-4a8d-bfd2-255044d7578c/performance-report.md)
 - [机器可读性能汇总](../../../../var/formal-300/62dab788-3a4b-4a8d-bfd2-255044d7578c/performance-summary.json)
 - [300 SKU 正式任务书](../../../../docs/runbooks/300-sku-formal-collection-task.md)
-- [Store Catalog 真实接口证据](../../../../1688%20StoreCatalog%20Collector/)
+- [1688 真实接口采集证据](../../../../docs/1688接口采集/README.md)
 
 ### 3.1 任务结果
 
