@@ -1,0 +1,40 @@
+{
+  "api": "mtop.1688.moga.pc.shopcard",
+  "data": {
+    "model": {
+      "iconType": "slsj",
+      "mainCategoryName": "电动工具",
+      "shopButton": {
+        "attentionRelation": false,
+        "fuzzyFavCount": "145粉丝",
+        "type": "ATTENTION"
+      },
+      "shopData": [
+        {
+          "dataKey": "店铺回头率",
+          "dataValue": "27%"
+        },
+        {
+          "dataKey": "店铺服务分",
+          "dataValue": "4.0",
+          "unit": "分"
+        },
+        {
+          "dataKey": "准时发货率",
+          "dataValue": "96%"
+        },
+        {
+          "dataKey": "店铺好评率",
+          "dataValue": "99.5%"
+        }
+      ],
+      "shopName": "脱敏电动工具商行",
+      "shopType": "slsj",
+      "shopUrl": "https://fixture-profile.1688.com",
+      "tpYear": 3
+    }
+  },
+  "ret": [
+    "SUCCESS::调用成功"
+  ]
+}

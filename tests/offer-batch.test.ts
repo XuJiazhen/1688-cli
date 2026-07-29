@@ -140,6 +140,25 @@ describe('createOfferCollectionBatch', () => {
         collectedAt: NOW,
       },
     ]);
+    expect(batch.observations[0]).not.toHaveProperty('offer.detailText');
+  });
+
+  it.each([
+    ['visible text', '灭火器使用说明'],
+    ['readable response without text', null],
+  ] as const)('preserves %s in the offer-detail observation', (_label, detailText) => {
+    const batch = createOfferCollectionBatch({
+      unit: unit('offer-detail'),
+      outcome: captured(offer({ detailText })),
+      batchId: 'offer-detail-text-batch',
+      startedAt: NOW,
+      completedAt: NOW,
+    });
+
+    expect(batch.observations[0]).toHaveProperty(
+      'offer.detailText',
+      detailText,
+    );
   });
 
   it('emits only the URL manifest for an offer-media-manifest unit', () => {

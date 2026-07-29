@@ -3,6 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import type { BrowserContext, Page } from 'playwright';
 import { createOfferCollectionBatch } from '../collection/offer-batch.js';
 import { createQualificationBatch } from '../collection/qualification-batch.js';
+import { createStoreProfileBatch } from '../collection/store-profile-batch.js';
 import {
   createSearchPageBatch,
   drainSearchCheckpointSnapshot,
@@ -46,7 +47,14 @@ import {
   sanitizeEvidenceRef,
 } from '../session/redaction.js';
 import { parseOfferItemsFromMtopText, type Offer } from '../session/search-mtop.js';
+import {
+  assertStoreProfilePayloadState,
+  captureStoreProfileForAction,
+  requestStoreProfileFromPage,
+  STORE_PROFILE_RUNTIME_SOURCE_REF,
+} from '../session/store-profile-capture.js';
 import type { SupplierQualification } from '../session/supplier-qualification.js';
+import type { StoreProfileSnapshot } from '../session/store-profile.js';
 import { dispatch } from '../session/dispatch.js';
 import type { OfferResult } from './offer.js';
 import { execute as collectOffer } from './offer.js';
@@ -111,6 +119,13 @@ export interface CollectCommandDependencies {
   batchId?: () => string;
 }
 
+export interface StoreProfileCollectorDeadlines {
+  naturalCaptureTimeoutMs?: number;
+  runtimeCaptureTimeoutMs?: number;
+  runtimeReadyTimeoutMs?: number;
+  runtimeRequestTimeoutMs?: number;
+}
+
 export interface FixtureCatalogPage {
   payload: unknown;
   request?: StoreCatalogRequestMeta;
@@ -119,6 +134,9 @@ export interface FixtureCatalogPage {
 
 export interface CollectionFixture {
   pages?: FixtureCatalogPage[];
+  storeProfile?: StoreProfileSnapshot;
+  storeProfilePayload?: unknown;
+  storeProfileSourceRef?: string;
   searchPage?: {
     page?: number;
     remoteSort?: string | null;
@@ -288,6 +306,8 @@ export function createPlaywrightCollectionRuntime(
       switch (unit.kind) {
         case 'search-page':
           return collectSearchUnit(ctx, unit, checkpoint, headed);
+        case 'store-profile':
+          return collectStoreProfileUnit(ctx, unit, checkpoint, headed);
         case 'store-catalog':
         case 'store-categories':
           return collectSupplierCatalog(ctx, {
@@ -313,6 +333,40 @@ export function createFixtureCollectionRuntime(
     async collect(unit, checkpoint) {
       const startedAt = new Date().toISOString();
       switch (unit.kind) {
+        case 'store-profile': {
+          const completedAt = new Date().toISOString();
+          const sourceRef =
+            fixture.storeProfileSourceRef ?? 'fixture:store-profile';
+          if (fixture.storeProfile !== undefined) {
+            return createStoreProfileBatch({
+              unit,
+              checkpoint,
+              batchId: randomUUID(),
+              profile: fixture.storeProfile,
+              startedAt,
+              completedAt,
+              rawEvidenceRefs: [sourceRef],
+            });
+          }
+          if (fixture.storeProfilePayload === undefined) {
+            throw new CliError(
+              9,
+              'FIXTURE_MISSING',
+              'storeProfilePayload fixture is required.',
+            );
+          }
+          return createStoreProfileBatch({
+            unit,
+            checkpoint,
+            batchId: randomUUID(),
+            payload: fixture.storeProfilePayload,
+            collectedAt: completedAt,
+            startedAt,
+            completedAt,
+            sourceRef,
+            rawEvidenceRefs: [sourceRef],
+          });
+        }
         case 'store-catalog':
         case 'store-categories': {
           const pages = fixture.pages ?? [];
@@ -498,6 +552,180 @@ async function collectQualificationUnit(
   } finally {
     await page.close().catch(() => {});
   }
+}
+
+export async function collectStoreProfileUnit(
+  ctx: BrowserContext,
+  unit: CollectionUnit,
+  checkpoint: CollectionCheckpoint | undefined,
+  headed: boolean,
+  deadlines: StoreProfileCollectorDeadlines = {},
+): Promise<CollectionBatch> {
+  const startedAt = new Date().toISOString();
+  const supplier = await resolveCatalogSupplier(ctx, unit, headed);
+  const knownMemberId = isSafeSupplierMemberKey(supplier.memberId)
+    ? supplier.memberId
+    : undefined;
+  const page = await ctx.newPage();
+  try {
+    const natural = await captureStoreProfileForAction(
+      page,
+      {
+        ...(knownMemberId === undefined ? {} : { memberId: knownMemberId }),
+        timeoutMs: deadlines.naturalCaptureTimeoutMs ?? 5_000,
+      },
+      () => navigateToStoreProfilePage(page, supplier.shopUrl),
+    );
+    if (natural.captured !== null) {
+      assertStoreProfilePayloadState(
+        natural.captured.payload,
+        natural.diagnostics,
+      );
+      const stateError = pageStateError(await detectPageState(page), headed);
+      if (stateError !== null) throw stateError;
+      return storeProfileBatchFromLivePayload(
+        unit,
+        checkpoint,
+        startedAt,
+        natural.captured.payload,
+        natural.captured.collectedAt,
+        natural.captured.sourceRef,
+      );
+    }
+
+    await waitForCollectionPageAvailability(page, { headed });
+    if (knownMemberId === undefined) {
+      throw new CliError(
+        9,
+        'STORE_PROFILE_MEMBER_ID_MISSING',
+        'The supplier shop page did not expose a profile response, and the collection unit has no safe memberId for the runtime fallback.',
+        {
+          category: 'store-profile',
+          failureKind: 'member-id-missing',
+          recoveryAction: 'collect-supplier-identity',
+          retryable: false,
+          responseCapture: natural.diagnostics,
+        },
+      );
+    }
+
+    const fallback = await captureStoreProfileForAction(
+      page,
+      {
+        memberId: knownMemberId,
+        timeoutMs: deadlines.runtimeCaptureTimeoutMs ?? 15_000,
+      },
+      async () => {
+        try {
+          return {
+            payload: await requestStoreProfileFromPage(
+              page,
+              knownMemberId,
+              {
+                runtimeReadyTimeoutMs:
+                  deadlines.runtimeReadyTimeoutMs ?? 15_000,
+                requestTimeoutMs:
+                  deadlines.runtimeRequestTimeoutMs ?? 15_000,
+              },
+            ),
+            error: null,
+          };
+        } catch (error) {
+          if (
+            error instanceof CliError &&
+            error.code === 'STORE_PROFILE_MTOP_RUNTIME_UNAVAILABLE'
+          ) {
+            throw error;
+          }
+          return { payload: null, error };
+        }
+      },
+    );
+    const payload =
+      fallback.captured?.payload ?? fallback.actionResult.payload ?? null;
+    if (payload === null) {
+      if (fallback.actionResult.error !== null) {
+        throw fallback.actionResult.error;
+      }
+      const stateError = pageStateError(await detectPageState(page), headed);
+      if (stateError !== null) throw stateError;
+      throw new CliError(
+        9,
+        'STORE_PROFILE_RESPONSE_TIMEOUT',
+        'The store profile request did not produce a correlated response.',
+        {
+          category: 'timeout',
+          failureKind: 'response-timeout',
+          recoveryAction: 'retry-later',
+          retryable: true,
+          responseCapture: fallback.diagnostics,
+        },
+      );
+    }
+    assertStoreProfilePayloadState(payload, fallback.diagnostics);
+    const stateError = pageStateError(await detectPageState(page), headed);
+    if (stateError !== null) throw stateError;
+    const sourceRef =
+      fallback.captured?.sourceRef ?? STORE_PROFILE_RUNTIME_SOURCE_REF;
+    return storeProfileBatchFromLivePayload(
+      unit,
+      checkpoint,
+      startedAt,
+      payload,
+      fallback.captured?.collectedAt ?? new Date().toISOString(),
+      sourceRef,
+    );
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+async function navigateToStoreProfilePage(
+  page: Page,
+  shopUrl: string,
+): Promise<unknown> {
+  try {
+    return await page.goto(shopUrl, {
+      waitUntil: 'domcontentloaded',
+      timeout: 30_000,
+    });
+  } catch (error) {
+    throw new CliError(
+      9,
+      'NETWORK_ERROR',
+      `Failed to load supplier shop: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+      {
+        category: 'store-profile',
+        failureKind: 'navigation-failed',
+        recoveryAction: 'retry-later',
+        retryable: true,
+      },
+    );
+  }
+}
+
+function storeProfileBatchFromLivePayload(
+  unit: CollectionUnit,
+  checkpoint: CollectionCheckpoint | undefined,
+  startedAt: string,
+  payload: unknown,
+  collectedAt: string,
+  sourceRef: string,
+): CollectionBatch {
+  const evidenceRef = sanitizeEvidenceRef(sourceRef);
+  return createStoreProfileBatch({
+    unit,
+    checkpoint,
+    batchId: randomUUID(),
+    payload,
+    collectedAt,
+    startedAt,
+    completedAt: new Date().toISOString(),
+    sourceRef: evidenceRef,
+    rawEvidenceRefs: [evidenceRef],
+  });
 }
 
 export async function navigateAndResolveQualificationMember(
@@ -803,9 +1031,17 @@ async function readFixture(
   if (file.endsWith('.js')) return { mediaScript: raw, mediaSourceRef: `fixture:${file}` };
   const parsed = JSON.parse(raw) as CollectionFixture;
   if (
-    parsed.pages || parsed.searchPage || parsed.qualification !== undefined ||
+    parsed.pages || parsed.storeProfile !== undefined ||
+    parsed.storeProfilePayload !== undefined || parsed.searchPage ||
+    parsed.qualification !== undefined ||
     parsed.qualificationPayload !== undefined || parsed.offerResult || parsed.mediaScript
   ) return parsed;
+  if (kind === 'store-profile') {
+    return {
+      storeProfilePayload: parsed,
+      storeProfileSourceRef: 'fixture:store-profile',
+    };
+  }
   if (kind === 'store-catalog' || kind === 'store-categories') {
     return { pages: [{ payload: parsed }] };
   }
@@ -830,7 +1066,9 @@ async function readStdin(): Promise<string> {
 }
 
 function isPageKind(kind: CollectionUnit['kind']): boolean {
-  return kind === 'search-page' || kind === 'store-catalog' || kind === 'store-categories' || kind === 'store-qualification';
+  return kind === 'search-page' || kind === 'store-profile' ||
+    kind === 'store-catalog' || kind === 'store-categories' ||
+    kind === 'store-qualification';
 }
 
 function isContractError(error: unknown): boolean {

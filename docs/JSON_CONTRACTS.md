@@ -462,6 +462,7 @@ CSV table.
   mixOrderQty: number | null,
   priceTiers: Array<{ minQty: number, price: number }>,
   detailUrl: string | null,
+  detailText?: string | null,
   attributes: Array<{ name: string, value: string }>,
   packageInfo: Array<{
     skuId: string,
@@ -526,6 +527,11 @@ CSV table.
   },
 }
 ```
+
+`detailText` is sanitized visible text extracted from the already-captured
+`offer_details.content` response; it does not trigger another remote request.
+`null` means that response was readable but contained no visible text.
+Omission means the response was not collected or could not be read.
 
 `ShopCardInfo` is shared by `offer` and `supplier inspect`:
 
@@ -692,8 +698,9 @@ The final selection target, rule evaluation, database cache, review pool, and
 type CollectionUnit = {
   schemaVersion: 1,
   unitId: string,
+  collectionTaskId?: string,
   taskId?: string,
-  kind: "search-page" | "store-catalog" | "store-categories"
+  kind: "search-page" | "store-profile" | "store-catalog" | "store-categories"
       | "store-qualification" | "offer-detail" | "offer-media-manifest",
   subject: {
     keyword?: string,
@@ -713,6 +720,11 @@ type CollectionUnit = {
   limits?: { maxItems?: number, deadlineMs?: number },
 }
 ```
+
+`collectionTaskId` is the explicit owner for new collection work. The legacy
+`taskId` remains readable for older callers, but a unit must not set both.
+Neither task identity participates in `unitFingerprint`; retry ownership can
+change without invalidating the collected subject and scope.
 
 The result is a versioned, idempotently ingestible batch:
 
@@ -861,6 +873,11 @@ snapshot without reloading the dynamic search page. The pending set therefore
 shrinks deterministically until the captured remote page is complete, and only
 then may the checkpoint advance to the next page.
 
+Every `search-page` batch also archives the source-declared continuation bit as
+`scope.remoteHasMore`. A scheduler uses that immutable value to distinguish a
+natural terminal page from a page whose successor belongs in a later bounded
+wave; it must not infer exhaustion from the emitted observation count.
+
 A response containing more than 60 offers is a remote protocol violation.
 The batch returns retryable `SEARCH_REMOTE_PAGE_SIZE_EXCEEDED`, emits no
 observations, and preserves the captured IDs in a readable key-only checkpoint
@@ -970,6 +987,11 @@ Catalog and bounded response failures use stable scheduler-facing codes:
 | `CATALOG_RESPONSE_SCOPE_MISMATCH` | protocol / non-retryable |
 | `CATALOG_RESPONSE_SCHEMA_CHANGED` | protocol / non-retryable |
 | `CATALOG_DOM_CONTROL_MISSING` | protocol / non-retryable |
+| `STORE_PROFILE_SHOP_URL_MISSING` | input/source / non-retryable |
+| `STORE_PROFILE_MEMBER_ID_MISSING` | input/source / non-retryable |
+| `STORE_PROFILE_RESPONSE_TIMEOUT` | timeout / retryable |
+| `STORE_PROFILE_MTOP_RUNTIME_UNAVAILABLE` | process / retryable |
+| `STORE_PROFILE_REQUEST_REJECTED` | process / retryable |
 | `OFFER_SKU_RESPONSE_TIMEOUT` | timeout / retryable |
 | `QUALIFICATION_RESPONSE_TIMEOUT` | timeout / retryable |
 | `QUALIFICATION_MTOP_RUNTIME_UNAVAILABLE` | process / retryable |
@@ -985,6 +1007,7 @@ Kind-specific observations are additive records inside the common batch:
 | Kind | Observation payload |
 |---|---|
 | `search-page` | `offerId`, full normalized search `offer`, source page, page/raw rank, remote sort, and collection time |
+| `store-profile` | request supplier identity plus Store-page name/URL/type, badge, main category, years, followers, service, region/address, and trust metrics as field-level `Evidence` with per-field raw source paths |
 | `store-catalog` | `offerId`, normalized store offer, source page/position, query/category/sort metadata, supplier identity, and collection time |
 | `store-categories` | store identity, `offerCount`, category tree/counts, and parsed plus raw `userDefined` state |
 | `store-qualification` | request-correlated `requestMemberId`, response `memberId` alias, company/business-scope facts as `Evidence`, certificates/images, and certificate-list availability |
@@ -1000,6 +1023,14 @@ must not replace the request correlation identity.
 Unknown SKU price, stock, or sales remain `null` with `availability` rather
 than becoming zero. Media observations contain URL references only; no image
 bytes are downloaded by this protocol.
+
+The store-profile fixture adapter parses both the backwards-compatible
+shop-card shape and the current Store-page `wp_pc_common_header` shape. Live
+collection listens during Store navigation first, then makes one bounded
+common-header request through that same page's active MTOP Runtime. It does
+not visit Offer Detail solely for profile collection. A field omitted by the
+matched source is `not-present`; a missing or unreadable source is `failed`,
+never silently `not-collected`.
 
 The public command accepts inline JSON, `@file`, or stdin, with an optional
 checkpoint and complete-result file. Stdin accepts either the legacy naked

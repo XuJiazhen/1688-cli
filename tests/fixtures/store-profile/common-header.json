@@ -1,0 +1,76 @@
+{
+  "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+  "data": {
+    "canRetry": "false",
+    "cost": "12",
+    "data": {
+      "addr": {
+        "capitalName": "杭州市",
+        "entAddress": "浙江省杭州市示例区脱敏路 88 号",
+        "province": "浙江省"
+      },
+      "businessModelList": [
+        {
+          "icon": "https://assets.example.test/quality.png",
+          "link": "https://fixture-profile.1688.com/page/quality.html",
+          "title": "质量保障"
+        }
+      ],
+      "businessTags": [
+        {
+          "text": "售后体验",
+          "value": "4.2"
+        },
+        {
+          "text": "发货体验",
+          "value": "4.6"
+        }
+      ],
+      "byrRepeatRateText": "31.5%",
+      "cardDetail": [
+        {
+          "code": "byrRepeatCustomer",
+          "extendInfo": {
+            "infoUnit": "人"
+          },
+          "info": "200+",
+          "title": "回购老客"
+        },
+        {
+          "code": "goodRate",
+          "extendInfo": {
+            "infoUnit": "%"
+          },
+          "info": "98.6",
+          "title": "好评率"
+        }
+      ],
+      "certInfo": {
+        "certLogo": "https://assets.example.test/cert.png",
+        "certNum": "编号:SANITIZED-001",
+        "certType": "深度认证",
+        "linkUrl": "https://fixture-profile.1688.com/page/cert.html"
+      },
+      "commonUrl": {
+        "shopUrl": "https://fixture-profile.1688.com/page/index.html"
+      },
+      "companyId": "fixture-company-001",
+      "companyName": "脱敏五金工具有限公司",
+      "customerStar": "4.5分",
+      "fans": {
+        "isFans": "false",
+        "num": "1.3w"
+      },
+      "lgtFulfillGotRateText": "94.2%",
+      "mainCate": "五金、工具",
+      "pcV2ShopCardTypeImg": "https://assets.example.test/shop-type.png",
+      "sellerType": "shili_factory",
+      "tpYear": "4年"
+    },
+    "msgCode": "SUCCESS",
+    "success": "true"
+  },
+  "ret": [
+    "SUCCESS::调用成功"
+  ]
+}

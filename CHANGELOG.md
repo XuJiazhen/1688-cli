@@ -6,6 +6,10 @@ This project follows [Semantic Versioning](https://semver.org/).
 ## [Unreleased]
 
 ### Added
+- Added first-class `store-profile` collection: explicit `collectionTaskId`
+  ownership, field-level common-header evidence, region/address and trust
+  facts, deterministic sanitized fixture replay, natural Store-page capture,
+  and a bounded same-page MTOP Runtime fallback.
 - Added exact-page Store Catalog collection through the loaded shop's MTOP
   Runtime, with `runtime`, `dom`, and default `auto` transport modes,
   checkpoint-direct resume, sanitized per-page diagnostics, and additive

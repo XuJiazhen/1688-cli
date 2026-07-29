@@ -57,4 +57,58 @@ describe('CollectionBatch ingestion contract', () => {
     expect(snapshots[0]).not.toHaveProperty('qualified');
     expect(snapshots[0]).not.toHaveProperty('ruleResult');
   });
+
+  it('ingests a store profile as an immutable collection-owned snapshot', async () => {
+    const payload = JSON.parse(
+      await readFile(
+        path.join(
+          process.cwd(),
+          'tests/fixtures/store-profile/basic.json',
+        ),
+        'utf8',
+      ),
+    );
+    const unit: CollectionUnit = {
+      schemaVersion: 1,
+      unitId: 'integration-store-profile-1',
+      collectionTaskId: 'collection-task-1',
+      kind: 'store-profile',
+      subject: {
+        supplier: {
+          memberId: 'b2b-fixture-supplier',
+          shopUrl: 'https://fixture-profile.1688.com/',
+        },
+      },
+      scope: { requestedScope: 'page' },
+    };
+    const batch = await executeCollectionUnit({
+      unit,
+      runtime: createFixtureCollectionRuntime({
+        storeProfilePayload: payload,
+        storeProfileSourceRef: 'fixture:store-profile',
+      }),
+    });
+    const store = new FakeFactStore();
+
+    store.ingest(batch);
+    store.ingest(batch);
+
+    const snapshots = store.snapshots('store-profile');
+    expect(snapshots).toHaveLength(1);
+    expect(snapshots[0]).toMatchObject({
+      kind: 'store-profile',
+      status: 'completed',
+      observations: [
+        {
+          name: {
+            availability: 'available',
+            value: '脱敏电动工具商行',
+          },
+          region: { availability: 'not-present', value: null },
+        },
+      ],
+    });
+    expect(snapshots[0]).not.toHaveProperty('qualified');
+    expect(snapshots[0]).not.toHaveProperty('ruleResult');
+  });
 });

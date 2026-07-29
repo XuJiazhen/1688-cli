@@ -323,10 +323,13 @@ contract:
 cat unit.json | 1688 collect - --json
 ```
 
-The six collection kinds cover search pages, store catalogs/categories,
-supplier qualification, offer details, and media manifests. The CLI records
-facts, provenance, completeness, and recovery state; selection rules, cache
-TTL, review pools, and qualified-SKU targets remain business-system concerns.
+The seven collection kinds cover search pages, store profiles,
+catalogs/categories, supplier qualification, offer details, and media
+manifests. Store-profile collection reuses the Store page's natural common
+header response, with a bounded request through the same page runtime as its
+fallback. The CLI records facts, provenance, completeness, and recovery
+state; selection rules, cache TTL, review pools, and qualified-SKU targets
+remain business-system concerns.
 See [the collection JSON contract](./docs/JSON_CONTRACTS.md#collection-protocol-v1).
 
 ### 2. Pre-sale inquiry — ask the supplier

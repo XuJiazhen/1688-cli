@@ -66,6 +66,14 @@ describe('collection contracts', () => {
       normalizeCollectionUnit({
         schemaVersion: 1,
         unitId: 'unit-1',
+        kind: 'store-profile',
+        subject: {},
+      }),
+    ).toThrow(/supplier is required/);
+    expect(() =>
+      normalizeCollectionUnit({
+        schemaVersion: 1,
+        unitId: 'unit-1',
         kind: 'store-catalog',
         subject: {},
       }),
@@ -78,6 +86,36 @@ describe('collection contracts', () => {
         subject: { offerId: 'not-an-offer-id' },
       }),
     ).toThrow(/offerId must contain only digits/);
+  });
+
+  it('accepts store-profile as a first-class supplier collection unit', () => {
+    expect(
+      normalizeCollectionUnit({
+        schemaVersion: 1,
+        unitId: 'profile-unit-1',
+        collectionTaskId: 'collection-task-1',
+        kind: 'store-profile',
+        subject: {
+          supplier: {
+            memberId: 'b2b-sanitized-supplier',
+            shopUrl: 'https://fixture-profile.1688.com/#about',
+          },
+        },
+        scope: { requestedScope: 'page' },
+      }),
+    ).toEqual({
+      schemaVersion: 1,
+      unitId: 'profile-unit-1',
+      collectionTaskId: 'collection-task-1',
+      kind: 'store-profile',
+      subject: {
+        supplier: {
+          memberId: 'b2b-sanitized-supplier',
+          shopUrl: 'https://fixture-profile.1688.com/',
+        },
+      },
+      scope: { requestedScope: 'page' },
+    });
   });
 
   it('fingerprints collection semantics without binding a checkpoint to batch limits', () => {
@@ -98,7 +136,8 @@ describe('collection contracts', () => {
     const resumed = {
       ...first,
       unitId: 'unit-retry',
-      taskId: 'task-b',
+      taskId: undefined,
+      collectionTaskId: 'collection-task-b',
       scope: { ...first.scope, maxPagesPerBatch: 5 },
       limits: { maxItems: 150, deadlineMs: 60_000 },
     };
@@ -111,6 +150,35 @@ describe('collection contracts', () => {
         scope: { ...resumed.scope, sort: 'price-asc' },
       }),
     ).not.toBe(fingerprintCollectionUnit(first));
+  });
+
+  it('keeps collection ownership explicit and rejects ambiguous legacy ownership', () => {
+    expect(
+      normalizeCollectionUnit({
+        schemaVersion: 1,
+        unitId: 'unit-owned-1',
+        collectionTaskId: 'collection-task-1',
+        kind: 'store-profile',
+        subject: {
+          supplier: { memberId: 'b2b-sanitized-supplier' },
+        },
+      }),
+    ).toMatchObject({
+      collectionTaskId: 'collection-task-1',
+      kind: 'store-profile',
+    });
+    expect(() =>
+      normalizeCollectionUnit({
+        schemaVersion: 1,
+        unitId: 'unit-ambiguous-1',
+        collectionTaskId: 'collection-task-1',
+        taskId: 'legacy-selection-task-1',
+        kind: 'store-profile',
+        subject: {
+          supplier: { memberId: 'b2b-sanitized-supplier' },
+        },
+      }),
+    ).toThrow(/must not both be set/);
   });
 
   it('normalizes available evidence while preserving the observed value', () => {

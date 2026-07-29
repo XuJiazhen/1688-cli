@@ -33,7 +33,10 @@ import { detectPageState } from '../session/page-state.js';
 import { sanitizeEvidenceRef } from '../session/redaction.js';
 import { waitForCollectionPageAvailability } from '../session/recovery.js';
 import { waitWithDeadline } from '../session/wait.js';
-import { execute as inspectSupplier } from './supplier-inspect.js';
+import {
+  execute as inspectSupplier,
+  resolveSupplierNavigationFromOffer,
+} from './supplier-inspect.js';
 
 const DEFAULT_PAGE_SIZE = 30;
 const DEFAULT_SORT = 'wangpu_score';
@@ -207,6 +210,28 @@ export async function resolveCatalogSupplier(
       ...(supplier.sourceOfferId ? { sourceOfferId: supplier.sourceOfferId } : {}),
     };
   }
+  if (supplier.sourceOfferId) {
+    const navigation = await resolveSupplierNavigationFromOffer(ctx, {
+      offerId: supplier.sourceOfferId,
+      headed,
+    });
+    if (!navigation.shopUrl) {
+      throw new CliError(
+        9,
+        'SUPPLIER_SHOP_URL_MISSING',
+        'The source Offer did not expose a canonical shop URL.',
+      );
+    }
+    return {
+      shopUrl: canonicalShopUrl(navigation.shopUrl),
+      ...(supplier.memberId
+        ? { memberId: supplier.memberId }
+        : navigation.memberId
+          ? { memberId: navigation.memberId }
+          : {}),
+      sourceOfferId: supplier.sourceOfferId,
+    };
+  }
   const target = supplierInspectionTarget(supplier);
   if (!target) throw new CliError(2, 'BAD_INPUT', 'Supplier reference is incomplete.');
   const inspected = await inspectSupplier(ctx, { target, headed });
@@ -220,19 +245,24 @@ export async function resolveCatalogSupplier(
   }
   return {
     shopUrl: canonicalShopUrl(shopUrl),
-    ...(inspected.supplier.memberId ? { memberId: inspected.supplier.memberId } : {}),
-    ...(supplier.sourceOfferId ? { sourceOfferId: supplier.sourceOfferId } : {}),
+    ...(supplier.memberId
+      ? { memberId: supplier.memberId }
+      : inspected.supplier.memberId
+        ? { memberId: inspected.supplier.memberId }
+        : {}),
   };
 }
 
 export function supplierInspectionTarget(
   supplier: NonNullable<CollectionUnit['subject']['supplier']>,
 ): string | null {
+  const sourceOfferId = supplier.sourceOfferId?.trim();
+  if (sourceOfferId) return sourceOfferId;
   const memberId = supplier.memberId?.trim();
   if (memberId && /^b2b-[A-Za-z0-9_-]+$/.test(memberId)) {
     return memberId;
   }
-  return supplier.sourceOfferId?.trim() || memberId || null;
+  return memberId || null;
 }
 
 export function createPlaywrightCatalogAdapter(

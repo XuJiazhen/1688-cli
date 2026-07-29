@@ -302,9 +302,11 @@ node .\dist\cli.js search "修枝剪" --max 30 --deeppro --json --pretty
 cat unit.json | 1688 collect - --json
 ```
 
-六种采集单元覆盖搜索页、店铺目录/分类、供应商资质、商品详情和媒体清单。CLI 只返回事实、
-来源、完整度与恢复状态；选品规则、缓存 TTL、审核池和合格 SKU 目标仍由业务系统负责。
-完整协议见[采集 JSON 合同](./docs/JSON_CONTRACTS.md#collection-protocol-v1)。
+七种采集单元覆盖搜索页、店铺基础档案、店铺目录/分类、供应商资质、商品详情和媒体清单。
+店铺档案优先复用店铺页自然产生的公共头部响应，缺失时通过同一页面的 MTOP Runtime
+做一次有界回退请求；脱敏 fixture 仍可离线重放。CLI 只返回事实、来源、完整度与恢复
+状态；选品规则、缓存 TTL、审核池和合格 SKU 目标仍由业务系统负责。完整协议见
+[采集 JSON 合同](./docs/JSON_CONTRACTS.md#collection-protocol-v1)。
 
 ### 2. 售前询盘 — 向卖家提问
 

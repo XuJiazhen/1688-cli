@@ -22,7 +22,8 @@ import {
 } from '../session/offer-evidence.js';
 import {
   buildOfferMediaManifest,
-  parseOfferDetailsScript,
+  parseOfferDetailsEvidence,
+  type OfferDetailsEvidence,
   type OfferMediaManifest,
 } from '../session/offer-media.js';
 
@@ -72,6 +73,12 @@ export interface OfferResult {
   priceTiers: PriceTier[];
   /** Long-form detail page URL (rich images / text). */
   detailUrl: string | null;
+  /**
+   * Sanitized visible text from offer_details.content. Null means the response
+   * was readable but contained no visible text; omission means the detail
+   * response was not collected or unreadable.
+   */
+  detailText?: string | null;
   /** Product attributes (材质 / 规格 / 产地 ...). Empty when the seller
    *  didn't fill them in. */
   attributes: ProductAttribute[];
@@ -234,12 +241,12 @@ export async function executeRaw(
       ),
     }),
   });
-  const detailMediaCapture = startResponseCapture<OfferMediaManifest>({
+  const offerDetailsCapture = startResponseCapture<OfferDetailsEvidence>({
     page,
     timeoutMs: 18000,
     matcher: OFFER_DETAILS_CONTENT_RE,
     parse: async (resp) =>
-      parseOfferDetailsScript(await resp.text(), resp.url()),
+      parseOfferDetailsEvidence(await resp.text(), resp.url()),
   });
   const onResp = async (resp: PWResponse) => {
     // Probe: save every offerdetail.service response so we can see which
@@ -370,12 +377,12 @@ export async function executeRaw(
       headed: args.headed === true,
     });
 
-    const [sku, shopCardResponse, consignmentResponse, detailMedia, pageInfo] =
+    const [sku, shopCardResponse, consignmentResponse, offerDetails, pageInfo] =
       await Promise.all([
         skuCapture.wait(),
         shopCardCapture.wait(),
         consignmentCapture.wait(),
-        detailMediaCapture.wait(),
+        offerDetailsCapture.wait(),
         readPageInfo(page),
       ]);
     const requiredSku = requireSkuSelectorModel(
@@ -391,16 +398,16 @@ export async function executeRaw(
       pageInfo,
       shopCard,
       consignment,
-      detailMedia,
+      offerDetails,
       shopCardResponse !== null,
       consignmentResponse !== null,
-      detailMediaCapture.diagnostics().matchedCount > 0,
+      offerDetailsCapture.diagnostics().matchedCount > 0,
     );
   } finally {
     skuCapture.dispose();
     shopCardCapture.dispose();
     consignmentCapture.dispose();
-    detailMediaCapture.dispose();
+    offerDetailsCapture.dispose();
     page.off('response', onResp);
   }
 }
@@ -991,7 +998,7 @@ function assemble(
   info: PageInfo,
   shopCard: ShopCardInfo | null,
   consignment: ConsignmentInfo | null,
-  detailMedia: OfferMediaManifest | null,
+  offerDetails: OfferDetailsEvidence | null,
   shopCardResponseObserved: boolean,
   consignmentResponseObserved: boolean,
   detailMediaResponseObserved: boolean,
@@ -1082,7 +1089,7 @@ function assemble(
     mainImage: fallbackImage,
     images: info.images,
     skuImages: skus.map((skuItem) => skuItem.image),
-    detail: detailMedia,
+    detail: offerDetails?.media ?? null,
   });
 
   return {
@@ -1097,6 +1104,9 @@ function assemble(
     mixOrderQty: parseIntOrNull(String(trade?.mixModel?.mixAmount ?? '')),
     priceTiers,
     detailUrl: info.detailUrl,
+    ...(offerDetails !== null && Object.hasOwn(offerDetails, 'detailText')
+      ? { detailText: offerDetails.detailText }
+      : {}),
     attributes: info.attributes,
     packageInfo: info.packageInfo,
     supplier: {
@@ -1129,7 +1139,7 @@ function assemble(
       consignmentResponseObserved,
       consignmentCaptured: consignment !== null,
       detailMediaResponseObserved,
-      detailMediaCaptured: detailMedia?.availability === 'available',
+      detailMediaCaptured: offerDetails?.media.availability === 'available',
     },
   };
 }

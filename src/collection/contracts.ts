@@ -5,6 +5,7 @@ export const COLLECTION_SCHEMA_VERSION = 1 as const;
 
 export const COLLECTION_KINDS = [
   'search-page',
+  'store-profile',
   'store-catalog',
   'store-categories',
   'store-qualification',
@@ -46,6 +47,7 @@ export interface CollectionLimits {
 export interface CollectionUnit {
   schemaVersion: typeof COLLECTION_SCHEMA_VERSION;
   unitId: string;
+  collectionTaskId?: string;
   taskId?: string;
   kind: CollectionKind;
   subject: CollectionSubject;
@@ -174,11 +176,22 @@ export function normalizeCollectionUnit(value: unknown): CollectionUnit {
   const subject = normalizeSubject(record.subject, kind);
   const scope = record.scope === undefined ? undefined : normalizeScope(record.scope);
   const limits = record.limits === undefined ? undefined : normalizeLimits(record.limits);
+  const collectionTaskId = optionalString(
+    record.collectionTaskId,
+    'CollectionUnit.collectionTaskId',
+  );
+  const taskId = optionalString(record.taskId, 'CollectionUnit.taskId');
+  if (collectionTaskId !== undefined && taskId !== undefined) {
+    invalid(
+      'CollectionUnit.collectionTaskId and legacy taskId must not both be set.',
+    );
+  }
 
   return omitUndefined({
     schemaVersion: COLLECTION_SCHEMA_VERSION,
     unitId: requireString(record.unitId, 'CollectionUnit.unitId'),
-    taskId: optionalString(record.taskId, 'CollectionUnit.taskId'),
+    collectionTaskId,
+    taskId,
     kind,
     subject,
     scope,
@@ -539,7 +552,8 @@ function normalizeSubject(value: unknown, kind: CollectionKind): CollectionSubje
     invalid('CollectionUnit.subject.keyword is required for search-page.');
   }
   if (
-    (kind === 'store-catalog' ||
+    (kind === 'store-profile' ||
+      kind === 'store-catalog' ||
       kind === 'store-categories' ||
       kind === 'store-qualification') &&
     subject.supplier === undefined

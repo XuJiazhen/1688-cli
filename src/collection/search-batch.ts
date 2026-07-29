@@ -535,6 +535,7 @@ export function createSearchPageBatch(
       page: input.page,
       remoteSort: input.remoteSort,
       remotePageSize: SEARCH_REMOTE_PAGE_SIZE,
+      remoteHasMore,
     },
     observations,
     completeness: {

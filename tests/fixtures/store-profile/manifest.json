@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-07-28T00:00:00.000Z",
+  "parserVersion": "store-profile-v1",
+  "source": "sanitized-minimal-derivative-of-existing-shop-card-fixture",
+  "allowedTopLevelFields": [
+    "api",
+    "data",
+    "ret"
+  ],
+  "fixtures": {
+    "basic.json": "modern offer shop-card derivative for backwards-compatible fixture replay",
+    "common-header.json": "sanitized current Store-page common-header profile response"
+  }
+}

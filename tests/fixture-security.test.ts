@@ -28,7 +28,11 @@ describe('committed replay fixtures', () => {
   it('keeps JSON fixture payloads within each directory allowlist', async () => {
     const root = path.join(process.cwd(), 'tests', 'fixtures');
     const violations: string[] = [];
-    for (const directory of ['store-catalog', 'store-qualification']) {
+    for (const directory of [
+      'store-catalog',
+      'store-profile',
+      'store-qualification',
+    ]) {
       const fixtureDirectory = path.join(root, directory);
       const manifest = JSON.parse(
         await readFile(path.join(fixtureDirectory, 'manifest.json'), 'utf8'),

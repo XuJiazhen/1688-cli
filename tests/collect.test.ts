@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createFixtureCollectionRuntime,
   createPlaywrightCollectionRuntime,
+  collectStoreProfileUnit,
   executeCollectCommand,
   executeCollectionUnit,
   navigateAndResolveQualificationMember,
@@ -27,6 +28,19 @@ const catalogUnit: CollectionUnit = {
   kind: 'store-catalog',
   subject: { supplier: { memberId: 'b2b-fixture-supplier' } },
   scope: { requestedScope: 'page', pageSize: 2, maxPagesPerBatch: 1 },
+};
+
+const storeProfileUnit: CollectionUnit = {
+  schemaVersion: 1,
+  unitId: 'collect-store-profile-1',
+  kind: 'store-profile',
+  subject: {
+    supplier: {
+      memberId: 'b2b-fixture-supplier',
+      shopUrl: 'https://fixture-profile.1688.com/',
+    },
+  },
+  scope: { requestedScope: 'page' },
 };
 
 function searchOffer(offerId: string): Offer {
@@ -160,6 +174,67 @@ class QualificationCollectionPage extends EventEmitter {
   async close(): Promise<void> {}
 }
 
+class StoreProfileCollectionPage extends EventEmitter {
+  runtimeRequestCount = 0;
+  private currentUrl = 'https://fixture-profile.1688.com/';
+
+  constructor(
+    private readonly payload: unknown,
+    private readonly natural: boolean,
+    private readonly emitRuntimeResponse = false,
+    private readonly rejectRuntimeRequest = false,
+  ) {
+    super();
+  }
+
+  async goto(url: string): Promise<null> {
+    this.currentUrl = url;
+    if (this.natural) {
+      this.emit(
+        'response',
+        storeProfileResponse('b2b-fixture-supplier', this.payload),
+      );
+    }
+    return null;
+  }
+
+  url(): string {
+    return this.currentUrl;
+  }
+
+  async title(): Promise<string> {
+    return 'Fixture supplier shop';
+  }
+
+  isClosed(): boolean {
+    return false;
+  }
+
+  async waitForFunction(): Promise<void> {}
+
+  async evaluate(
+    _pageFunction: unknown,
+    runtimeRequest?: unknown,
+  ): Promise<unknown> {
+    if (runtimeRequest !== undefined) {
+      this.runtimeRequestCount += 1;
+      if (this.emitRuntimeResponse) {
+        this.emit(
+          'response',
+          storeProfileResponse('b2b-fixture-supplier', this.payload),
+        );
+      }
+      if (this.rejectRuntimeRequest) {
+        throw new Error('fixture runtime Promise rejected');
+      }
+      return this.payload;
+    }
+    return 'Fixture supplier shop';
+  }
+
+  async close(): Promise<void> {}
+}
+
 function qualificationMemberResponse(
   payload: unknown,
   memberId: string,
@@ -200,6 +275,27 @@ function qualificationResponse(
           certList: [],
         },
       }),
+  } as unknown as PWResponse;
+}
+
+function storeProfileResponse(
+  memberId: string,
+  payload: unknown,
+): PWResponse {
+  const data = {
+    componentKey: 'wp_pc_common_header',
+    params: JSON.stringify({
+      memberId,
+      appdata: { version: '2025V2' },
+    }),
+  };
+  const url =
+    `https://h5api.m.1688.com/h5/${ALISITE_MODULE_API}/1.0/` +
+    `?data=${encodeURIComponent(JSON.stringify(data))}`;
+  return {
+    url: () => url,
+    request: () => ({ postData: () => null }),
+    text: async () => JSON.stringify(payload),
   } as unknown as PWResponse;
 }
 
@@ -298,6 +394,190 @@ describe('collect entry', () => {
       '900000000202',
     ]);
     expect(batch.rawEvidenceRefs).toEqual(['fixture:catalog:page:1']);
+  });
+
+  it('replays a store-profile fixture without launching a browser or inventing location facts', async () => {
+    const batch = await executeCollectCommand({
+      unit: JSON.stringify(storeProfileUnit),
+      fixture: path.join(
+        process.cwd(),
+        'tests/fixtures/store-profile/basic.json',
+      ),
+      requestId: 'attempt:store-profile-fixture',
+    });
+
+    expect(batch).toMatchObject({
+      sourceRequestId: 'attempt:store-profile-fixture',
+      kind: 'store-profile',
+      status: 'completed',
+      observations: [
+        {
+          name: {
+            availability: 'available',
+            value: '脱敏电动工具商行',
+          },
+          region: { availability: 'not-present', value: null },
+          address: { availability: 'not-present', value: null },
+        },
+      ],
+    });
+    expect(batch.checkpoint).toBeUndefined();
+    expect(batch.rawEvidenceRefs).toEqual(['fixture:store-profile']);
+  });
+
+  it('collects the natural Store-page common-header response without an active request', async () => {
+    const payload = JSON.parse(
+      await readFile(
+        path.join(
+          process.cwd(),
+          'tests/fixtures/store-profile/common-header.json',
+        ),
+        'utf8',
+      ),
+    );
+    const page = new StoreProfileCollectionPage(payload, true);
+    const context = {
+      newPage: async () => page,
+    } as unknown as BrowserContext;
+
+    const batch = await executeCollectionUnit({
+      unit: storeProfileUnit,
+      runtime: createPlaywrightCollectionRuntime(context, false),
+    });
+
+    expect(batch).toMatchObject({
+      kind: 'store-profile',
+      status: 'completed',
+      observations: [
+        {
+          name: {
+            availability: 'available',
+            value: '脱敏五金工具有限公司',
+          },
+          region: {
+            availability: 'available',
+            value: '浙江省 杭州市',
+          },
+        },
+      ],
+    });
+    expect(page.runtimeRequestCount).toBe(0);
+    expect(page.listenerCount('response')).toBe(0);
+    expect(batch.rawEvidenceRefs[0]).toMatch(
+      /h5\/mtop\.alibaba\.alisite\.cbu\.server\.moduleasyncservice\/1\.0\//,
+    );
+  });
+
+  it('falls back to the same Store-page MTOP runtime after natural capture is absent', async () => {
+    const payload = JSON.parse(
+      await readFile(
+        path.join(
+          process.cwd(),
+          'tests/fixtures/store-profile/common-header.json',
+        ),
+        'utf8',
+      ),
+    );
+    const page = new StoreProfileCollectionPage(payload, false);
+    const context = {
+      newPage: async () => page,
+    } as unknown as BrowserContext;
+
+    const batch = await collectStoreProfileUnit(
+      context,
+      storeProfileUnit,
+      undefined,
+      false,
+      {
+        naturalCaptureTimeoutMs: 2,
+        runtimeCaptureTimeoutMs: 2,
+        runtimeReadyTimeoutMs: 5,
+        runtimeRequestTimeoutMs: 5,
+      },
+    );
+
+    expect(batch).toMatchObject({
+      kind: 'store-profile',
+      status: 'completed',
+      observations: [
+        {
+          name: {
+            availability: 'available',
+            value: '脱敏五金工具有限公司',
+          },
+        },
+      ],
+    });
+    expect(page.runtimeRequestCount).toBe(1);
+    expect(page.listenerCount('response')).toBe(0);
+    expect(batch.rawEvidenceRefs).toEqual([
+      'mtop:mtop.alibaba.alisite.cbu.server.moduleasyncservice:wp_pc_common_header',
+    ]);
+  });
+
+  it('preserves risk-control semantics from a natural store-profile response', async () => {
+    const page = new StoreProfileCollectionPage(
+      { ret: ['FAIL_SYS_USER_VALIDATE::验证失败'] },
+      true,
+    );
+    const context = {
+      newPage: async () => page,
+    } as unknown as BrowserContext;
+
+    const batch = await executeCollectionUnit({
+      unit: storeProfileUnit,
+      runtime: createPlaywrightCollectionRuntime(context, false),
+    });
+
+    expect(batch).toMatchObject({
+      kind: 'store-profile',
+      status: 'blocked',
+      actionRequired: { type: 'risk-control' },
+      errors: [{ code: 'RISK_CONTROL', retryable: true }],
+      checkpoint: {
+        nextPage: 1,
+        pendingKeys: ['page:1'],
+      },
+    });
+  });
+
+  it('prefers a correlated fallback risk response when the runtime Promise rejects', async () => {
+    const page = new StoreProfileCollectionPage(
+      { ret: ['FAIL_SYS_USER_VALIDATE::验证失败'] },
+      false,
+      true,
+      true,
+    );
+    const context = {
+      newPage: async () => page,
+    } as unknown as BrowserContext;
+    const runtime: CollectionRuntime = {
+      collect: (unit, checkpoint) =>
+        collectStoreProfileUnit(
+          context,
+          unit,
+          checkpoint,
+          false,
+          {
+            naturalCaptureTimeoutMs: 2,
+            runtimeCaptureTimeoutMs: 10,
+            runtimeReadyTimeoutMs: 5,
+            runtimeRequestTimeoutMs: 5,
+          },
+        ),
+    };
+
+    const batch = await executeCollectionUnit({
+      unit: storeProfileUnit,
+      runtime,
+    });
+
+    expect(batch).toMatchObject({
+      status: 'blocked',
+      errors: [{ code: 'RISK_CONTROL', retryable: true }],
+    });
+    expect(page.runtimeRequestCount).toBe(1);
+    expect(page.listenerCount('response')).toBe(0);
   });
 
   it('attaches an injected requestId to a fixture batch for correlation', async () => {

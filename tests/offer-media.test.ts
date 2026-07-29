@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   buildOfferMediaManifest,
+  parseOfferDetailsEvidence,
   parseOfferDetailsScript,
 } from '../src/session/offer-media.js';
 
@@ -66,6 +67,30 @@ describe('parseOfferDetailsScript', () => {
         },
       ],
     });
+  });
+
+  it('extracts sanitized visible detail text from the same captured response', () => {
+    const result = parseOfferDetailsEvidence(
+      String.raw`var offer_details={content:'<style>.hidden{display:none}</style><h2>灭火器&nbsp;说明</h2><p>适用温度：&#45;20℃ <strong>至 55℃</strong></p><script>secret()</script><p>请直立使用<br>远离火源</p><img src="//img.example.test/detail.jpg">'};`,
+    );
+
+    expect(result.detailText).toBe(
+      '灭火器 说明\n适用温度：-20℃ 至 55℃\n请直立使用\n远离火源',
+    );
+    expect(result.media.items).toHaveLength(1);
+  });
+
+  it('distinguishes readable image-only content from unreadable content', () => {
+    const imageOnly = parseOfferDetailsEvidence(
+      `var offer_details={content:'<p><img src="//img.example.test/detail.jpg"></p>'};`,
+    );
+    const unreadable = parseOfferDetailsEvidence(
+      'var offer_details={content:{html:"not a string"}};',
+    );
+
+    expect(imageOnly).toHaveProperty('detailText', null);
+    expect(unreadable).not.toHaveProperty('detailText');
+    expect(unreadable.media.availability).toBe('failed');
   });
 
   it.each([

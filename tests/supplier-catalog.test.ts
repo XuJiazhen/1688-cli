@@ -1,7 +1,22 @@
 import { readFile } from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
-import type { Page, Response as PWResponse } from 'playwright';
-import { describe, expect, it } from 'vitest';
+import type {
+  BrowserContext,
+  Page,
+  Response as PWResponse,
+} from 'playwright';
+import { describe, expect, it, vi } from 'vitest';
+
+const { inspectSupplierMock, resolveSupplierNavigationMock } = vi.hoisted(() => ({
+  inspectSupplierMock: vi.fn(),
+  resolveSupplierNavigationMock: vi.fn(),
+}));
+
+vi.mock('../src/commands/supplier-inspect.js', () => ({
+  execute: inspectSupplierMock,
+  resolveSupplierNavigationFromOffer: resolveSupplierNavigationMock,
+}));
+
 import {
   buildStoreCatalogUrl,
   catalogSortInteraction,
@@ -10,6 +25,7 @@ import {
   normalizeCatalogTransport,
   normalizeCatalogTarget,
   planCatalogNavigation,
+  resolveCatalogSupplier,
   supplierInspectionTarget,
 } from '../src/commands/supplier-catalog.js';
 import {
@@ -264,7 +280,7 @@ describe('supplier catalog command helpers', () => {
     expect(() => normalizeCatalogTarget('seller-login-id')).toThrow(/offerId.*memberId.*shop URL/i);
   });
 
-  it('falls back to the source offer for member values that cannot be inspected directly', () => {
+  it('prefers a source Offer navigation hint over direct member inspection', () => {
     expect(
       supplierInspectionTarget({
         memberId: 'seller-login-id',
@@ -282,7 +298,48 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-valid-member',
         sourceOfferId: '9876543210',
       }),
+    ).toBe('9876543210');
+    expect(
+      supplierInspectionTarget({
+        memberId: 'b2b-valid-member',
+      }),
     ).toBe('b2b-valid-member');
+  });
+
+  it('keeps the stable member identity when a source Offer resolves navigation', async () => {
+    inspectSupplierMock.mockReset();
+    resolveSupplierNavigationMock.mockReset();
+    resolveSupplierNavigationMock.mockResolvedValue({
+      memberId: 'b2b-inspected-alias',
+      shopUrl: 'https://resolved-shop.1688.com/page/index.html',
+    });
+
+    const result = await resolveCatalogSupplier(
+      {} as BrowserContext,
+      {
+        schemaVersion: 1,
+        unitId: 'catalog-source-offer',
+        kind: 'store-catalog',
+        subject: {
+          supplier: {
+            memberId: 'b2b-stable-store',
+            sourceOfferId: '9876543210',
+          },
+        },
+      },
+      false,
+    );
+
+    expect(resolveSupplierNavigationMock).toHaveBeenCalledWith(
+      expect.anything(),
+      { offerId: '9876543210', headed: false },
+    );
+    expect(inspectSupplierMock).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      memberId: 'b2b-stable-store',
+      shopUrl: 'https://resolved-shop.1688.com/',
+      sourceOfferId: '9876543210',
+    });
   });
 
   it('builds all-products, category, and keyword URLs on the resolved shop origin', () => {

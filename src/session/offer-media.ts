@@ -23,11 +23,17 @@ export interface OfferMediaManifest {
   }>;
 }
 
-export function parseOfferDetailsScript(
+export interface OfferDetailsEvidence {
+  media: OfferMediaManifest;
+  /** Present only when offer_details.content was readable. */
+  detailText?: string | null;
+}
+
+export function parseOfferDetailsEvidence(
   script: string,
   sourceUrl = 'offer_details.content',
   collectedAt = new Date().toISOString(),
-): OfferMediaManifest {
+): OfferDetailsEvidence {
   const source: EvidenceSource = {
     sourceType: 'offer-payload',
     fieldPath: 'offer_details.content',
@@ -41,13 +47,15 @@ export function parseOfferDetailsScript(
   const content = readContentString(script);
   if (content === null) {
     return {
-      availability: 'failed',
-      items: [],
-      source,
-      warnings: [{
-        code: 'OFFER_DETAILS_CONTENT_UNREADABLE',
-        message: 'offer_details.content was not found or was not a supported string literal.',
-      }],
+      media: {
+        availability: 'failed',
+        items: [],
+        source,
+        warnings: [{
+          code: 'OFFER_DETAILS_CONTENT_UNREADABLE',
+          message: 'offer_details.content was not found or was not a supported string literal.',
+        }],
+      },
     };
   }
 
@@ -80,11 +88,22 @@ export function parseOfferDetailsScript(
   }
 
   return {
-    availability: items.length > 0 ? 'available' : 'not-present',
-    items,
-    source,
-    warnings,
+    media: {
+      availability: items.length > 0 ? 'available' : 'not-present',
+      items,
+      source,
+      warnings,
+    },
+    detailText: extractVisibleDetailText(content),
   };
+}
+
+export function parseOfferDetailsScript(
+  script: string,
+  sourceUrl = 'offer_details.content',
+  collectedAt = new Date().toISOString(),
+): OfferMediaManifest {
+  return parseOfferDetailsEvidence(script, sourceUrl, collectedAt).media;
 }
 
 export function buildOfferMediaManifest(input: {
@@ -189,10 +208,47 @@ function normalizeRemoteMediaUrl(value: string): string | null {
   }
 }
 
+function extractVisibleDetailText(content: string): string | null {
+  const text = content
+    .replace(/<!--[\s\S]*?-->/gu, ' ')
+    .replace(
+      /<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/giu,
+      ' ',
+    )
+    .replace(/<(?:br|hr)\b[^>]*\/?>/giu, '\n')
+    .replace(
+      /<\/?(?:address|article|aside|blockquote|div|dl|dt|dd|fieldset|figcaption|figure|footer|form|h[1-6]|header|li|main|nav|ol|p|pre|section|table|tbody|td|tfoot|th|thead|tr|ul)\b[^>]*>/giu,
+      '\n',
+    )
+    .replace(/<[^>]*>/gu, ' ');
+  const normalized = decodeHtmlEntities(text)
+    .replace(/\r\n?/gu, '\n')
+    .replace(/[\t\f\v \u00a0]+/gu, ' ')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join('\n');
+  return normalized || null;
+}
+
 function decodeHtmlEntities(value: string): string {
   return value
+    .replace(/&#(?:x([0-9a-f]+)|([0-9]+));?/giu, (entity, hex, decimal) => {
+      const codePoint = Number.parseInt(hex ?? decimal, hex ? 16 : 10);
+      return Number.isInteger(codePoint) &&
+        codePoint > 0 &&
+        codePoint <= 0x10ffff &&
+        !(codePoint >= 0xd800 && codePoint <= 0xdfff)
+        ? String.fromCodePoint(codePoint)
+        : entity;
+    })
+    .replaceAll('&nbsp;', ' ')
+    .replaceAll('&ensp;', ' ')
+    .replaceAll('&emsp;', ' ')
+    .replaceAll('&thinsp;', ' ')
     .replaceAll('&amp;', '&')
     .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
     .replaceAll('&#39;', "'")
     .replaceAll('&lt;', '<')
     .replaceAll('&gt;', '>');

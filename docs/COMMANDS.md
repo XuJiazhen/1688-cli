@@ -147,12 +147,23 @@ checkpoint both in the envelope and with `--checkpoint` is invalid.
 artifact directory. It must contain at most 128 letters, digits, `.`, `_`,
 `:`, or `-`.
 
-Supported kinds are `search-page`, `store-catalog`, `store-categories`,
-`store-qualification`, `offer-detail`, and `offer-media-manifest`. For
+Supported kinds are `search-page`, `store-profile`, `store-catalog`,
+`store-categories`, `store-qualification`, `offer-detail`, and
+`offer-media-manifest`. For
 deterministic development, `--fixture <file>` runs the same collection
 contract without a browser. The result is one `CollectionBatch`; collection
 does not evaluate selection rules or decide when a business task has reached
 its qualified-SKU target. See [JSON_CONTRACTS.md](JSON_CONTRACTS.md#collection-protocol-v1).
+
+`store-profile` uses an upstream supplier shop URL when one is present.
+Otherwise it first resolves a canonical shop URL from a safe `b2b-*`
+`memberId` or `sourceOfferId`; unresolved identities fail closed before Store
+Profile collection. Live collection then reuses the Store page's natural
+`wp_pc_common_header` response and uses that page's active MTOP Runtime as a
+bounded fallback when a safe `memberId` is available. Source-offer inspection
+is only an identity bootstrap, not a source of profile facts. Matched-source
+omissions are explicit `not-present`; parse failures remain `failed` and
+checkpointed.
 
 For `search-page`, 1688 still returns fixed 60-offer remote pages.
 `scope.pageSize` and `limits.maxItems` limit only the deterministic subset

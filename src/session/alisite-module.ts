@@ -603,7 +603,7 @@ function safePayloadSummary(
   };
 }
 
-function classifyAlisitePayloadState(
+export function classifyAlisitePayloadState(
   payload: unknown,
 ): 'risk_control' | 'rate_limited' | 'not_logged_in' | undefined {
   const root = recordOrNull(payload);

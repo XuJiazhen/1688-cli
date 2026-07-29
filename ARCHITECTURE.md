@@ -79,9 +79,9 @@ by `scripts/generate_agent_context.mjs`.
 
 - Sourcing: `search`, `similar`, `image-search`, `offer`, `supplier search`,
   `supplier research`, `supplier inspect`, `supplier catalog`.
-- Production fact collection: `collect` with `search-page`, `store-catalog`,
-  `store-categories`, `store-qualification`, `offer-detail`, and
-  `offer-media-manifest` units.
+- Production fact collection: `collect` with `search-page`, `store-profile`,
+  `store-catalog`, `store-categories`, `store-qualification`, `offer-detail`,
+  and `offer-media-manifest` units.
 - Pre-sale seller IM: `seller inquire`, `seller messages --offer`.
 - Cart: `cart list`, `cart add`, `cart remove`.
 - Checkout: `checkout prepare`, `checkout confirm`.
@@ -128,6 +128,13 @@ replaying prior DOM pagination. A bounded, explicit DOM transport remains for
 diagnosis and rollback; `auto` uses it only after an allowed Runtime failure
 and records the fallback. Qualification collection uses the same
 page-owned-authentication boundary.
+
+`store-profile` listens for the Store page's own `wp_pc_common_header`
+Alisite response during navigation. If the page did not naturally request it,
+the collector uses that same page's active MTOP Runtime for one lightweight
+common-header request; it never opens Offer Detail solely for profile facts.
+Every supported field keeps its raw source path and is `not-present` when the
+matched source omitted it or `failed` when the source could not be parsed.
 
 ## Generated Context
 

@@ -117,6 +117,10 @@ describe('incremental search batches', () => {
         collectedAt: '2026-07-22T02:00:00.000Z',
       },
     ]);
+    expect(batch.scope).toMatchObject({
+      page: 1,
+      remoteHasMore: true,
+    });
     expect(batch.checkpoint).toMatchObject({
       nextPage: 2,
       completedPages: [1],
@@ -205,6 +209,7 @@ describe('incremental search batches', () => {
 
     expect(first).toMatchObject({
       status: 'partial',
+      scope: { page: 1, remoteHasMore: false },
       observations: [{ offerId: '1101', pageRank: 1, rawRank: 1 }],
       completeness: { state: 'truncated', uniqueItems: 1 },
       checkpoint: {

@@ -37,6 +37,11 @@ export interface SupplierInspectArgs {
   headed?: boolean;
 }
 
+export interface SupplierNavigationResolution {
+  memberId: string | null;
+  shopUrl: string | null;
+}
+
 export interface SupplierTarget {
   input: string;
   type: 'offerId' | 'memberId';
@@ -166,6 +171,35 @@ export async function execute(
     ctx,
     { cmd: 'supplier-inspect', args },
     () => executeRaw(ctx, args),
+    { headed: args.headed === true, maxRetries: 1 },
+  );
+}
+
+export async function resolveSupplierNavigationFromOffer(
+  ctx: BrowserContext,
+  args: { offerId: string; headed?: boolean },
+): Promise<SupplierNavigationResolution> {
+  if (!/^\d+$/.test(args.offerId)) {
+    throw new CliError(2, 'BAD_INPUT', `Invalid offerId: ${args.offerId}`);
+  }
+  return withRecovery(
+    ctx,
+    { cmd: 'supplier-navigation-from-offer', args },
+    async () => {
+      const probe = await inspectOfferTarget(
+        ctx,
+        args.offerId,
+        args.headed === true,
+      );
+      return {
+        memberId:
+          probe.seller?.memberId ??
+          (probe.shopCard?.factoryCardUrl
+            ? extractMemberIdFromUrl(probe.shopCard.factoryCardUrl)
+            : null),
+        shopUrl: probe.seller?.shopUrl ?? probe.shopCard?.url ?? null,
+      };
+    },
     { headed: args.headed === true, maxRetries: 1 },
   );
 }
