@@ -1088,7 +1088,10 @@ function assemble(
     offerId,
     mainImage: fallbackImage,
     images: info.images,
-    skuImages: skus.map((skuItem) => skuItem.image),
+    skus: skus.map((skuItem) => ({
+      skuId: skuItem.skuId,
+      image: skuItem.image,
+    })),
     detail: offerDetails?.media ?? null,
   });
 

@@ -4,11 +4,13 @@ import { redactUrlForDiagnostics } from './redaction.js';
 export const OFFER_MEDIA_PARSER_VERSION = '1' as const;
 
 export interface OfferMediaRef {
-  role: 'main' | 'sku' | 'detail';
+  role: 'main' | 'gallery' | 'sku' | 'detail';
   order: number;
   originalUrl: string;
   normalizedUrl: string;
   sourceField: string;
+  /** Present for SKU media so downstream storage can preserve ownership. */
+  skuId?: string;
 }
 
 export interface OfferMediaManifest {
@@ -110,7 +112,7 @@ export function buildOfferMediaManifest(input: {
   offerId: string;
   mainImage: string | null;
   images: string[];
-  skuImages: Array<string | null>;
+  skus: Array<{ skuId: string; image: string | null }>;
   detail: OfferMediaManifest | null;
   collectedAt?: string;
 }): OfferMediaManifest {
@@ -131,6 +133,7 @@ export function buildOfferMediaManifest(input: {
     originalUrl: string | null,
     order: number,
     sourceField: string,
+    skuId?: string,
   ) => {
     if (!originalUrl) return;
     const normalizedUrl = normalizeRemoteMediaUrl(originalUrl);
@@ -143,15 +146,27 @@ export function buildOfferMediaManifest(input: {
       });
       return;
     }
-    const key = `${role}:${normalizedUrl}`;
+    const key = `${role}:${skuId ?? ''}:${normalizedUrl}`;
     if (seenByRole.has(key)) return;
     seenByRole.add(key);
-    items.push({ role, order, originalUrl, normalizedUrl, sourceField });
+    items.push({
+      role,
+      order,
+      originalUrl,
+      normalizedUrl,
+      sourceField,
+      ...(skuId === undefined ? {} : { skuId }),
+    });
   };
 
-  add('main', input.mainImage, 0, 'gallery.mainImage');
-  input.images.forEach((url, order) => add('main', url, order, 'gallery.mainImage'));
-  input.skuImages.forEach((url, order) => add('sku', url, order, 'skuProps.imageUrl'));
+  const primary = input.mainImage ?? input.images[0] ?? null;
+  add('main', primary, 0, 'gallery.mainImage');
+  input.images
+    .filter((url) => normalizeRemoteMediaUrl(url) !== normalizeRemoteMediaUrl(primary ?? ''))
+    .forEach((url, order) => add('gallery', url, order, 'gallery.images'));
+  input.skus.forEach((sku, order) =>
+    add('sku', sku.image, order, 'skuProps.imageUrl', sku.skuId)
+  );
   items.push(...(input.detail?.items ?? []));
 
   return {

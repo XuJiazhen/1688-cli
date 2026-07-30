@@ -118,11 +118,41 @@ describe('parseOfferDetailsScript', () => {
         'https://img.example.test/main.jpg',
         'https://img.example.test/alternate.jpg',
       ],
-      skuImages: ['https://img.example.test/main.jpg'],
+      skus: [{
+        skuId: 'sku-1',
+        image: 'https://img.example.test/main.jpg',
+      }],
       detail: null,
     });
 
-    expect(manifest.items.filter((item) => item.role === 'main')).toHaveLength(2);
-    expect(manifest.items.filter((item) => item.role === 'sku')).toHaveLength(1);
+    expect(manifest.items.filter((item) => item.role === 'main')).toHaveLength(1);
+    expect(manifest.items.filter((item) => item.role === 'gallery')).toHaveLength(1);
+    expect(manifest.items.filter((item) => item.role === 'sku')).toEqual([
+      expect.objectContaining({ skuId: 'sku-1' }),
+    ]);
+  });
+
+  it('preserves distinct SKU owners when variants share an image URL', () => {
+    const manifest = buildOfferMediaManifest({
+      offerId: '900000000002',
+      mainImage: 'https://img.example.test/main.jpg',
+      images: [],
+      skus: [
+        {
+          skuId: 'sku-1',
+          image: 'https://img.example.test/shared.jpg',
+        },
+        {
+          skuId: 'sku-2',
+          image: 'https://img.example.test/shared.jpg',
+        },
+      ],
+      detail: null,
+    });
+
+    expect(manifest.items.filter((item) => item.role === 'sku')).toEqual([
+      expect.objectContaining({ skuId: 'sku-1', order: 0 }),
+      expect.objectContaining({ skuId: 'sku-2', order: 1 }),
+    ]);
   });
 });

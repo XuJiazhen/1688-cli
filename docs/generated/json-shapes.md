@@ -116,7 +116,7 @@ This is a heuristic index of exported TypeScript interfaces that are likely to m
 | `ConsignmentPrice` | `src/session/offer-evidence.ts` | `text: string \| null;`<br>`price: number \| null;`<br>`minimumQuantity: number \| null;` |
 | `OfferDetailsEvidence` | `src/session/offer-media.ts` | `media: OfferMediaManifest;`<br>`/** Present only when offer_details.content was readable. */`<br>`detailText?: string \| null;` |
 | `OfferMediaManifest` | `src/session/offer-media.ts` | `availability: 'available' \| 'not-present' \| 'failed';`<br>`items: OfferMediaRef[];`<br>`source: EvidenceSource;`<br>`warnings: Array<{`<br>`code: string;`<br>`message: string;`<br>`order?: number;`<br>`originalUrl?: string;` |
-| `OfferMediaRef` | `src/session/offer-media.ts` | `role: 'main' \| 'sku' \| 'detail';`<br>`order: number;`<br>`originalUrl: string;`<br>`normalizedUrl: string;`<br>`sourceField: string;` |
+| `OfferMediaRef` | `src/session/offer-media.ts` | `role: 'main' \| 'gallery' \| 'sku' \| 'detail';`<br>`order: number;`<br>`originalUrl: string;`<br>`normalizedUrl: string;`<br>`sourceField: string;`<br>`/** Present for SKU media so downstream storage can preserve ownership. */`<br>`skuId?: string;` |
 | `SupplierQualificationCaptureResult` | `src/session/qualification-capture.ts` | `actionResult: TResult;`<br>`qualification: SupplierQualification \| null;`<br>`diagnostics: ResponseCaptureDiagnostics;` |
 | `ResponseCaptureActionResult` | `src/session/response-capture.ts` | `actionResult: TResult;`<br>`response: T \| null;`<br>`diagnostics: ResponseCaptureDiagnostics;` |
 | `ResponseCaptureEmptyResult` | `src/session/response-capture.ts` | `at: string;`<br>`url: string;` |

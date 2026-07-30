@@ -349,6 +349,37 @@ describe('parseStoreCatalogModule', () => {
     );
   });
 
+  it('accepts an omitted offerList only when offerCount explicitly reports zero', () => {
+    const parsed = parseStoreCatalogModule({
+      data: {
+        content: {
+          offerCount: 0,
+          offerSumm: { offersCount: '98' },
+        },
+      },
+    }, {
+      memberId: 'b2b-fixture-zero-result',
+      pageNum: 1,
+      pageSize: 30,
+      keyword: '暖炉',
+    });
+
+    expect(parsed).toMatchObject({
+      kind: 'offer-list',
+      offerCount: 0,
+      totalPages: 0,
+      offers: [],
+      page: {
+        memberId: 'b2b-fixture-zero-result',
+        pageNum: 1,
+        keyword: '暖炉',
+      },
+    });
+    expect(() => parseStoreCatalogModule({
+      data: { content: { offerCount: 1 } },
+    })).toThrow(AlisiteSchemaError);
+  });
+
   it.each([
     ['category-filter', { categoryId: 'fixture-category-tools' }],
     ['keyword-search', { keyword: '工具' }],
@@ -711,6 +742,40 @@ describe('startAlisiteModuleCapture', () => {
     expect(diagnosticsText).toContain(ALISITE_MODULE_API);
     expect(diagnosticsText).not.toContain('fixture-secret');
     expect(diagnosticsText).not.toContain('pageNum');
+  });
+
+  it('retains only safe catalog counts when a matching response omits offerList', async () => {
+    const mockPage = page();
+    const capture = startAlisiteModuleCapture({
+      page: mockPage,
+      targets: [
+        {
+          id: 'catalog',
+          componentKey: STORE_CATALOG_COMPONENT_KEY,
+          request: { pageNum: 1 },
+        },
+      ],
+    });
+
+    const wait = capture.wait({ timeoutMs: 10, intervalMs: 1 });
+    mockPage.emitResponse(
+      response(alisiteUrl({ pageNum: 1 }), {
+        ret: ['SUCCESS::ok'],
+        data: {
+          content: {
+            offerCount: 12,
+            offerSumm: { offersCount: '12', secret: 'must-not-persist' },
+          },
+        },
+      }),
+    );
+
+    const result = await wait;
+    expect(result.diagnostics.failures[0]?.payloadSummary).toMatchObject({
+      offerCount: 12,
+      offerSummaryCount: 12,
+    });
+    expect(JSON.stringify(result)).not.toContain('must-not-persist');
   });
 
   it('reports timeout, cancellation, page close, and disposal distinctly', async () => {

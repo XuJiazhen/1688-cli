@@ -991,7 +991,7 @@ function offerFromMediaFixture(
       offerId,
       mainImage: null,
       images: [],
-      skuImages: [],
+      skus: [],
       detail,
       collectedAt,
     }),

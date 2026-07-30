@@ -81,6 +81,8 @@ export interface AlisiteModuleCaptureFailure {
     dataKeys: string[];
     contentType: string;
     contentKeys: string[];
+    offerCount: number | null;
+    offerSummaryCount: number | null;
     retCodes: string[];
   };
 }
@@ -587,6 +589,7 @@ function safePayloadSummary(
       ? recordOrNull(parseJsonOrNull(rawContent))
       : null);
   const ret = Array.isArray(root?.ret) ? root.ret : [];
+  const offerSummary = recordOrNull(content?.offerSumm);
   return {
     rootKeys: safeObjectKeys(root),
     dataType: diagnosticValueType(root?.data),
@@ -596,6 +599,9 @@ function safePayloadSummary(
         ? 'json-string'
         : diagnosticValueType(rawContent),
     contentKeys: safeObjectKeys(content),
+    offerCount: nonNegativeIntegerOrNull(content?.offerCount),
+    offerSummaryCount:
+      nonNegativeIntegerOrNull(offerSummary?.offersCount),
     retCodes: ret
       .filter((value): value is string => typeof value === 'string')
       .map((value) => value.split('::', 1)[0]!.slice(0, 64))
@@ -710,14 +716,19 @@ export function parseStoreCatalogModule(
       warnings,
     };
   }
-  if (!content || !Array.isArray(content.offerList)) {
+  const offerCount = nonNegativeIntegerOrNull(content?.offerCount);
+  const offerList = Array.isArray(content?.offerList)
+    ? content.offerList
+    : offerCount === 0
+      ? []
+      : null;
+  if (!content || offerList === null) {
     throw new AlisiteSchemaError(
       'Expected an Alisite store catalog response at data.content.offerList',
     );
   }
 
   const warnings: StoreCatalogWarning[] = [];
-  const offerCount = nonNegativeIntegerOrNull(content.offerCount);
   if (offerCount === null) {
     warnings.push({
       code: 'INVALID_OFFER_COUNT',
@@ -734,7 +745,7 @@ export function parseStoreCatalogModule(
       'data.content.offerCategoryDataModel.userDefined',
     ),
   );
-  const offers = content.offerList
+  const offers = offerList
     .map((raw, index) => {
       const offer = mapOffer(raw, index, requestMeta);
       if (!offer) {
