@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "batchId": "fixture-batch-search-002",
+  "unitId": "fixture-unit-search-001",
+  "sourceRequestId": "fixture-request-search-001",
+  "kind": "search-page",
+  "status": "completed",
+  "startedAt": "2026-07-31T00:00:01.000Z",
+  "completedAt": "2026-07-31T00:00:02.000Z",
+  "subject": {
+    "keyword": "fixture-keyword"
+  },
+  "scope": {
+    "requestedScope": "bounded-pages",
+    "searchQueryKey": "fixture-search-query-001",
+    "querySnapshotHash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+    "searchSegmentId": "fixture-search-segment-001",
+    "pageActionId": "fixture-page-action-search-001",
+    "page": 2,
+    "requestedEndPage": 2,
+    "advertisementPolicy": "exclude_promoted",
+    "terminal": true,
+    "terminalReason": "source-end"
+  },
+  "observations": [
+    {
+      "schemaVersion": "search-hit-observation-v1",
+      "id": "fixture-search-hit-003",
+      "collectionTaskId": "fixture-collection-task-001",
+      "searchWaveId": "fixture-search-wave-001",
+      "sourceBatchId": "fixture-batch-search-002",
+      "querySnapshotHash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "keyword": "fixture-keyword",
+      "filtersHash": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+      "sort": "relevance",
+      "advertisementPolicy": "exclude_promoted",
+      "page": 2,
+      "rankInPage": 1,
+      "offerId": "fixture-offer-003",
+      "memberId": "fixture-member-003",
+      "offerUrl": "https://offer.example.test/fixture-offer-003",
+      "shopUrl": "https://shop.example.test/fixture-member-003",
+      "observedAt": "2026-07-31T00:00:01.500Z",
+      "eligible": true,
+      "ineligibilityReason": null,
+      "observationSha256": "sha256:0000000000000000000000000000000000000000000000000000000000000013"
+    }
+  ],
+  "completeness": {
+    "requestedScope": "bounded-pages",
+    "state": "complete",
+    "observedPages": [1, 2],
+    "failedPages": [],
+    "uniqueItems": 3
+  },
+  "duplicateObservations": [],
+  "warnings": [],
+  "errors": [],
+  "rawEvidenceRefs": [
+    "fixture:page-actions/search-list/page-2"
+  ],
+  "metrics": {
+    "remoteRequests": 1,
+    "eligibleSearchHits": 1,
+    "cumulativeEligibleSearchHits": 3
+  }
+}

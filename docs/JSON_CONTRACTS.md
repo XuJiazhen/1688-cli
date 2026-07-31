@@ -1065,6 +1065,80 @@ archived batches can be joined.
 category `CollectionUnit`; `--full` remains bounded by `--max-pages` and
 `--max-items` in the current invocation.
 
+## Collector PageAction V1
+
+Production collectors use a strict PageAction envelope while historical
+cohorts remain readable as a bare `CollectionBatch` with `schemaVersion: 1`:
+
+```ts
+type CollectorWireResponseV1 =
+  | CollectionBatch
+  | {
+      executionAttemptReceipt: PageActionExecutionAttemptReceiptV1,
+      completionReceipt?: PageActionCompletionReceiptV1,
+    }
+```
+
+The accepted action discriminators are exactly `search-list`, `offer-detail`,
+`store-qualification`, and `store-sample`. Store sampling accepts only
+`mode: "phase-1-bounded" | "approved-expansion"`; aliases such as `baseline`,
+`expansion`, different case, or underscore variants are contract errors.
+Phase 1 has the inclusive page scope `1..3`.
+
+Each request freezes a logical lineage containing collection task, WorkUnit,
+PageAction, business hash, kind, and business subject. Each physical try adds
+an execution lineage containing a fresh request, idempotency key, WorkUnit
+attempt, PageAction execution attempt, ordinal, Profile/daemon/context, and
+the supervisor, reservation, and WorkUnit fences. Duplicated IDs, hashes,
+kinds, subjects, handle bindings, and policy hashes must match exactly.
+The effective deadline is the earliest of all three `leaseNotAfter` values and
+the request `deadlineAt`.
+
+Execution attempts always terminate with an immutable
+`collector.page-action.execution-attempt-receipt.v1`. Attempt 1 has no
+predecessor; every later ordinal names the immediately preceding receipt ID
+and canonical SHA-256 hash. Failed, blocked, and cancelled receipts carry a
+structured collector error; completed receipts do not. Remote attempts have
+contiguous ordinals and exactly one sanitized request snapshot each. Terminal
+receipts prove all owned Pages were closed. A snapshot's `page` must exactly
+match its remote attempt's `logicalPage`, including joint absence for
+non-page requests. Snapshot `filterParams` accept only the request-key surface
+frozen in the Collector contract; credential, cookie, token, signature,
+session, and authentication key variants fail closed.
+
+A completed logical action has one immutable
+`collector.page-action.completion-receipt.v1`. It contains stable logical
+lineage only, one or more V1 batches, and the complete attempt refs ordered by
+ordinal. It must not contain a Profile, daemon, context, fences, or a single
+execution lineage. A direct execute response must reference its returned
+attempt with an exact match across attempt ID, ordinal, receipt ID/hash, and
+execution-lineage hash. All lineage and receipt hashes use recursively
+key-sorted canonical JSON and the `sha256:<lowercase hex>` representation.
+
+The daemon wire methods are `collector.pageAction.execute`,
+`collector.pageAction.cancel`, and `collector.pageAction.lookupReceipt`.
+Execute accepts a signed capability handle; search recovery additionally
+accepts only a signed recovery handle. Neither handle permits caller-provided
+cookies, headers, tokens, final URLs, or scripts.
+
+V1 handle and expansion-approval signatures use HMAC-SHA256 encoded as
+canonical unpadded 43-character base64url. Verification receives trusted keys
+and route policies from daemon configuration; key material is never part of
+the wire value or logs. Unknown
+key IDs and routes fail closed. The signed handle binds the canonical action
+payload hash, policy revisions, and the hash of the configured allowed field
+paths. `approved-expansion` also requires its own signed approval binding the
+eligibility receipt and the exact
+`store-catalog-enrichment-eligibility-policy-v1` / `@1` policy identity and
+configured hash, fresh baseline generation and dormant next page, registered
+dispatch policy and configured hash, `cache-seed-only` evidence usage, and all
+dispatch gates. Those gates affirm eligibility, daily target acceptance,
+independent release approval, enabled dispatch, low-priority routing, reserved
+budget, and operational readiness for the execution Profile. The initial
+`store-catalog-expansion-dispatch-v1@1` revision freezes the numeric page limit
+to `3`; unregistered future revisions fail closed. The requested contiguous
+page range must start at the dormant next page and exactly match that limit.
+
 ## Generated Shape Index
 
 Run `pnpm agent-context` to refresh `docs/generated/json-shapes.md`, which

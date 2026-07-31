@@ -64,6 +64,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "agent-context": "node scripts/generate_agent_context.mjs",
+    "fixtures:page-actions": "tsx scripts/verify_page_action_fixtures.mjs",
     "docs-check": "node scripts/generate_agent_context.mjs --check",
     "agent-map-check": "node scripts/check_agent_map.mjs",
     "release-check": "node scripts/check_release.mjs",

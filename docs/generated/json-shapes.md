@@ -7,6 +7,7 @@ This is a heuristic index of exported TypeScript interfaces that are likely to m
 | Interface | File | Notable Fields |
 |---|---|---|
 | `CreateOfferCollectionBatchInput` | `src/collection/offer-batch.ts` | `unit: unknown;`<br>`outcome: OfferCaptureOutcome;`<br>`batchId?: string;`<br>`startedAt: string;`<br>`completedAt: string;`<br>`rawEvidenceRefs?: string[];` |
+| `OfferActionV1` | `src/collection/page-action-contracts.ts` | `kind: 'offer-detail';`<br>`offerId: string;`<br>`memberId: string;`<br>`searchOriginReceiptId: string;`<br>`searchOriginReceiptHash: string;`<br>`executionHandle: SignedCollectorExecutionHandleV1;` |
 | `SearchOfferObservation` | `src/collection/search-batch.ts` | `offerId: string;`<br>`offer: Offer;`<br>`sourcePage: number;`<br>`remoteSort: string \| null;`<br>`pageRank: number;`<br>`rawRank: number;`<br>`collectedAt: string;` |
 | `CartAddArgs` | `src/commands/cart-add.ts` | `offerId: string;`<br>`skuId: string;`<br>`quantity: number;`<br>`headed?: boolean;` |
 | `CartAddOpts` | `src/commands/cart-add.ts` | `offerId: string;`<br>`sku?: string;`<br>`qty?: string;`<br>`profile?: string;`<br>`headed?: boolean;` |

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "batchId": "fixture-batch-search-001",
+  "unitId": "fixture-unit-search-001",
+  "sourceRequestId": "fixture-request-search-001",
+  "kind": "search-page",
+  "status": "partial",
+  "startedAt": "2026-07-31T00:00:00.000Z",
+  "completedAt": "2026-07-31T00:00:01.000Z",
+  "subject": {
+    "keyword": "fixture-keyword"
+  },
+  "scope": {
+    "requestedScope": "bounded-pages",
+    "searchQueryKey": "fixture-search-query-001",
+    "querySnapshotHash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+    "searchSegmentId": "fixture-search-segment-001",
+    "pageActionId": "fixture-page-action-search-001",
+    "page": 1,
+    "requestedEndPage": 2,
+    "advertisementPolicy": "exclude_promoted",
+    "terminal": false,
+    "terminalReason": null
+  },
+  "observations": [
+    {
+      "schemaVersion": "search-hit-observation-v1",
+      "id": "fixture-search-hit-001",
+      "collectionTaskId": "fixture-collection-task-001",
+      "searchWaveId": "fixture-search-wave-001",
+      "sourceBatchId": "fixture-batch-search-001",
+      "querySnapshotHash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "keyword": "fixture-keyword",
+      "filtersHash": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+      "sort": "relevance",
+      "advertisementPolicy": "exclude_promoted",
+      "page": 1,
+      "rankInPage": 1,
+      "offerId": "fixture-offer-001",
+      "memberId": "fixture-member-001",
+      "offerUrl": "https://offer.example.test/fixture-offer-001",
+      "shopUrl": "https://shop.example.test/fixture-member-001",
+      "observedAt": "2026-07-31T00:00:00.500Z",
+      "eligible": true,
+      "ineligibilityReason": null,
+      "observationSha256": "sha256:0000000000000000000000000000000000000000000000000000000000000011"
+    },
+    {
+      "schemaVersion": "search-hit-observation-v1",
+      "id": "fixture-search-hit-002",
+      "collectionTaskId": "fixture-collection-task-001",
+      "searchWaveId": "fixture-search-wave-001",
+      "sourceBatchId": "fixture-batch-search-001",
+      "querySnapshotHash": "sha256:0000000000000000000000000000000000000000000000000000000000000001",
+      "keyword": "fixture-keyword",
+      "filtersHash": "sha256:0000000000000000000000000000000000000000000000000000000000000002",
+      "sort": "relevance",
+      "advertisementPolicy": "exclude_promoted",
+      "page": 1,
+      "rankInPage": 2,
+      "offerId": "fixture-offer-002",
+      "memberId": "fixture-member-002",
+      "offerUrl": "https://offer.example.test/fixture-offer-002",
+      "shopUrl": "https://shop.example.test/fixture-member-002",
+      "observedAt": "2026-07-31T00:00:00.600Z",
+      "eligible": true,
+      "ineligibilityReason": null,
+      "observationSha256": "sha256:0000000000000000000000000000000000000000000000000000000000000012"
+    }
+  ],
+  "completeness": {
+    "requestedScope": "bounded-pages",
+    "state": "truncated",
+    "observedPages": [1],
+    "failedPages": [],
+    "uniqueItems": 2
+  },
+  "duplicateObservations": [],
+  "warnings": [],
+  "errors": [],
+  "rawEvidenceRefs": [
+    "fixture:page-actions/search-list/page-1"
+  ],
+  "metrics": {
+    "remoteRequests": 1,
+    "eligibleSearchHits": 2
+  }
+}

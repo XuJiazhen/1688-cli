@@ -1,0 +1,45 @@
+{
+  "schema": "collector.page-action.sanitized-fixture-manifest.v1",
+  "fixtureSetId": "fixture-page-actions-t0-v1",
+  "createdAt": "2026-07-31T00:00:00.000Z",
+  "source": "synthetic-structural-derivative-no-raw-values",
+  "sanitizationPolicy": {
+    "identifiers": "deterministic fixture-prefixed placeholders",
+    "networkLocations": "reserved example.test hosts without query strings",
+    "customerData": "omitted",
+    "requestCredentials": "omitted",
+    "freeText": "short ASCII structural labels only"
+  },
+  "fixtures": {
+    "search-list-page-1.json": {
+      "actionKind": "search-list",
+      "wireFormat": "collection-batch-v1",
+      "semanticRole": "first non-terminal search page"
+    },
+    "search-list-page-2-terminal.json": {
+      "actionKind": "search-list",
+      "wireFormat": "collection-batch-v1",
+      "semanticRole": "correlated terminal search page"
+    },
+    "offer-detail.json": {
+      "actionKind": "offer-detail",
+      "wireFormat": "collection-batch-v1",
+      "semanticRole": "core, explicit SKU, and owned media observations"
+    },
+    "store-qualification.json": {
+      "actionKind": "store-qualification",
+      "wireFormat": "collection-batch-v1",
+      "semanticRole": "qualification facts and complete qualification media"
+    },
+    "store-sample-pages-1-3.json": {
+      "actionKind": "store-sample",
+      "wireFormat": "collection-batch-v1",
+      "semanticRole": "bounded pages 1-3 with dormant page 4 checkpoint"
+    },
+    "store-sample-page-action-response.json": {
+      "actionKind": "store-sample",
+      "wireFormat": "collector.page-action.execute-response.v1",
+      "semanticRole": "strict PageAction response with execution and completion receipts"
+    }
+  }
+}
