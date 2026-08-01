@@ -7,11 +7,20 @@
     "summary": "店铺自述内容",
     "productionService": "电动工具",
     "businessLine": "五金、工具",
+    "sellerType": "生产厂家",
+    "strengthSignals": [
+      { "code": "factoryInspection", "label": "深度验厂", "enabled": true },
+      { "code": "superFactory", "label": "超级工厂", "enabled": false }
+    ],
+    "guaranteeItems": [
+      { "code": "returnFreight", "label": "退货包运费", "status": "enabled" }
+    ],
     "businessInfo": {
       "companyBusinessLine": "一般项目：风动和电动工具制造；户外用品销售。",
       "companyName": "脱敏工具有限公司",
       "companyYearStarted": "2024-05-27",
-      "socialCreditCode": "SANITIZED-CREDIT-CODE"
+      "socialCreditCode": "SANITIZED-CREDIT-CODE",
+      "registeredAddress": "浙江省某市某工业园区"
     },
     "propaganda": {
       "companyImg": [

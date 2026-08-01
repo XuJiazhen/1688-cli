@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   createOfferCollectionBatch,
+  createOfferSkuManifestV1,
   type OfferCaptureOutcome,
 } from '../src/collection/offer-batch.js';
 import type { CollectionUnit } from '../src/collection/contracts.js';
@@ -95,6 +96,54 @@ function captured(value = offer()): OfferCaptureOutcome {
 }
 
 describe('createOfferCollectionBatch', () => {
+  it('recursively sanitizes personal fields and contacts in Batch observations', () => {
+    const batch = createOfferCollectionBatch({
+      unit: unit('offer-detail'),
+      outcome: captured(offer({
+        title: '工厂直供 联系电话：138-0013-8000',
+        supplier: {
+          name: '脱敏工厂', loginId: 'private-login', memberId: 'member-1', userId: 'private-user',
+        },
+      })),
+      batchId: 'offer-detail-private-batch',
+      startedAt: NOW,
+      completedAt: NOW,
+    });
+    expect(batch.observations[0]).toMatchObject({
+      offer: {
+        title: '工厂直供 [redacted]',
+        supplier: {
+          loginId: '[redacted]', userId: '[redacted]', memberId: 'member-1',
+        },
+      },
+    });
+  });
+
+  it('freezes an exact SKU manifest and rejects null facts disguised as available', () => {
+    const manifest = createOfferSkuManifestV1(offer());
+    expect(manifest).toMatchObject({
+      state: 'explicit-variants', explicitSkuCount: 1,
+      skuIds: ['sku-unknown'], nullFactsCarryAvailability: true,
+    });
+    const invalid = offer({
+      skus: [{
+        ...offer().skus[0]!,
+        availability: { price: 'available', stock: 'not-present', saleCount: 'not-present' },
+      }],
+    });
+    expect(() => createOfferSkuManifestV1(invalid)).toThrowError(
+      expect.objectContaining({ code: 'OFFER_SKU_AVAILABILITY_INVALID' }),
+    );
+    expect(() => createOfferSkuManifestV1(offer({
+      skus: [],
+      options: [{ prop: '颜色', values: [{ name: '黑色', imageUrl: null }] }],
+    }))).toThrowError(
+      expect.objectContaining({ code: 'OFFER_SKU_IDENTITY_UNRESOLVED' }),
+    );
+    expect(createOfferSkuManifestV1(offer({ skus: [], options: [] }))).toMatchObject({
+      state: 'offer-singleton', singletonSourceKey: expect.any(String),
+    });
+  });
   it('preserves the complete offer observation and unknown SKU facts', () => {
     const batch = createOfferCollectionBatch({
       unit: unit('offer-detail'),

@@ -1,0 +1,226 @@
+import { describe, expect, it } from 'vitest';
+import {
+  collectBoundedStoreSampleV1,
+  materializeFreshStoreSampleCacheV1,
+  type StoreSampleCursorV1,
+} from '../src/session/catalog-runtime.js';
+import type { StoreCatalogParseResult } from '../src/session/alisite-module.js';
+import { createBoundedStoreSampleBatchesV1 } from '../src/collection/catalog-batch.js';
+
+const MEMBER = 'b2b-member-1';
+const SHOP = 'https://fixture.1688.com/';
+const NOW = '2026-07-31T00:00:00.000Z';
+const LATER = '2026-08-01T00:00:00.000Z';
+
+function parsed(page: number, options: {
+  memberId?: string;
+  count?: number;
+  offerCount?: number;
+  totalPages?: number;
+} = {}): StoreCatalogParseResult {
+  const count = options.count ?? 30;
+  return {
+    kind: 'offer-list', offerCount: options.offerCount ?? 590,
+    totalPages: options.totalPages ?? 20,
+    offers: Array.from({ length: count }, (_, index) => ({
+      offerId: `${page}${index.toString().padStart(3, '0')}`,
+      memberId: options.memberId ?? MEMBER, title: `Offer ${page}-${index}`,
+      url: `https://detail.1688.com/offer/${page}${index}.html`,
+      imageUrl: null, categoryId: null, price: null, quantityBegin: null,
+      unit: null, pagePosition: index + 1, absolutePosition: (page - 1) * 30 + index + 1,
+      sales: {
+        vagueSaleQuantity: null, thirtySaleQuantity: null, bookedCount: null,
+        ninetySaleQuantity: null, saleQuantity: null, modelBookedCount: null,
+        modelAgentBookedCount: null, modelQuantitySumMonth: null, modelSaleQuantity: null,
+      },
+    })),
+    categories: page === 1
+      ? [{ id: 'cat-1', name: 'Tools', fullName: 'Tools', count: 590, children: [] }]
+      : [],
+    userDefined: { raw: null, value: null, state: 'missing' },
+    page: {
+      memberId: options.memberId ?? MEMBER,
+      pageNum: page, pageSize: 30, categoryId: null, keyword: null,
+      sortType: 'wangpu_score',
+    },
+    warnings: [],
+  };
+}
+
+async function baseline(overrides: Partial<Parameters<typeof collectBoundedStoreSampleV1>[0]> = {}) {
+  const calls: number[] = [];
+  const result = await collectBoundedStoreSampleV1({
+    memberId: MEMBER, canonicalShopUrl: SHOP,
+    mode: 'phase-1-bounded', firstPage: 1, lastPageInclusive: 3,
+    generation: 'generation-1', baselineExpiresAt: LATER,
+    now: () => new Date(NOW),
+    collectPage: async (page) => { calls.push(page); return parsed(page); },
+    ...overrides,
+  });
+  return { result, calls };
+}
+
+describe('bounded Store Sample runtime', () => {
+  it('collects one session pages 1-3, page-1 categories, 90 unique cache-only-safe offers, and dormant page 4', async () => {
+    const { result, calls } = await baseline();
+    expect(calls).toEqual([1, 2, 3]);
+    expect(result).toMatchObject({
+      mode: 'phase-1-bounded', remoteRequests: 3,
+      taskCandidateEligible: false, evidenceUsage: 'baseline-evidence',
+      cursor: {
+        observedPages: [1, 2, 3], nextPage: 4,
+        checkpointState: 'dormant', sourceOfferCount: 590,
+      },
+    });
+    expect(result.uniqueOffers).toHaveLength(90);
+    expect(result.categories).toHaveLength(1);
+    const batches = createBoundedStoreSampleBatchesV1({
+      result, unitId: 'unit-1', sourceRequestId: 'request-1',
+      catalogBatchId: 'catalog-1', categoriesBatchId: 'categories-1',
+      profileBatchId: 'profile-1', startedAt: NOW, completedAt: NOW,
+      rawEvidenceRefs: ['artifact:store-pages-1-3'],
+    });
+    expect(batches.map((batch) => batch.kind)).toEqual(['store-catalog', 'store-categories', 'store-profile']);
+    expect(batches[0].metrics).toMatchObject({ candidatesPublished: 0, remoteRequests: 3 });
+    expect(batches[0].observations.every((observation) =>
+      observation.taskCandidateEligible === false
+    )).toBe(true);
+    expect(batches[1].metrics.remoteRequests).toBe(0);
+  });
+
+  it('rejects any phase-1 page 4 scope before invoking the remote port', async () => {
+    let calls = 0;
+    await expect(collectBoundedStoreSampleV1({
+      memberId: MEMBER, canonicalShopUrl: SHOP,
+      mode: 'phase-1-bounded', firstPage: 2, lastPageInclusive: 4,
+      generation: 'generation-1', baselineExpiresAt: LATER,
+      now: () => new Date(NOW),
+      collectPage: async (page) => { calls++; return parsed(page); },
+    })).rejects.toMatchObject({ code: 'STORE_SAMPLE_BASELINE_SCOPE_INVALID' });
+    expect(calls).toBe(0);
+  });
+
+  it('preserves a verified prefix as partial evidence on later member or total drift', async () => {
+    const { result: memberDrift } = await baseline({
+      collectPage: async (page) => parsed(page, page === 2 ? { memberId: 'b2b-other' } : {}),
+    });
+    expect(memberDrift).toMatchObject({
+      status: 'partial', errorCode: 'STORE_SAMPLE_MEMBER_SCOPE_MISMATCH',
+      failedPages: [2], remoteRequests: 2,
+      cursor: { observedPages: [1], nextPage: 2, checkpointState: 'incomplete' },
+    });
+    const { result: totalDrift } = await baseline({
+      collectPage: async (page) => parsed(page, { offerCount: page === 2 ? 591 : 590 }),
+    });
+    expect(totalDrift).toMatchObject({
+      status: 'partial', errorCode: 'STORE_SAMPLE_TOTAL_DRIFT', failedPages: [2],
+    });
+    const batches = createBoundedStoreSampleBatchesV1({
+      result: totalDrift, unitId: 'unit-partial', sourceRequestId: 'request-partial',
+      catalogBatchId: 'catalog-partial', categoriesBatchId: 'categories-partial',
+      profileBatchId: 'profile-partial', startedAt: NOW, completedAt: NOW,
+      rawEvidenceRefs: ['artifact:store-page-1'],
+    });
+    expect(batches.every((batch) => batch.status === 'partial')).toBe(true);
+    expect(batches[0]).toMatchObject({
+      completeness: { state: 'truncated', observedPages: [1], failedPages: [2] },
+      errors: [{ code: 'STORE_SAMPLE_TOTAL_DRIFT' }],
+    });
+  });
+
+  it('preserves the just-committed page when pacing or cancellation fails afterwards', async () => {
+    const { result } = await baseline({
+      afterPageCommitted: async () => { throw new Error('cancelled during pacing'); },
+    });
+    expect(result).toMatchObject({
+      status: 'partial', errorCode: 'STORE_SAMPLE_PAGE_FAILED',
+      failedPages: [], remoteRequests: 1,
+      cursor: { observedPages: [1], nextPage: 2, checkpointState: 'incomplete' },
+    });
+    expect(result.uniqueOffers).toHaveLength(30);
+  });
+
+  it('still fails closed when the first page has no verified evidence', async () => {
+    await expect(baseline({
+      collectPage: async (page) => parsed(page, { memberId: 'b2b-other' }),
+    })).rejects.toMatchObject({ code: 'STORE_SAMPLE_MEMBER_SCOPE_MISMATCH' });
+  });
+
+  it.each(['offer-count', 'total-pages', 'categories'] as const)(
+    'cannot complete when page-1 %s authority is missing',
+    async (missing) => {
+      await expect(baseline({
+        collectPage: async (page) => {
+          const value = parsed(page);
+          if (page === 1 && missing === 'offer-count') value.offerCount = null;
+          if (page === 1 && missing === 'total-pages') value.totalPages = null;
+          if (page === 1 && missing === 'categories') value.categories = [];
+          return value;
+        },
+      })).rejects.toMatchObject({ code: 'STORE_SAMPLE_PAGE1_SUMMARY_INCOMPLETE' });
+    },
+  );
+
+  it('materializes fresh cache with zero remote requests and expires on TTL/parser drift', async () => {
+    const { result } = await baseline();
+    const hit = materializeFreshStoreSampleCacheV1({
+      cursor: result.cursor, parserRevisionMatches: true,
+      now: '2026-07-31T01:00:00.000Z', originBatchRefs: ['batch:1'],
+      contentHash: `sha256:${'1'.repeat(64)}`,
+    });
+    expect(hit).toMatchObject({ hit: true, remoteRequests: 0, observedAt: NOW });
+    expect(materializeFreshStoreSampleCacheV1({
+      cursor: result.cursor, parserRevisionMatches: true,
+      now: LATER, originBatchRefs: [], contentHash: `sha256:${'1'.repeat(64)}`,
+    })).toEqual({ hit: false, remoteRequests: 0, reason: 'expired' });
+    expect(materializeFreshStoreSampleCacheV1({
+      cursor: result.cursor, parserRevisionMatches: false,
+      now: NOW, originBatchRefs: [], contentHash: `sha256:${'1'.repeat(64)}`,
+    })).toEqual({ hit: false, remoteRequests: 0, reason: 'parser-revision-changed' });
+  });
+
+  it('allows only 3-10 approved expansion pages from the dormant generation and never candidates/evidence', async () => {
+    const { result: base } = await baseline();
+    const expand = await collectBoundedStoreSampleV1({
+      memberId: MEMBER, canonicalShopUrl: SHOP,
+      mode: 'approved-expansion', firstPage: 4, lastPageInclusive: 6,
+      generation: 'generation-1', previousCursor: base.cursor,
+      baselineExpiresAt: LATER, now: () => new Date('2026-07-31T01:00:00.000Z'),
+      collectPage: async (page) => parsed(page),
+    });
+    expect(expand).toMatchObject({
+      remoteRequests: 3, taskCandidateEligible: false,
+      evidenceUsage: 'cache-seed-only', cursor: {
+        observedPages: [1, 2, 3, 4, 5, 6],
+        checkpointState: 'approved-expansion-active', nextPage: 7,
+      },
+    });
+    for (const pageCount of [2, 11, 3.5]) {
+      await expect(collectBoundedStoreSampleV1({
+        memberId: MEMBER, canonicalShopUrl: SHOP,
+        mode: 'approved-expansion', firstPage: 4,
+        lastPageInclusive: 4 + pageCount - 1,
+        generation: 'generation-1', previousCursor: base.cursor,
+        baselineExpiresAt: LATER, now: () => new Date(NOW),
+        collectPage: async (page) => parsed(page),
+      })).rejects.toBeTruthy();
+    }
+
+    const wrongIdentity: StoreSampleCursorV1 = { ...base.cursor, memberId: 'b2b-other' };
+    await expect(collectBoundedStoreSampleV1({
+      memberId: MEMBER, canonicalShopUrl: SHOP,
+      mode: 'approved-expansion', firstPage: 4, lastPageInclusive: 6,
+      generation: 'generation-1', previousCursor: wrongIdentity,
+      baselineExpiresAt: LATER, now: () => new Date(NOW),
+      collectPage: async (page) => parsed(page),
+    })).rejects.toMatchObject({ code: 'STORE_SAMPLE_EXPANSION_CURSOR_INVALID' });
+
+    await expect(collectBoundedStoreSampleV1({
+      memberId: MEMBER, canonicalShopUrl: SHOP,
+      mode: 'approved-expansion', firstPage: 4, lastPageInclusive: 6,
+      generation: 'generation-1', previousCursor: base.cursor,
+      baselineExpiresAt: LATER, now: () => new Date(NOW),
+      collectPage: async (page) => parsed(page, { offerCount: 591 }),
+    })).rejects.toMatchObject({ code: 'STORE_SAMPLE_BASELINE_TOTAL_DRIFT' });
+  });
+});

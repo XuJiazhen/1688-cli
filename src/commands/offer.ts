@@ -54,6 +54,11 @@ export interface OfferBatchResult {
 export interface OfferArgs {
   offerId: string;
   headed?: boolean;
+  captureTimeoutMs?: number;
+  onRawComponent?: (
+    component: 'core' | 'sku' | 'detail' | 'shop-card' | 'consignment',
+    rawPayload: unknown,
+  ) => Promise<void>;
 }
 
 export interface OfferResult {
@@ -118,6 +123,49 @@ export interface OfferResult {
     detailMediaResponseObserved: boolean;
     detailMediaCaptured: boolean;
   };
+}
+
+export interface OfferSourceCaptureEvidenceV1 {
+  responseObserved: boolean;
+  responseSucceeded: boolean;
+  correlatedOfferId: string | null;
+  correlatedMemberId: string | null;
+  rawPayload: unknown | null;
+  authoritativeEmpty?: {
+    sourcePath: string;
+    sourceValue: unknown;
+    reasonCode: string;
+  };
+}
+
+export interface OfferSourceCaptureEvidenceSetV1 {
+  shopCard: OfferSourceCaptureEvidenceV1;
+  consignment: OfferSourceCaptureEvidenceV1;
+  components: {
+    core: unknown;
+    sku: unknown | null;
+    detail: unknown | null;
+  };
+}
+
+interface OfferSourceResponseCaptureV1<T> {
+  value: T | null;
+  responseSucceeded: boolean;
+  correlatedOfferId: string | null;
+  correlatedMemberId: string | null;
+  rawPayload: unknown;
+  authoritativeEmpty?: OfferSourceCaptureEvidenceV1['authoritativeEmpty'];
+}
+
+const OFFER_SOURCE_CAPTURE_EVIDENCE = new WeakMap<
+  OfferResult,
+  OfferSourceCaptureEvidenceSetV1
+>();
+
+export function readOfferSourceCaptureEvidenceV1(
+  offer: OfferResult,
+): OfferSourceCaptureEvidenceSetV1 | null {
+  return OFFER_SOURCE_CAPTURE_EVIDENCE.get(offer) ?? null;
 }
 
 export interface PriceTier {
@@ -193,10 +241,11 @@ export async function executeRaw(
   args: OfferArgs,
 ): Promise<OfferResult> {
   const page = await ctx.newPage();
+  const captureTimeoutMs = args.captureTimeoutMs ?? 18_000;
 
-  const skuCapture = startResponseCapture<SkuBizModel>({
+  const skuCapture = startResponseCapture<{ model: SkuBizModel | null; rawPayload: unknown }>({
     page,
-    timeoutMs: 18000,
+    timeoutMs: captureTimeoutMs,
     matcher: SKU_API_RE,
     parse: async (resp) => {
       const text = await resp.text();
@@ -212,41 +261,72 @@ export async function executeRaw(
           /* ignore */
         }
       }
-      const json = parseMtop<{ data?: { skuSelectorBizModel?: SkuBizModel } }>(
-        text,
-      );
-      return json?.data?.skuSelectorBizModel ?? null;
+      await args.onRawComponent?.('sku', text);
+      const json = parseMtop<{ data?: { skuSelectorBizModel?: SkuBizModel } }>(text);
+      return { model: json?.data?.skuSelectorBizModel ?? null, rawPayload: json };
     },
   });
-  const shopCardCapture = startResponseCapture<{ value: ShopCardInfo | null }>({
+  const shopCardCapture = startResponseCapture<OfferSourceResponseCaptureV1<ShopCardInfo>>({
     page,
-    timeoutMs: 18000,
+    timeoutMs: captureTimeoutMs,
     matcher: SHOPCARD_API_RE,
-    parse: async (resp) => ({
-      value: mapShopCardPayload(parseMtop(await resp.text())),
-    }),
+    parse: async (resp) => {
+      const rawResponseText = await resp.text();
+      await args.onRawComponent?.('shop-card', rawResponseText);
+      const rawPayload = parseMtop(rawResponseText);
+      const value = mapShopCardPayload(rawPayload);
+      const correlation = readOfferSourceCorrelationScopeV1(resp.url(), rawPayload);
+      return {
+        value,
+        responseSucceeded: isSuccessfulMtopPayload(rawPayload),
+        ...correlation,
+        rawPayload,
+        ...(value === null
+          ? authoritativeEmptyEvidence(rawPayload, 'shop-card')
+          : {}),
+      };
+    },
   });
-  const consignmentCapture = startResponseCapture<{
-    value: ConsignmentInfo | null;
-  }>({
+  const consignmentCapture = startResponseCapture<
+    OfferSourceResponseCaptureV1<ConsignmentInfo>
+  >({
     page,
-    timeoutMs: 18000,
+    timeoutMs: captureTimeoutMs,
     matcher: (resp) =>
       OFFER_DETAIL_SERVICE_API_RE.test(resp.url()) &&
       /offerPCConsignInfoService/i.test(resp.url()),
-    parse: async (resp) => ({
-      value: mapConsignmentPayload(
-        parseMtop(await resp.text()),
-        resp.url(),
-      ),
-    }),
+    parse: async (resp) => {
+      const rawResponseText = await resp.text();
+      await args.onRawComponent?.('consignment', rawResponseText);
+      const rawPayload = parseMtop(rawResponseText);
+      const value = mapConsignmentPayload(rawPayload, resp.url());
+      const correlation = readOfferSourceCorrelationScopeV1(resp.url(), rawPayload);
+      return {
+        value,
+        responseSucceeded: isSuccessfulMtopPayload(rawPayload),
+        ...correlation,
+        rawPayload,
+        ...(value === null
+          ? authoritativeEmptyEvidence(rawPayload, 'offer-consignment')
+          : {}),
+      };
+    },
   });
-  const offerDetailsCapture = startResponseCapture<OfferDetailsEvidence>({
+  const offerDetailsCapture = startResponseCapture<{
+    evidence: OfferDetailsEvidence;
+    rawPayload: string;
+  }>({
     page,
-    timeoutMs: 18000,
+    timeoutMs: captureTimeoutMs,
     matcher: OFFER_DETAILS_CONTENT_RE,
-    parse: async (resp) =>
-      parseOfferDetailsEvidence(await resp.text(), resp.url()),
+    parse: async (resp) => {
+      const rawPayload = await resp.text();
+      await args.onRawComponent?.('detail', rawPayload);
+      return {
+        evidence: parseOfferDetailsEvidence(rawPayload, resp.url()),
+        rawPayload,
+      };
+    },
   });
   const onResp = async (resp: PWResponse) => {
     // Probe: save every offerdetail.service response so we can see which
@@ -371,6 +451,12 @@ export async function executeRaw(
         9,
         'NETWORK_ERROR',
         `Failed to load offer page: ${(e as Error).message}`,
+        {
+          category: 'network',
+          retryable: true,
+          recoveryAction: 'retry-admitted-navigation',
+          cause: e instanceof Error ? e.name : 'UnknownNavigationFailure',
+        },
       );
     }
     await waitForCollectionPageAvailability(page, {
@@ -383,33 +469,197 @@ export async function executeRaw(
         shopCardCapture.wait(),
         consignmentCapture.wait(),
         offerDetailsCapture.wait(),
-        readPageInfo(page),
+        (async () => {
+          const rawPage = await page.content();
+          await args.onRawComponent?.('core', rawPage);
+          return readPageInfo(page);
+        })(),
       ]);
     const requiredSku = requireSkuSelectorModel(
-      selectSkuSelectorModel(sku, pageInfo.skuModel),
+      selectSkuSelectorModel(sku?.model ?? null, pageInfo.skuModel),
       skuCapture.diagnostics(),
     );
     const shopCard = shopCardResponse?.value ?? null;
     const consignment = consignmentResponse?.value ?? null;
-    return assemble(
+    const result = assemble(
       args.offerId,
       url,
       requiredSku,
       pageInfo,
       shopCard,
       consignment,
-      offerDetails,
+      offerDetails?.evidence ?? null,
       shopCardResponse !== null,
       consignmentResponse !== null,
       offerDetailsCapture.diagnostics().matchedCount > 0,
     );
+    OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
+      shopCard: captureEvidence(shopCardResponse),
+      consignment: captureEvidence(consignmentResponse),
+      components: {
+        core: pageInfo.rawPayload,
+        sku: sku?.rawPayload ?? pageInfo.skuRawPayload,
+        detail: offerDetails?.rawPayload ?? null,
+      },
+    });
+    return result;
   } finally {
     skuCapture.dispose();
     shopCardCapture.dispose();
     consignmentCapture.dispose();
     offerDetailsCapture.dispose();
+    await Promise.all([
+      skuCapture.drain(),
+      shopCardCapture.drain(),
+      consignmentCapture.drain(),
+      offerDetailsCapture.drain(),
+    ]);
     page.off('response', onResp);
   }
+}
+
+function captureEvidence<T>(
+  captured: OfferSourceResponseCaptureV1<T> | null,
+): OfferSourceCaptureEvidenceV1 {
+  return {
+    responseObserved: captured !== null,
+    responseSucceeded: captured?.responseSucceeded ?? false,
+    correlatedOfferId: captured?.correlatedOfferId ?? null,
+    correlatedMemberId: captured?.correlatedMemberId ?? null,
+    rawPayload: captured?.rawPayload ?? null,
+    ...(captured?.authoritativeEmpty === undefined
+      ? {}
+      : { authoritativeEmpty: captured.authoritativeEmpty }),
+  };
+}
+
+export function readOfferSourceCorrelationScopeV1(
+  requestUrl: string,
+  rawPayload: unknown,
+): { correlatedOfferId: string | null; correlatedMemberId: string | null } {
+  const requestPayloads: unknown[] = [];
+  try {
+    const url = new URL(requestUrl);
+    for (const [key, value] of url.searchParams) {
+      requestPayloads.push({ [key]: value }, parseJsonString(value));
+    }
+  } catch {
+    return { correlatedOfferId: null, correlatedMemberId: null };
+  }
+  const offerIds = new Set<string>();
+  const memberIds = new Set<string>();
+  for (const payload of [...requestPayloads, rawPayload]) {
+    collectCorrelationValues(payload, offerIds, memberIds);
+  }
+  return {
+    correlatedOfferId: uniqueCorrelationValue(offerIds),
+    correlatedMemberId: uniqueCorrelationValue(memberIds),
+  };
+}
+
+function collectCorrelationValues(
+  value: unknown,
+  offerIds: Set<string>,
+  memberIds: Set<string>,
+  depth = 0,
+): void {
+  if (depth > 10 || value === null || value === undefined) return;
+  if (typeof value === 'string') {
+    const parsed = parseJsonString(value);
+    if (parsed !== value) collectCorrelationValues(parsed, offerIds, memberIds, depth + 1);
+    return;
+  }
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectCorrelationValues(item, offerIds, memberIds, depth + 1));
+    return;
+  }
+  if (typeof value !== 'object') return;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/gu, '');
+    const scalar = correlationScalar(child);
+    if (scalar !== null && normalizedKey === 'offerid') offerIds.add(scalar);
+    if (
+      scalar !== null &&
+      ['memberid', 'sellermemberid', 'suppliermemberid'].includes(normalizedKey)
+    ) {
+      memberIds.add(scalar);
+    }
+    collectCorrelationValues(child, offerIds, memberIds, depth + 1);
+  }
+}
+
+function parseJsonString(value: string): unknown {
+  const trimmed = value.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return value;
+  try {
+    return JSON.parse(trimmed) as unknown;
+  } catch {
+    return value;
+  }
+}
+
+function correlationScalar(value: unknown): string | null {
+  if (typeof value !== 'string' && typeof value !== 'number') return null;
+  const normalized = String(value).trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function uniqueCorrelationValue(values: Set<string>): string | null {
+  return values.size === 1 ? [...values][0] ?? null : null;
+}
+
+function isSuccessfulMtopPayload(value: unknown): boolean {
+  const root = asRecord(value);
+  const ret = Array.isArray(root?.ret) ? root.ret : [];
+  const topLevelSuccess = ret.some(
+    (entry) => typeof entry === 'string' && /^SUCCESS(?:::|$)/u.test(entry),
+  );
+  const data = asRecord(root?.data);
+  return topLevelSuccess && data?.success !== false;
+}
+
+function authoritativeEmptyEvidence(
+  payload: unknown,
+  source: 'shop-card' | 'offer-consignment',
+): Pick<OfferSourceResponseCaptureV1<never>, 'authoritativeEmpty'> {
+  const paths = source === 'shop-card'
+    ? [['data']]
+    : [['data', 'data', 'data', 'data'], ['data', 'data', 'data']];
+  for (const pathParts of paths) {
+    const found = valueAt(payload, pathParts);
+    if (found.found && isStructurallyEmpty(found.value)) {
+      return {
+        authoritativeEmpty: {
+          sourcePath: pathParts.join('.'),
+          sourceValue: found.value,
+          reasonCode: source === 'shop-card'
+            ? 'SHOP_CARD_SUCCESS_EMPTY_SENTINEL'
+            : 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL',
+        },
+      };
+    }
+  }
+  return {};
+}
+
+function valueAt(
+  value: unknown,
+  pathParts: string[],
+): { found: boolean; value: unknown } {
+  let current = value;
+  for (const key of pathParts) {
+    if (!current || typeof current !== 'object' || !Object.hasOwn(current, key)) {
+      return { found: false, value: undefined };
+    }
+    current = (current as Record<string, unknown>)[key];
+  }
+  return { found: true, value: current };
+}
+
+function isStructurallyEmpty(value: unknown): boolean {
+  return value === null ||
+    (Array.isArray(value) && value.length === 0) ||
+    (typeof value === 'object' && value !== null && Object.keys(value).length === 0);
 }
 
 export function requireSkuSelectorModel(
@@ -642,6 +892,8 @@ interface PageInfo {
   attributes: ProductAttribute[];
   packageInfo: SkuPackage[];
   skuModel: SkuBizModel | null;
+  rawPayload: unknown;
+  skuRawPayload: unknown;
 }
 
 /**
@@ -908,6 +1160,10 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
           ? String(descFields.leafCategoryId)
           : null;
       return {
+        sourcePayload: {
+          contextResult: w.context?.result ?? null,
+          feGlobals: feg,
+        },
         skuContext: {
           skuModel: skuDataJson.skuModel,
           skuModelOrigin: skuDataJson.skuModelOrigin,
@@ -943,11 +1199,13 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     const raw = await page.title();
     title = raw.replace(/\s*-\s*阿里巴巴\s*$/, '').trim();
   }
-  const { skuContext, ...pageInfo } = fromContext;
+  const { sourcePayload, skuContext, ...pageInfo } = fromContext;
   return {
     ...pageInfo,
     title,
     skuModel: mapContextSkuBizModel(skuContext),
+    rawPayload: sourcePayload,
+    skuRawPayload: skuContext,
   };
 }
 
@@ -971,6 +1229,12 @@ async function scrapeDomFallback(page: Page): Promise<PageInfo> {
         imgSrc('img[alt*="主图"]'),
     };
   });
+  let rawPayload: unknown = { title: raw, extracted: info };
+  try {
+    rawPayload = await page.content();
+  } catch {
+    // Some reduced test/browser adapters cannot expose the document source.
+  }
   return {
     title,
     supplierName: info.supplierName,
@@ -988,6 +1252,8 @@ async function scrapeDomFallback(page: Page): Promise<PageInfo> {
     attributes: [],
     packageInfo: [],
     skuModel: null,
+    rawPayload,
+    skuRawPayload: null,
   };
 }
 

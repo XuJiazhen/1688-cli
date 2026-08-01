@@ -1,0 +1,29 @@
+{
+  "schema": "offer-detail-historical-gap-diagnostic-v1",
+  "baselineCompletedOffers": 118,
+  "shopCard": {
+    "responseObserved": 118,
+    "parsed": 113
+  },
+  "consignment": {
+    "responseObserved": 113,
+    "parsed": 111
+  },
+  "bothParsed": 107,
+  "offers": [
+    { "offerId": "1030645644156", "source": "shop-card", "observed": true, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "1002543684834", "source": "shop-card", "observed": true, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "987690973186", "source": "shop-card", "observed": true, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "1038896512490", "source": "shop-card", "observed": true, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "1032979838807", "source": "shop-card", "observed": true, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "1002543684834", "source": "offer-consignment", "observed": true, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "978004114888", "source": "offer-consignment", "observed": true, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "1059793092192", "source": "offer-consignment", "observed": false, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "951708781824", "source": "offer-consignment", "observed": false, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "977802213829", "source": "offer-consignment", "observed": false, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "974187867257", "source": "offer-consignment", "observed": false, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" },
+    { "offerId": "970536061201", "source": "offer-consignment", "observed": false, "parsed": false, "rootCause": "historical_evidence_insufficient", "rawEvidenceRef": null, "expectedTerminalState": "failed" }
+  ],
+  "gateStatus": "blocked_pending_controlled_recollection",
+  "decision": "Historical completed status is not promoted to the V2 completeness contract without raw response evidence."
+}

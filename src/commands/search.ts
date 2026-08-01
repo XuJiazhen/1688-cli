@@ -25,6 +25,7 @@ import {
 } from '../session/search-mtop.js';
 import { parseMtopJsonp } from '../session/mtop.js';
 import { sleep } from '../session/wait.js';
+import { withIsolatedOperationPages } from '../session/page-lifecycle.js';
 import type { OfferResult, OfferArgs } from './offer.js';
 import {
   applySearchControls,
@@ -118,7 +119,7 @@ export async function execute(
   ctx: BrowserContext,
   args: SearchArgs,
 ): Promise<SearchResult> {
-  return withRecovery(
+  return withIsolatedOperationPages(ctx, () => withRecovery(
     ctx,
     { cmd: 'search', args },
     async () => {
@@ -151,7 +152,7 @@ export async function execute(
       };
     },
     { headed: args.headed === true, maxRetries: 1 },
-  );
+  ));
 }
 
 /** Executes one production search page while retaining the legacy search API. */
@@ -175,7 +176,8 @@ export async function fetchIncrementalSearchPage(
   const sort = args.sort ?? 'relevance';
   let captured: Offer[] | null = null;
   let collectedAt: string | null = null;
-  await fetchSearch(
+  let remoteHasMore: boolean | null = null;
+  await withIsolatedOperationPages(ctx, () => fetchSearch(
     ctx,
     keyword,
     args.headed === true,
@@ -184,19 +186,32 @@ export async function fetchIncrementalSearchPage(
     args.pageDelayMin ?? 2,
     args.pageDelayMax ?? 4,
     {
-      onCapturedPage(page, offers) {
+      onCapturedPage(page, offers, hasMore) {
         if (page === args.page) {
           captured = offers;
           collectedAt = new Date().toISOString();
+          remoteHasMore = hasMore;
         }
       },
     },
-  );
+  ));
   if (captured === null || collectedAt === null) {
     throw new CliError(
       9,
       'CAPTURE_TIMEOUT',
       `Search page ${args.page} did not produce a correlated offer response.`,
+    );
+  }
+  if (remoteHasMore === null) {
+    throw new CliError(
+      9,
+      'SEARCH_RESPONSE_HAS_MORE_INVALID',
+      'Correlated search response did not expose a valid OFFER.hasMore sentinel.',
+      {
+        category: 'protocol',
+        retryable: false,
+        recoveryAction: 'refresh-search-contract',
+      },
     );
   }
   const pageOffers = captured as Offer[];
@@ -205,7 +220,7 @@ export async function fetchIncrementalSearchPage(
     pageSize: SEARCH_REMOTE_PAGE_SIZE,
     remoteSort: remoteSortType(sort),
     offers: pageOffers,
-    hasMore: pageOffers.length >= SEARCH_REMOTE_PAGE_SIZE,
+    hasMore: remoteHasMore,
     collectedAt: collectedAt as string,
   };
 }
@@ -302,7 +317,7 @@ async function fetchSearch(
   pageDelayMin: number,
   pageDelayMax: number,
   hooks: {
-    onCapturedPage?: (page: number, offers: Offer[]) => void;
+    onCapturedPage?: (page: number, offers: Offer[], hasMore: boolean | null) => void;
   } = {},
 ): Promise<Offer[]> {
   const page = await ctx.newPage();
@@ -558,11 +573,9 @@ async function fetchSearch(
         if (headed) {
           info('A Chrome window has opened — switch focus to it now.');
         }
-        if (sortType) {
-          await searchThenSortOrNavigate();
-        } else {
-          await searchFromHomepageOrNavigate();
-        }
+        // Production search is compiled once and navigated once. Filter/sort
+        // locators remain diagnostic-only and are never an implicit fallback.
+        await navigateTo(baseUrl);
       }, headed ? 180000 : 12000);
     } else {
       try {
@@ -634,7 +647,7 @@ async function fetchSearch(
       break;
     }
     if (pageNum === 1) await detectLoginRedirect(page);
-    hooks.onCapturedPage?.(pageNum, [...capturedOffers]);
+    hooks.onCapturedPage?.(pageNum, [...capturedOffers], captureResult.remoteHasMore);
 
     // Accumulate with cross-page dedup. 1688 occasionally repeats P4P ad
     // slots across pages; dedup keeps the result set clean.
@@ -648,12 +661,23 @@ async function fetchSearch(
 
     // Stop conditions:
     //  - collected enough for the caller's --max
-    //  - short page (< 60) means we hit the last page of results
+    //  - only the source `hasMore=false` sentinel ends source pagination
     //  - zero new items means pagination isn't advancing (bail rather than
     //    spin through identical pages)
     if (allOffers.length >= maxResults) break;
-    if (capturedOffers.length < SEARCH_REMOTE_PAGE_SIZE) break;
-    if (added === 0) break;
+    if (captureResult.remoteHasMore === false) break;
+    if (captureResult.remoteHasMore === true && added === 0) {
+      throw new CliError(
+        9,
+        'SEARCH_PAGINATION_NO_PROGRESS',
+        `Search page ${pageNum} declared hasMore but added no new offers.`,
+        {
+          category: 'protocol',
+          retryable: true,
+          recoveryAction: 'retry-same-logical-page',
+        },
+      );
+    }
 
     // Configurable pacing makes long search snapshots reproducible and lets
     // callers record the exact browsing cadence used for a risk-control run.
@@ -715,8 +739,9 @@ export function buildSearchUrl(keyword: string, sort: SearchSort): string {
   // search for mojibake. Encode the keyword as GBK bytes first.
   const gbkQs = encodeGbkPercent(keyword);
   const sortType = remoteSortType(sort);
-  const sortQs = sortType ? `&sortType=${encodeURIComponent(sortType)}` : '';
-  return `https://s.1688.com/selloffer/offer_search.htm?keywords=${gbkQs}${sortQs}`;
+  const descendOrder = sort === 'price-asc' ? 'false' : 'true';
+  return `https://s.1688.com/selloffer/offer_search.htm?keywords=${gbkQs}` +
+    `&sortType=${encodeURIComponent(sortType)}&descendOrder=${descendOrder}`;
 }
 
 export function shouldUseMainSiteSearchSubmit(sort: SearchSort): boolean {
@@ -873,11 +898,10 @@ async function waitForLikelySearchNavigation(
   return false;
 }
 
-function remoteSortType(sort: SearchSort): string | null {
-  if (sort === 'best-selling') return 'va_rmdarkgmv30';
-  if (sort === 'price-asc') return 'va_price_asc';
-  if (sort === 'price-desc') return 'va_price_desc';
-  return null;
+function remoteSortType(sort: SearchSort): string {
+  if (sort === 'best-selling') return 'va_sales360';
+  if (sort === 'price-asc' || sort === 'price-desc') return 'price';
+  return 'normal';
 }
 
 async function isBlocked(page: Page, retries = 3): Promise<boolean> {

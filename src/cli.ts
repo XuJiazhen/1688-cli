@@ -530,8 +530,24 @@ program
   .option('--profile <name>', 'Profile name (default: default)')
   .option('--idle-timeout <minutes>', 'Idle timeout in minutes', '30')
   .option('--no-prewarm', 'Skip pre-warming Chromium at startup')
+  .option('--supervisor-config <path>', '0600 Supervisor-issued daemon config')
+  .option('--legacy-rollback', 'Explicitly run the legacy unfenced daemon')
   .action(async (opts) => {
     const { start } = await import('./daemon/server.js');
+    const supervisorConfig = opts.supervisorConfig
+      ?? process.env.BB1688_SUPERVISOR_CONFIG;
+    if (supervisorConfig) {
+      const { loadManagedServerOptions } = await import('./daemon/managed-bootstrap.js');
+      await start(await loadManagedServerOptions(supervisorConfig, opts.profile));
+      return;
+    }
+    if (opts.legacyRollback !== true) {
+      throw new CliError(
+        20,
+        'SUPERVISOR_CONFIG_REQUIRED',
+        'serve requires --supervisor-config; use --legacy-rollback only for an explicit legacy rollback cohort.',
+      );
+    }
     await start({
       profile: opts.profile,
       idleTimeoutMs: Math.max(1, parseInt(opts.idleTimeout, 10)) * 60_000,
@@ -557,6 +573,22 @@ daemon
           `Daemon started for profile "${profile}" (pid ${pid}).\n`,
         ),
       data: { ok: true, profile, pid },
+    });
+  });
+
+daemon
+  .command('managed-start')
+  .description('Start a Supervisor-fenced daemon from a 0600 config')
+  .requiredOption('--supervisor-config <path>', 'Supervisor-issued daemon config')
+  .action(async (opts) => {
+    const { startManaged } = await import('./daemon/manager.js');
+    const { emit } = await import('./io/output.js');
+    const { pid, profile } = await startManaged(opts.supervisorConfig);
+    emit({
+      human: () => process.stdout.write(
+        `Managed daemon started for profile "${profile}" (pid ${pid}).\n`,
+      ),
+      data: { ok: true, profile, pid, managed: true },
     });
   });
 

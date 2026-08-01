@@ -475,7 +475,7 @@ describe('startResponseCapture', () => {
     });
   });
 
-  it('ignores late parser rejection after a failed action disposes the capture', async () => {
+  it('drains late parser rejection before a failed action returns', async () => {
     const mockPage = page();
     let rejectParse!: (error: Error) => void;
     const parseResult = new Promise<{ ok: true }>((_resolve, reject) => {
@@ -488,21 +488,57 @@ describe('startResponseCapture', () => {
       parse: async () => parseResult,
     });
 
-    await expect(
-      capture.waitForAction(async () => {
+    let returned = false;
+    const pending = capture.waitForAction(async () => {
         mockPage.emitResponse(response('https://example.com/api'));
         await Promise.resolve();
         throw new Error('click failed');
-      }),
-    ).rejects.toThrow('click failed');
+      }).finally(() => { returned = true; });
 
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(returned).toBe(false);
     rejectParse(new Error('late parser failure'));
-    await Promise.resolve();
-    await Promise.resolve();
+    await expect(pending).rejects.toThrow('click failed');
     expect(capture.diagnostics()).toMatchObject({
       disposed: true,
       failureCount: 0,
     });
+  });
+
+  it('bounds a stuck drain and quarantines its eventually completed callback', async () => {
+    vi.useFakeTimers();
+    try {
+      const mockPage = page();
+      let releaseParse!: () => void;
+      const parseGate = new Promise<void>((resolve) => { releaseParse = resolve; });
+      const capture = startResponseCapture({
+        page: mockPage,
+        timeoutMs: 100,
+        matcher: /api/,
+        parse: async () => {
+          await parseGate;
+          return { ok: true };
+        },
+      });
+      const pending = capture.waitForAction(async () => {
+        mockPage.emitResponse(response('https://example.com/api'));
+        throw new Error('fixture cancellation');
+      });
+      const assertion = expect(pending).rejects.toMatchObject({
+        code: 'COLLECTOR_CAPTURE_DRAIN_TIMEOUT',
+        details: { retryable: false },
+      });
+      await Promise.resolve();
+      await vi.advanceTimersByTimeAsync(100);
+      await assertion;
+      releaseParse();
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(capture.diagnostics().disposed).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('preserves parser diagnostics through waitForAction', async () => {

@@ -1,7 +1,9 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { OfferResult } from '../commands/offer.js';
 import { CliError } from '../io/errors.js';
 import type { OfferMediaManifest } from '../session/offer-media.js';
+import { createOfferSingletonSourceKeyV1 } from '../session/offer-media.js';
+import { sanitizeCollectorPayloadV1 } from '../session/collector-raw-archive.js';
 import {
   redactDiagnosticMetadata,
   redactTextForDiagnostics,
@@ -18,6 +20,65 @@ export type OfferCaptureOutcome =
   | { status: 'captured'; value: OfferResult }
   | { status: 'failed'; error: unknown };
 
+export interface OfferSkuManifestV1 {
+  schema: 'offer-sku-manifest-v1';
+  offerId: string;
+  state: 'explicit-variants' | 'offer-singleton';
+  explicitSkuCount: number;
+  skuIds: string[];
+  singletonSourceKey: string | null;
+  optionCount: number;
+  nullFactsCarryAvailability: true;
+  manifestHash: string;
+}
+
+export function createOfferSkuManifestV1(offer: OfferResult): OfferSkuManifestV1 {
+  const skuIds = offer.skus.map((sku) => sku.skuId.trim());
+  if (offer.skus.length === 0 && offer.options.length > 0) {
+    throw new CliError(
+      9,
+      'OFFER_SKU_IDENTITY_UNRESOLVED',
+      'Offer variants without stable platform skuId values cannot be downgraded to a singleton.',
+      {
+        category: 'protocol',
+        retryable: false,
+        recoveryAction: 'inspect-sku-parser',
+      },
+    );
+  }
+  if (skuIds.some((skuId) => !skuId) || new Set(skuIds).size !== skuIds.length) {
+    throw new CliError(9, 'OFFER_SKU_IDENTITY_INVALID', 'Explicit Offer SKUs require unique stable skuId values.', {
+      category: 'protocol', retryable: false, recoveryAction: 'inspect-sku-parser',
+    });
+  }
+  for (const sku of offer.skus) {
+    for (const field of ['price', 'stock', 'saleCount'] as const) {
+      if (sku[field] === null && sku.availability[field] !== 'not-present') {
+        throw new CliError(9, 'OFFER_SKU_AVAILABILITY_INVALID', `Null ${field} requires not-present availability.`);
+      }
+      if (sku[field] !== null && sku.availability[field] !== 'available') {
+        throw new CliError(9, 'OFFER_SKU_AVAILABILITY_INVALID', `Present ${field} requires available availability.`);
+      }
+    }
+  }
+  const content = {
+    schema: 'offer-sku-manifest-v1' as const,
+    offerId: offer.offerId,
+    state: offer.skus.length === 0 ? 'offer-singleton' as const : 'explicit-variants' as const,
+    explicitSkuCount: offer.skus.length,
+    skuIds,
+    singletonSourceKey: offer.skus.length === 0
+      ? createOfferSingletonSourceKeyV1(offer.offerId)
+      : null,
+    optionCount: offer.options.length,
+    nullFactsCarryAvailability: true as const,
+  };
+  return {
+    ...content,
+    manifestHash: `sha256:${createHash('sha256').update(JSON.stringify(content), 'utf8').digest('hex')}`,
+  };
+}
+
 export interface CreateOfferCollectionBatchInput {
   unit: unknown;
   outcome: OfferCaptureOutcome;
@@ -25,6 +86,7 @@ export interface CreateOfferCollectionBatchInput {
   startedAt: string;
   completedAt: string;
   rawEvidenceRefs?: string[];
+  sourceRequestId?: string;
 }
 
 export function createOfferCollectionBatch(
@@ -46,7 +108,10 @@ export function createOfferCollectionBatch(
   }
   const collectedAt = normalizeTimestamp(input.completedAt);
   const media = sanitizeMediaManifest(offer.media);
-  const sanitizedOffer: OfferResult = { ...offer, media };
+  const sanitizedOffer = sanitizeCollectorPayloadV1({
+    ...offer,
+    media,
+  }) as OfferResult;
   const observations = unit.kind === 'offer-detail'
     ? [{ offerId: offer.offerId, offer: sanitizedOffer, collectedAt }]
     : [{ offerId: offer.offerId, media, collectedAt }];
@@ -81,6 +146,7 @@ export function createOfferCollectionBatch(
     schemaVersion: 1,
     batchId: input.batchId ?? randomUUID(),
     unitId: unit.unitId,
+    ...(input.sourceRequestId ? { sourceRequestId: input.sourceRequestId } : {}),
     kind: unit.kind,
     status: mediaFailed ? 'partial' : 'completed',
     startedAt: input.startedAt,
@@ -154,6 +220,7 @@ function createFailedBatch(
     schemaVersion: 1,
     batchId: input.batchId ?? randomUUID(),
     unitId: unit.unitId,
+    ...(input.sourceRequestId ? { sourceRequestId: input.sourceRequestId } : {}),
     kind: unit.kind,
     status: actionRequired === undefined ? 'failed' : 'blocked',
     startedAt: input.startedAt,
@@ -189,6 +256,36 @@ function createFailedBatch(
     rawEvidenceRefs: sanitizeEvidenceRefs(input.rawEvidenceRefs ?? []),
     metrics: { capturedOffers: 0, failedOffers: 1 },
   });
+}
+
+export function createOfferPageActionBatchesV1(input: {
+  offer: OfferResult;
+  unitId: string;
+  sourceRequestId: string;
+  detailBatchId: string;
+  mediaBatchId: string;
+  startedAt: string;
+  completedAt: string;
+  rawEvidenceRefs: string[];
+}): [CollectionBatch, CollectionBatch] {
+  const unit = (kind: 'offer-detail' | 'offer-media-manifest'): CollectionUnit => ({
+    schemaVersion: 1,
+    unitId: input.unitId,
+    kind,
+    subject: { offerId: input.offer.offerId },
+    scope: { requestedScope: 'page' },
+  });
+  const common = {
+    outcome: { status: 'captured' as const, value: input.offer },
+    sourceRequestId: input.sourceRequestId,
+    startedAt: input.startedAt,
+    completedAt: input.completedAt,
+    rawEvidenceRefs: input.rawEvidenceRefs,
+  };
+  return [
+    createOfferCollectionBatch({ ...common, unit: unit('offer-detail'), batchId: input.detailBatchId }),
+    createOfferCollectionBatch({ ...common, unit: unit('offer-media-manifest'), batchId: input.mediaBatchId }),
+  ];
 }
 
 function sanitizeEvidenceRefs(refs: readonly string[]): string[] {

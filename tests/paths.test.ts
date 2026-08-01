@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   daemonLogFile,
   daemonVersionFile,
+  defaultProfileName,
   lockFile,
   pidFile,
   profilePath,
@@ -12,6 +13,12 @@ import {
 } from '../src/session/paths.js';
 
 describe('platform paths', () => {
+  it('rejects profile names that can escape or alias the runtime directory', () => {
+    for (const name of ['../outside', 'nested/profile', '..', '.', '/tmp/profile', 'nested\\profile']) {
+      expect(() => defaultProfileName(name)).toThrow(/safe local identifier/u);
+    }
+  });
+
   it('uses Unix socket files outside Windows', () => {
     expect(socketPathForPlatform('darwin', '/Users/me/.1688')).toBe(
       path.join('/Users/me/.1688', 'daemon.sock'),

@@ -3,6 +3,7 @@ import {
   mapSupplierQualificationPayload,
   type SupplierQualification,
 } from '../session/supplier-qualification.js';
+import { sanitizeCollectorPayloadV1 } from '../session/collector-raw-archive.js';
 import {
   assertCheckpointCompatible,
   fingerprintCollectionUnit,
@@ -25,6 +26,7 @@ interface QualificationBatchBaseInput {
   requestMemberId?: string;
   sourceRef?: string;
   rawEvidenceRefs?: string[];
+  sourceRequestId?: string;
 }
 
 export type CreateQualificationBatchInput = QualificationBatchBaseInput &
@@ -42,9 +44,15 @@ export interface QualificationObservation {
   registeredBusinessScope: Evidence<string>;
   socialCreditCode: Evidence<string>;
   establishedAt: Evidence<string>;
+  registeredAddress: Evidence<string>;
+  sellerType: Evidence<string>;
   shopSummary: Evidence<string>;
   productionService: Evidence<string>;
   businessLine: Evidence<string>;
+  strengthSignals: SupplierQualification['strengthSignals'];
+  strengthSignalsAvailability: SupplierQualification['strengthSignalsAvailability'];
+  guaranteeItems: SupplierQualification['guaranteeItems'];
+  guaranteeItemsAvailability: SupplierQualification['guaranteeItemsAvailability'];
   certificates: SupplierQualification['certificates'];
   certificateListAvailability: SupplierQualification['certificateListAvailability'];
   certificationImages: SupplierQualification['certificationImages'];
@@ -83,19 +91,24 @@ export function createQualificationBatch(
     input.sourceRef,
     rawEvidenceRefs[0],
   );
-  const observation = rebaseQualification(
+  const observation = sanitizeCollectorPayloadV1(rebaseQualification(
     qualification,
     source,
     requestMemberId,
-  );
+  )) as unknown as QualificationObservation;
   const failedFacts = countAvailability(observation, 'failed');
   const availableFacts = countAvailability(observation, 'available');
   const notPresentFacts = countAvailability(observation, 'not-present');
   const hasFailure =
-    failedFacts > 0 || observation.certificateListAvailability === 'failed';
+    failedFacts > 0 ||
+    observation.certificateListAvailability === 'failed' ||
+    observation.strengthSignalsAvailability === 'failed' ||
+    observation.guaranteeItemsAvailability === 'failed';
   const payloadFailed =
     failedFacts === qualificationEvidence(observation).length &&
-    observation.certificateListAvailability === 'failed';
+    observation.certificateListAvailability === 'failed' &&
+    observation.strengthSignalsAvailability === 'failed' &&
+    observation.guaranteeItemsAvailability === 'failed';
   const completedAt = normalizeTimestamp(input.completedAt, 'completedAt');
   const checkpoint = hasFailure
     ? qualificationCheckpoint(unit, completedAt, restoredCheckpoint)
@@ -106,6 +119,7 @@ export function createQualificationBatch(
     schemaVersion: 1,
     batchId: input.batchId,
     unitId: unit.unitId,
+    ...(input.sourceRequestId ? { sourceRequestId: input.sourceRequestId } : {}),
     kind: 'store-qualification',
     status: payloadFailed ? 'failed' : hasFailure ? 'partial' : 'completed',
     startedAt: input.startedAt,
@@ -165,6 +179,13 @@ function qualificationErrors(
     };
     uniqueErrors.set(`${error.code}\u0000${error.message}`, error);
   }
+  for (const [availability, code, message] of [
+    [qualification.strengthSignalsAvailability, 'QUALIFICATION_STRENGTH_SIGNALS_FAILED', 'Qualification strength/factory signals could not be collected or parsed.'],
+    [qualification.guaranteeItemsAvailability, 'QUALIFICATION_GUARANTEE_ITEMS_FAILED', 'Qualification guarantee items could not be collected or parsed.'],
+  ] as const) {
+    if (availability !== 'failed' || uniqueErrors.size > 0) continue;
+    uniqueErrors.set(`${code}\u0000${message}`, { code, message });
+  }
   return [...uniqueErrors.values()].map((error) => ({
     ...error,
     retryable: true,
@@ -203,9 +224,15 @@ function rebaseQualification(
     ),
     socialCreditCode: rebaseEvidence(qualification.socialCreditCode, source),
     establishedAt: rebaseEvidence(qualification.establishedAt, source),
+    registeredAddress: rebaseEvidence(qualification.registeredAddress, source),
+    sellerType: rebaseEvidence(qualification.sellerType, source),
     shopSummary: rebaseEvidence(qualification.shopSummary, source),
     productionService: rebaseEvidence(qualification.productionService, source),
     businessLine: rebaseEvidence(qualification.businessLine, source),
+    strengthSignals: qualification.strengthSignals.map((signal) => ({ ...signal })),
+    strengthSignalsAvailability: qualification.strengthSignalsAvailability,
+    guaranteeItems: qualification.guaranteeItems.map((item) => ({ ...item })),
+    guaranteeItemsAvailability: qualification.guaranteeItemsAvailability,
     certificates: qualification.certificates.map((certificate) => ({ ...certificate })),
     certificateListAvailability: qualification.certificateListAvailability,
     certificationImages: qualification.certificationImages.map((image) => ({ ...image })),
@@ -279,6 +306,8 @@ function qualificationEvidence(
     qualification.registeredBusinessScope,
     qualification.socialCreditCode,
     qualification.establishedAt,
+    qualification.registeredAddress,
+    qualification.sellerType,
     qualification.shopSummary,
     qualification.productionService,
     qualification.businessLine,

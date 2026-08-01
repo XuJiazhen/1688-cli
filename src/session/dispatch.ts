@@ -121,6 +121,11 @@ export async function dispatch<TArgs, TData>(
   args: TArgs,
   opts: DispatchOpts = {},
 ): Promise<TData> {
+  if (process.env.BB1688_SUPERVISOR_MANAGED === '1') {
+    throw new TypeError(
+      'Supervisor-managed PageActions must use direct fenced RPC; legacy dispatch and inline fallback are disabled.',
+    );
+  }
   const profile = defaultProfileName(opts.profile);
   const requestId = opts.requestId ?? makeRequestId();
   if (

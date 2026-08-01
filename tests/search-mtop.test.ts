@@ -4,6 +4,8 @@ import {
   SEARCH_MTOP_API,
   mapOffer,
   parseOfferItemsFromMtopText,
+  parseSearchMtopPageV1,
+  readCapturedSearchRequestBusinessV1,
   readSearchMtopRequestMeta,
 } from '../src/session/search-mtop.js';
 
@@ -49,6 +51,45 @@ describe('readSearchMtopRequestMeta', () => {
   });
 });
 
+describe('strict Search MTOP V1 envelope', () => {
+  it('requires ret/code/success/items and reads the source hasMore independently of page size', () => {
+    const parsed = parseSearchMtopPageV1(`mtopjsonp1(${JSON.stringify({
+      ret: ['SUCCESS::调用成功'],
+      data: {
+        code: 200, success: true,
+        data: { OFFER: { items: [{ data: { offerId: '1', title: 'One' } }], hasMore: 'true', found: '99' } },
+      },
+    })})`);
+    expect(parsed).toMatchObject({ hasMore: true, found: '99', offers: [{ offerId: '1' }] });
+    expect(parsed.responseBusinessHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+  });
+
+  it.each([
+    [{ ret: ['FAIL'], data: { code: 200, success: true, data: { OFFER: { items: [], hasMore: 'false' } } } }, 'ret'],
+    [{ ret: ['SUCCESS'], data: { code: 500, success: false, data: { OFFER: { items: [], hasMore: 'false' } } } }, 'code/success'],
+    [{ ret: ['SUCCESS'], data: { code: 200, success: true, data: { OFFER: { items: [] } } } }, 'hasMore'],
+  ])('fails closed when required response state is missing', (body, _case) => {
+    expect(() => parseSearchMtopPageV1(JSON.stringify(body))).toThrow();
+  });
+
+  it('reads all typed request keys without exposing outer signing fields', () => {
+    const url = mtopUrl({
+      appId: SEARCH_APP_ID,
+      params: JSON.stringify({
+        method: 'getOfferList', keywords: '%C3%F0', beginPage: '2', pageSize: 60,
+        pageId: 'page-session', sortType: 'price', descendOrder: false,
+        province: '广东', city: '广州', quantityBegin: '1',
+      }),
+    });
+    expect(readCapturedSearchRequestBusinessV1(url)).toEqual({
+      appId: SEARCH_APP_ID, method: 'getOfferList', keywords: '%C3%F0',
+      beginPage: '2', pageSize: 60, pageId: 'page-session', sortType: 'price',
+      descendOrder: false,
+      filterParams: { city: '广州', province: '广东', quantityBegin: '1' },
+    });
+  });
+});
+
 describe('parseOfferItemsFromMtopText', () => {
   it('parses offer items from JSONP response bodies', () => {
     const offers = parseOfferItemsFromMtopText(
@@ -73,6 +114,22 @@ describe('parseOfferItemsFromMtopText', () => {
 });
 
 describe('mapOffer', () => {
+  it('preserves cellType P4P semantics and redacts contacts embedded in title HTML', () => {
+    const mapped = mapOffer({
+      cellType: 'offer_p4p_card',
+      data: {
+        offerId: '1001',
+        title: '<font>灭火器 13800138000 wx:fixture_shop</font>',
+        isP4P: 'false',
+      },
+    });
+    expect(mapped).toMatchObject({
+      offerId: '1001',
+      title: '灭火器 [redacted] [redacted]',
+      isP4P: true,
+    });
+  });
+
   it('returns null when offerId is missing', () => {
     expect(mapOffer({ data: { title: 'missing id' } })).toBeNull();
   });

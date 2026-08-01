@@ -3,7 +3,12 @@ import {
   SEARCH_REMOTE_PAGE_LIMIT,
   SEARCH_REMOTE_PAGE_SIZE,
 } from '../session/search-limits.js';
-import type { Offer } from '../session/search-mtop.js';
+import type { Offer, RawOfferItem } from '../session/search-mtop.js';
+import {
+  redactCollectorTextV1,
+  sanitizeCollectorPayloadV1,
+} from '../session/collector-raw-archive.js';
+import { SEARCH_FILTER_REQUEST_KEYS } from '../session/search-contract.js';
 import {
   assertCheckpointCompatible,
   fingerprintCollectionUnit,
@@ -90,11 +95,24 @@ export interface CreateSearchPageBatchInput {
   page: number;
   remoteSort: string | null;
   offers: readonly Offer[];
+  rawItems?: readonly RawOfferItem[];
   hasMore: boolean;
   startedAt: string;
   collectedAt: string;
   completedAt: string;
   rawEvidenceRefs?: string[];
+  requestSnapshot?: {
+    parameterSetHash: string;
+    requestBusinessHash: string;
+    pageSessionHash: string;
+    filterConfigSnapshotHash: string;
+    serializerCapabilitySnapshotHash: string;
+    businessSort: 'relevance' | 'sales' | 'price-asc' | 'price-desc';
+    compatibilitySortInput: string | null;
+    remoteSortType: 'normal' | 'va_sales360' | 'price';
+    remoteDescendOrder: boolean;
+    filterParams: Record<string, string | boolean | number>;
+  };
 }
 
 export interface DrainSearchCheckpointSnapshotInput {
@@ -206,6 +224,9 @@ export function createSearchPageBatch(
   input: CreateSearchPageBatchInput,
 ): SearchPageBatch {
   const plan = planSearchBatch(input.unit, input.checkpoint);
+  const requestSnapshot = input.requestSnapshot === undefined
+    ? undefined
+    : normalizeSearchBatchRequestSnapshot(input.requestSnapshot);
   if (!Number.isInteger(input.page) || input.page < 1) {
     throw new CliError(2, 'BAD_INPUT', 'Search source page must be a positive integer.');
   }
@@ -323,15 +344,29 @@ export function createSearchPageBatch(
   const emittedCandidates =
     remotePageOversize || snapshotTooLarge ? [] : initiallyEmittedCandidates;
   const observations: SearchOfferObservation[] = emittedCandidates.map(
-    ({ offer, pageRank, rawRank, collectedAt: itemCollectedAt, remoteSort }) => ({
-      offerId: offer.offerId,
-      offer,
-      sourcePage: input.page,
-      remoteSort,
-      pageRank,
-      rawRank,
-      collectedAt: itemCollectedAt,
-    }),
+    ({ offer, pageRank, rawRank, collectedAt: itemCollectedAt, remoteSort }) => {
+      const raw = input.rawItems?.find((item) => item.data?.offerId === offer.offerId);
+      return sanitizeCollectorPayloadV1({
+        offerId: offer.offerId,
+        offer,
+        sourcePage: input.page,
+        remoteSort,
+        pageRank,
+        rawRank,
+        collectedAt: itemCollectedAt,
+        ...(raw === undefined
+          ? {}
+          : {
+              sourcePresentation: {
+                cellType: raw.cellType ?? null,
+                titleHtml: raw.data?.title === undefined
+                  ? null
+                  : redactCollectorTextV1(raw.data.title),
+                p4pDeclared: offer.isP4P === true,
+              },
+            }),
+      }) as SearchOfferObservation;
+    },
   );
   const emittedOfferIds = new Set(observations.map((item) => item.offerId));
   const pendingKeys = [
@@ -536,6 +571,9 @@ export function createSearchPageBatch(
       remoteSort: input.remoteSort,
       remotePageSize: SEARCH_REMOTE_PAGE_SIZE,
       remoteHasMore,
+      ...(requestSnapshot === undefined
+        ? {}
+        : { requestSnapshot }),
     },
     observations,
     completeness: {
@@ -564,9 +602,33 @@ export function createSearchPageBatch(
       emissionLimit,
       remotePageLimit: SEARCH_REMOTE_PAGE_LIMIT,
       noProgressAttempts,
+      requestSnapshots: requestSnapshot === undefined ? 0 : 1,
       snapshotBytes: createdSnapshotBytes,
     },
   };
+}
+
+function normalizeSearchBatchRequestSnapshot(
+  snapshot: NonNullable<CreateSearchPageBatchInput['requestSnapshot']>,
+): NonNullable<CreateSearchPageBatchInput['requestSnapshot']> {
+  for (const [field, value] of Object.entries({
+    parameterSetHash: snapshot.parameterSetHash,
+    requestBusinessHash: snapshot.requestBusinessHash,
+    pageSessionHash: snapshot.pageSessionHash,
+    filterConfigSnapshotHash: snapshot.filterConfigSnapshotHash,
+    serializerCapabilitySnapshotHash: snapshot.serializerCapabilitySnapshotHash,
+  })) {
+    if (!/^sha256:[0-9a-f]{64}$/.test(value)) {
+      throw new CliError(2, 'BAD_INPUT', `Search request snapshot ${field} is invalid.`);
+    }
+  }
+  const allowed = new Set<string>(SEARCH_FILTER_REQUEST_KEYS);
+  for (const [key, value] of Object.entries(snapshot.filterParams)) {
+    if (!allowed.has(key) || !['string', 'number', 'boolean'].includes(typeof value)) {
+      throw new CliError(2, 'BAD_INPUT', `Search request snapshot contains unsafe filter key ${key}.`);
+    }
+  }
+  return structuredClone(snapshot);
 }
 
 export function drainSearchCheckpointSnapshot(

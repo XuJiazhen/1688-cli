@@ -3,6 +3,7 @@ import {
   redactTextForDiagnostics,
   redactUrlForDiagnostics,
 } from './redaction.js';
+import { CliError } from '../io/errors.js';
 
 export type ResponseMatcher = RegExp | ((response: PWResponse) => boolean);
 export type ResponseParser<T> = (
@@ -61,6 +62,7 @@ export interface ResponseCapture<T> {
     action: () => Promise<TResult>,
   ): Promise<ResponseCaptureActionResult<T, TResult>>;
   dispose(): void;
+  drain(): Promise<void>;
   diagnostics(): ResponseCaptureDiagnostics;
 }
 
@@ -69,6 +71,7 @@ export function startResponseCapture<T>(
 ): ResponseCapture<T> {
   const maxDiagnosticsEntries = opts.maxDiagnosticsEntries ?? 5;
   const startedAt = new Date().toISOString();
+  const drainDeadlineAt = Date.now() + opts.timeoutMs;
   let endedAt: string | undefined;
   let disposed = false;
   let settled = false;
@@ -82,6 +85,7 @@ export function startResponseCapture<T>(
   let lastParsedUrl: string | undefined;
   const failures: ResponseCaptureFailure[] = [];
   const emptyResults: ResponseCaptureEmptyResult[] = [];
+  const inFlight = new Set<Promise<void>>();
   let waitPromise: Promise<T | null> | null = null;
   let resolveCaptured!: (value: T) => void;
   const captured = new Promise<T>((resolve) => {
@@ -131,7 +135,7 @@ export function startResponseCapture<T>(
     return opts.matcher(response);
   };
 
-  const onResponse = async (response: PWResponse) => {
+  const handleResponse = async (response: PWResponse) => {
     if (disposed || settled) return;
     const url = response.url();
     const diagnosticUrl = redactUrlForDiagnostics(url);
@@ -166,6 +170,23 @@ export function startResponseCapture<T>(
     } catch (e) {
       if (settled || disposed) return;
       recordFailure('parse', diagnosticUrl, e);
+    }
+  };
+  const onResponse = (response: PWResponse) => {
+    const task = handleResponse(response).catch((error) => {
+      recordFailure('match', '[response-unavailable]', error);
+    });
+    inFlight.add(task);
+    void task.finally(() => inFlight.delete(task));
+  };
+  const drain = async (): Promise<void> => {
+    while (inFlight.size > 0) {
+      const remainingMs = drainDeadlineAt - Date.now();
+      if (remainingMs <= 0) throw captureDrainTimeoutError();
+      await Promise.race([
+        Promise.allSettled([...inFlight]),
+        rejectAfterDrainDeadline(remainingMs),
+      ]);
     }
   };
 
@@ -207,14 +228,16 @@ export function startResponseCapture<T>(
           }
           return value;
         })
-        .finally(() => {
+        .finally(async () => {
           if (timer) clearTimeout(timer);
           dispose();
+          await drain();
         });
       return waitPromise;
     },
     async waitForAction<TResult>(action: () => Promise<TResult>) {
       const responsePromise = this.wait();
+      void responsePromise.catch(() => {});
       try {
         const actionResult = await action();
         const response = await responsePromise;
@@ -225,9 +248,31 @@ export function startResponseCapture<T>(
         };
       } finally {
         dispose();
+        await drain();
       }
     },
     dispose,
+    drain,
     diagnostics,
   };
+}
+
+function rejectAfterDrainDeadline(ms: number): Promise<never> {
+  return new Promise((_, reject) => {
+    const timer = setTimeout(() => reject(captureDrainTimeoutError()), ms);
+    timer.unref?.();
+  });
+}
+
+function captureDrainTimeoutError(): CliError {
+  return new CliError(
+    9,
+    'COLLECTOR_CAPTURE_DRAIN_TIMEOUT',
+    'Collector capture cleanup exceeded its bounded response deadline.',
+    {
+      category: 'protocol',
+      retryable: false,
+      recoveryAction: 'quarantine-capture-and-inspect-archive-writer',
+    },
+  );
 }

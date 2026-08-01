@@ -100,6 +100,414 @@ export interface ConsignmentInfo {
   supportedChannels: Array<{ name: string | null; iconUrl: string | null }>;
 }
 
+export type OfferSourceKindV1 = 'shop-card' | 'offer-consignment';
+
+export interface OfferSourceSidecarV1 {
+  schema: 'collector.offer-source-sidecar.v1';
+  source: OfferSourceKindV1;
+  offerId: string;
+  memberId: string;
+  correlatedOfferId: string | null;
+  correlatedMemberId: string | null;
+  pageActionId: string;
+  remoteRequestAttemptId: string;
+  capturedAt: string;
+  sanitizedRawPayload: unknown;
+}
+
+export function createOfferSourceSidecarV1(input: {
+  source: OfferSourceKindV1;
+  offerId: string;
+  memberId: string;
+  correlatedOfferId: string | null;
+  correlatedMemberId: string | null;
+  pageActionId: string;
+  remoteRequestAttemptId: string;
+  capturedAt: string;
+  rawPayload: unknown;
+}): { artifactRef: string; artifact: OfferSourceSidecarV1 } {
+  const artifact: OfferSourceSidecarV1 = {
+    schema: 'collector.offer-source-sidecar.v1',
+    source: input.source,
+    offerId: requiredId(input.offerId, 'offerId'),
+    memberId: requiredId(input.memberId, 'memberId'),
+    correlatedOfferId: optionalId(input.correlatedOfferId, 'correlatedOfferId'),
+    correlatedMemberId: optionalId(input.correlatedMemberId, 'correlatedMemberId'),
+    pageActionId: requiredId(input.pageActionId, 'pageActionId'),
+    remoteRequestAttemptId: requiredId(
+      input.remoteRequestAttemptId,
+      'remoteRequestAttemptId',
+    ),
+    capturedAt: new Date(input.capturedAt).toISOString(),
+    sanitizedRawPayload: sanitizeOfferSourcePayloadV1(input.rawPayload),
+  };
+  const digest = evidenceHash(artifact).slice('sha256:'.length);
+  return Object.freeze({
+    artifactRef: `artifact:offer-source-${input.source}-${digest}`,
+    artifact: Object.freeze(artifact),
+  });
+}
+
+export function assertOfferSourceSidecarBindingV1(
+  artifactRef: string,
+  artifact: OfferSourceSidecarV1,
+): void {
+  const digest = evidenceHash(artifact).slice('sha256:'.length);
+  if (
+    artifact.schema !== 'collector.offer-source-sidecar.v1' ||
+    artifactRef !== `artifact:offer-source-${artifact.source}-${digest}`
+  ) {
+    throw new TypeError('Offer source sidecar content does not match its artifact reference.');
+  }
+}
+
+const OFFER_SOURCE_REVISIONS = Object.freeze({
+  'shop-card': {
+    schema: 'offer-shop-card-observation-receipt-v1',
+    schemaRevision: 'shop-card-source-v1@1',
+    parserRevision: 'shop-card-parser-v1@1',
+  },
+  'offer-consignment': {
+    schema: 'offer-consignment-observation-receipt-v1',
+    schemaRevision: 'offer-consignment-source-v1@1',
+    parserRevision: 'offer-consignment-parser-v1@1',
+  },
+} as const);
+
+const OFFER_SOURCE_EMPTY_SENTINELS: Readonly<
+  Record<OfferSourceKindV1, ReadonlyArray<{ sourcePath: string; reasonCode: string }>>
+> = Object.freeze({
+  'shop-card': Object.freeze([
+    { sourcePath: 'data', reasonCode: 'SHOP_CARD_SUCCESS_EMPTY_SENTINEL' },
+  ]),
+  'offer-consignment': Object.freeze([
+    { sourcePath: 'data.data.data.data', reasonCode: 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL' },
+    { sourcePath: 'data.data.data', reasonCode: 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL' },
+  ]),
+});
+
+export interface OfferSourceTerminalReceiptV1 {
+  schema:
+    | 'offer-shop-card-observation-receipt-v1'
+    | 'offer-consignment-observation-receipt-v1';
+  source: OfferSourceKindV1;
+  offerId: string;
+  memberId: string;
+  pageActionId: string;
+  remoteRequestAttemptId: string;
+  responseObserved: boolean;
+  responseSucceeded: boolean;
+  correlation: 'matched' | 'failed';
+  schemaRevision: string;
+  parserRevision: string;
+  state: 'available' | 'not-present' | 'failed';
+  absenceProof?: {
+    sourcePath: string;
+    sourceValueHash: string;
+    reasonCode: string;
+  };
+  rawEvidenceRefs: string[];
+  fieldObservationRefs?: string[];
+  error?: CollectorErrorV1;
+  receiptContentHash: string;
+}
+
+export function createOfferSourceTerminalReceiptV1(input: {
+  source: OfferSourceKindV1;
+  offerId: string;
+  memberId: string;
+  pageActionId: string;
+  remoteRequestAttemptId: string;
+  responseObserved: boolean;
+  responseSucceeded: boolean;
+  correlatedOfferId: string | null;
+  correlatedMemberId: string | null;
+  parsedValue: ShopCardInfo | ConsignmentInfo | null;
+  authoritativeEmpty?: {
+    sourcePath: string;
+    sourceValue: unknown;
+    reasonCode: string;
+  };
+  rawEvidenceRefs: string[];
+  fieldObservationRefs?: string[];
+  error?: CollectorErrorV1;
+}): OfferSourceTerminalReceiptV1 {
+  const rawEvidenceRefs = [...new Set(input.rawEvidenceRefs.map((ref) => requiredId(ref, 'rawEvidenceRef')))].sort();
+  const rawEvidenceComplete = rawEvidenceRefs.length > 0 && rawEvidenceRefs.every(
+    (ref) => isOfferSourceArtifactRefV1(ref, input.source),
+  );
+  const fieldObservationRefs = [...new Set(
+    (input.fieldObservationRefs ?? []).map((ref) => requiredId(ref, 'fieldObservationRef')),
+  )].sort();
+  const correlation: OfferSourceTerminalReceiptV1['correlation'] =
+    input.correlatedOfferId === input.offerId &&
+    input.correlatedMemberId === input.memberId
+      ? 'matched'
+      : 'failed';
+  let state: OfferSourceTerminalReceiptV1['state'] = 'failed';
+  let absenceProof: OfferSourceTerminalReceiptV1['absenceProof'];
+  if (
+    input.responseObserved &&
+    input.responseSucceeded &&
+    correlation === 'matched' &&
+    input.parsedValue !== null &&
+    rawEvidenceComplete
+  ) {
+    state = 'available';
+  } else if (
+    input.responseObserved &&
+    input.responseSucceeded &&
+    correlation === 'matched' &&
+    input.parsedValue === null &&
+    input.authoritativeEmpty &&
+    rawEvidenceComplete
+  ) {
+    assertRegisteredAuthoritativeEmpty(input.source, input.authoritativeEmpty);
+    state = 'not-present';
+    absenceProof = {
+      sourcePath: input.authoritativeEmpty.sourcePath,
+      sourceValueHash: evidenceHash(input.authoritativeEmpty.sourceValue),
+      reasonCode: input.authoritativeEmpty.reasonCode,
+    };
+  }
+  const error = state === 'failed'
+    ? input.error ?? {
+        code: sourceFailureCode({ ...input, rawEvidenceRefs }),
+        category: correlation === 'failed' ? 'protocol' : 'timeout',
+        retryable: correlation !== 'failed',
+        actionRequired: null,
+        recoveryAction: correlation === 'failed'
+          ? 'inspect-source-correlation'
+          : 'retry-offer-detail',
+      }
+    : undefined;
+  const content = {
+    schema: OFFER_SOURCE_REVISIONS[input.source].schema,
+    source: input.source,
+    offerId: requiredId(input.offerId, 'offerId'),
+    memberId: requiredId(input.memberId, 'memberId'),
+    pageActionId: requiredId(input.pageActionId, 'pageActionId'),
+    remoteRequestAttemptId: requiredId(input.remoteRequestAttemptId, 'remoteRequestAttemptId'),
+    responseObserved: input.responseObserved,
+    responseSucceeded: input.responseSucceeded,
+    correlation,
+    schemaRevision: OFFER_SOURCE_REVISIONS[input.source].schemaRevision,
+    parserRevision: OFFER_SOURCE_REVISIONS[input.source].parserRevision,
+    state,
+    ...(absenceProof ? { absenceProof } : {}),
+    rawEvidenceRefs,
+    ...(input.source === 'shop-card'
+      ? { fieldObservationRefs }
+      : {}),
+    ...(error ? { error } : {}),
+  };
+  return Object.freeze({
+    ...content,
+    receiptContentHash: evidenceHash(content),
+  });
+}
+
+export function assertOfferSourceReceiptsCompleteV1(input: {
+  offerId: string;
+  memberId: string;
+  pageActionId: string;
+  remoteRequestAttemptId: string;
+  remoteRawEvidenceRefs: string[];
+  shopCard: OfferSourceTerminalReceiptV1;
+  consignment: OfferSourceTerminalReceiptV1;
+}): void {
+  for (const [source, receipt] of [
+    ['shop-card', input.shopCard],
+    ['offer-consignment', input.consignment],
+  ] as const) {
+    const expected = OFFER_SOURCE_REVISIONS[source];
+    const { receiptContentHash, ...content } = receipt;
+    const absenceProofValid = receipt.state !== 'not-present' || (
+      receipt.absenceProof !== undefined &&
+      isRegisteredAbsenceProof(source, receipt.absenceProof) &&
+      /^sha256:[0-9a-f]{64}$/.test(receipt.absenceProof.sourceValueHash)
+    );
+    if (
+      receipt.source !== source ||
+      receipt.schema !== expected.schema ||
+      receipt.schemaRevision !== expected.schemaRevision ||
+      receipt.parserRevision !== expected.parserRevision ||
+      receipt.offerId !== input.offerId ||
+      receipt.memberId !== input.memberId ||
+      receipt.pageActionId !== input.pageActionId ||
+      receipt.remoteRequestAttemptId !== input.remoteRequestAttemptId ||
+      !receipt.responseObserved ||
+      !receipt.responseSucceeded ||
+      receipt.correlation !== 'matched' ||
+      !['available', 'not-present'].includes(receipt.state) ||
+      receipt.rawEvidenceRefs.length === 0 ||
+      receipt.rawEvidenceRefs.some((ref) => !isOfferSourceArtifactRefV1(ref, source)) ||
+      receipt.rawEvidenceRefs.some((ref) => !input.remoteRawEvidenceRefs.includes(ref)) ||
+      !absenceProofValid ||
+      (receipt.state === 'available' && receipt.absenceProof !== undefined) ||
+      receipt.error !== undefined ||
+      receiptContentHash !== evidenceHash(content)
+    ) {
+      throw new TypeError(`${source} terminal source receipt is absent, failed, or belongs to another scope.`);
+    }
+  }
+}
+
+function sourceFailureCode(input: {
+  source: OfferSourceKindV1;
+  responseObserved: boolean;
+  responseSucceeded: boolean;
+  correlatedOfferId: string | null;
+  correlatedMemberId: string | null;
+  offerId: string;
+  memberId: string;
+  rawEvidenceRefs: string[];
+}): string {
+  const prefix = input.source === 'shop-card' ? 'SHOP_CARD' : 'OFFER_CONSIGNMENT';
+  if (!input.responseObserved) return `${prefix}_RESPONSE_NOT_OBSERVED`;
+  if (!input.responseSucceeded) return `${prefix}_RESPONSE_NOT_SUCCESS`;
+  if (input.rawEvidenceRefs.length === 0) return `${prefix}_RAW_EVIDENCE_MISSING`;
+  if (input.rawEvidenceRefs.some((ref) => !isOfferSourceArtifactRefV1(ref, input.source))) {
+    return `${prefix}_RAW_EVIDENCE_INVALID`;
+  }
+  if (input.correlatedOfferId !== input.offerId || input.correlatedMemberId !== input.memberId) {
+    return `${prefix}_SCOPE_MISMATCH`;
+  }
+  return `${prefix}_PARSE_FAILED`;
+}
+
+function isOfferSourceArtifactRefV1(
+  value: string,
+  source: OfferSourceKindV1,
+): boolean {
+  return new RegExp(`^artifact:offer-source-${source}-[0-9a-f]{64}$`, 'u').test(value);
+}
+
+function sanitizeOfferSourcePayloadV1(value: unknown, key?: string): unknown {
+  const normalizedKey = key?.toLowerCase().replace(/[^a-z0-9]/gu, '') ?? '';
+  if (
+    /(?:authorization|cookie|password|secret|token|signature|^sign|mh5tk|headers)/u.test(normalizedKey) ||
+    /(?:contact|mobile|phone|telephone|email|wechat|wangwang|identitycard|idcard|bankaccount|principal|legalperson|legalrepresentative)/u.test(normalizedKey)
+  ) {
+    return '[redacted]';
+  }
+  if (typeof value === 'string') {
+    const piiRedacted = redactEmbeddedPiiV1(value);
+    if (piiRedacted !== value) {
+      return piiRedacted;
+    }
+    if (/^\+?\d[\d\s()-]{6,}\d$/u.test(value)) {
+      return '[redacted]';
+    }
+    if (/^https?:\/\//iu.test(value)) {
+      try {
+        const url = new URL(value);
+        url.username = '';
+        url.password = '';
+        url.hash = '';
+        for (const queryKey of [...url.searchParams.keys()]) {
+          if (!['api', 'v', 'version', 'type', 'method'].includes(queryKey.toLowerCase())) {
+            url.searchParams.delete(queryKey);
+          }
+        }
+        url.searchParams.sort();
+        return url.toString();
+      } catch {
+        return '[redacted-url]';
+      }
+    }
+    return value;
+  }
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) return value.map((item) => sanitizeOfferSourcePayloadV1(item));
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .filter(([, child]) => child !== undefined)
+      .map(([childKey, child]) => [
+        childKey,
+        sanitizeOfferSourcePayloadV1(child, childKey),
+      ]),
+  );
+}
+
+function redactEmbeddedPiiV1(value: string): string {
+  return value
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/giu, '[redacted]')
+    .replace(
+      /(^|[^\d])(?:\+?86[\s-]?)?1[3-9]\d(?:[\s-]?\d){8}(?!\d)/gu,
+      '$1[redacted]',
+    )
+    .replace(/(^|[^\d])\+\d[\d\s()-]{6,}\d(?!\d)/gu, '$1[redacted]')
+    .replace(/\b\d{17}[\dX]\b/giu, '[redacted]')
+    .replace(/\b\d{16,19}\b/gu, '[redacted]')
+    .replace(
+      /((?:phone|mobile|telephone|tel|wechat|weixin|手机|电话|联系方式|微信)\s*[:：=-]?\s*)\+?[\d\s()-]{7,}\d/giu,
+      '$1[redacted]',
+    );
+}
+
+function assertRegisteredAuthoritativeEmpty(
+  source: OfferSourceKindV1,
+  empty: { sourcePath: string; sourceValue: unknown; reasonCode: string },
+): void {
+  if (
+    !isRegisteredAbsenceProof(source, empty) ||
+    !isStructurallyEmpty(empty.sourceValue)
+  ) {
+    throw new TypeError(`${source} authoritative-empty proof is not a registered versioned sentinel.`);
+  }
+}
+
+function isRegisteredAbsenceProof(
+  source: OfferSourceKindV1,
+  proof: { sourcePath: string; reasonCode: string; sourceValueHash?: string },
+): boolean {
+  const registered = OFFER_SOURCE_EMPTY_SENTINELS[source].some(
+    (registered) =>
+      registered.sourcePath === proof.sourcePath &&
+      registered.reasonCode === proof.reasonCode,
+  );
+  return registered && (
+    proof.sourceValueHash === undefined ||
+    REGISTERED_EMPTY_VALUE_HASHES.has(proof.sourceValueHash)
+  );
+}
+
+function isStructurallyEmpty(value: unknown): boolean {
+  if (value === null) return true;
+  if (Array.isArray(value)) return value.length === 0;
+  return typeof value === 'object' && value !== null && Object.keys(value).length === 0;
+}
+
+function requiredId(value: string, field: string): string {
+  const trimmed = value.trim();
+  if (!trimmed || /[\u0000-\u001f\u007f]/.test(trimmed)) throw new TypeError(`${field} is invalid.`);
+  return trimmed;
+}
+
+function optionalId(value: string | null, field: string): string | null {
+  return value === null ? null : requiredId(value, field);
+}
+
+function evidenceHash(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(canonicalizeEvidence(value)), 'utf8').digest('hex')}`;
+}
+
+function canonicalizeEvidence(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalizeEvidence);
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.keys(record).sort().map((key) => [key, canonicalizeEvidence(record[key])]),
+    );
+  }
+  return value;
+}
+
+const REGISTERED_EMPTY_VALUE_HASHES = new Set(
+  [null, [], {}].map((value) => evidenceHash(value)),
+);
+
 const SHOP_BADGES: Record<string, { label: string; imageUrl: string }> = {
   cjgc_global: {
     label: '超级工厂全球供',
@@ -495,3 +903,5 @@ function normalizeUrl(value: string | null): string | null {
   if (value.startsWith('//')) return `https:${value}`;
   return value;
 }
+import { createHash } from 'node:crypto';
+import type { CollectorErrorV1 } from '../collection/page-action-contracts.js';

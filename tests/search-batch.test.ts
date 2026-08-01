@@ -109,7 +109,10 @@ describe('incremental search batches', () => {
     expect(batch.observations).toEqual([
       {
         offerId: '1001',
-        offer: sourceOffer,
+        offer: {
+          ...sourceOffer,
+          supplier: { ...sourceOffer.supplier, loginId: '[redacted]' },
+        },
         sourcePage: 1,
         remoteSort: 'va_sales_amount_desc',
         pageRank: 1,
@@ -117,6 +120,7 @@ describe('incremental search batches', () => {
         collectedAt: '2026-07-22T02:00:00.000Z',
       },
     ]);
+    expect(sourceOffer.supplier.loginId).toBe('supplier-1001');
     expect(batch.scope).toMatchObject({
       page: 1,
       remoteHasMore: true,

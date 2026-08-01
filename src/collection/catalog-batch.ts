@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { CliError } from '../io/errors.js';
 import type { StoreCatalogParseResult } from '../session/alisite-module.js';
+import type { StoreSampleRuntimeResultV1 } from '../session/catalog-runtime.js';
+import { sanitizeCollectorPayloadV1 } from '../session/collector-raw-archive.js';
 import {
   redactDiagnosticMetadata,
   redactTextForDiagnostics,
@@ -55,6 +57,122 @@ export interface ExecuteCatalogBatchOptions {
   signal?: AbortSignal;
   batchId?: string;
   now?: () => Date;
+}
+
+export function createBoundedStoreSampleBatchesV1(input: {
+  result: StoreSampleRuntimeResultV1;
+  unitId: string;
+  sourceRequestId: string;
+  catalogBatchId: string;
+  categoriesBatchId: string;
+  profileBatchId: string;
+  startedAt: string;
+  completedAt: string;
+  rawEvidenceRefs: string[];
+}): [CollectionBatch, CollectionBatch, CollectionBatch] {
+  const common = {
+    schemaVersion: 1 as const,
+    unitId: input.unitId,
+    sourceRequestId: input.sourceRequestId,
+    status: input.result.status,
+    startedAt: input.startedAt,
+    completedAt: input.completedAt,
+    subject: {
+      supplier: {
+        memberId: input.result.cursor.memberId,
+        shopUrl: input.result.cursor.canonicalShopUrl,
+      },
+    },
+    scope: {
+      requestedScope: 'bounded-pages',
+      mode: input.result.mode,
+      generation: input.result.cursor.generation,
+      observedPages: input.result.cursor.observedPages,
+      nextPage: input.result.cursor.nextPage,
+      checkpointState: input.result.cursor.checkpointState,
+      evidenceUsage: input.result.evidenceUsage,
+    },
+    duplicateObservations: [],
+    warnings: [],
+    errors: input.result.errorCode === null
+      ? []
+      : [{
+          code: input.result.errorCode,
+          message: 'Store Sample stopped after preserving its verified page prefix.',
+          retryable: true,
+        }],
+    rawEvidenceRefs: input.rawEvidenceRefs,
+  };
+  const completeness = {
+    requestedScope: 'bounded-pages' as const,
+    state: input.result.status === 'completed' ? 'complete' as const : 'truncated' as const,
+    observedPages: input.result.cursor.observedPages,
+    failedPages: input.result.failedPages,
+  };
+  const catalog = normalizeCollectionBatch({
+    ...common,
+    batchId: input.catalogBatchId,
+    kind: 'store-catalog',
+    observations: input.result.uniqueOffers.map((offer) =>
+      sanitizeCollectorPayloadV1({
+        ...offer,
+        storeSample: true,
+        taskCandidateEligible: false,
+        evidenceUsage: input.result.evidenceUsage,
+      }) as Record<string, unknown>
+    ),
+    completeness: {
+      ...completeness,
+      expectedItems: input.result.cursor.sourceOfferCount ?? undefined,
+      uniqueItems: input.result.uniqueOffers.length,
+    },
+    metrics: {
+      remoteRequests: input.result.remoteRequests,
+      uniqueCatalogOffers: input.result.uniqueOffers.length,
+      candidatesPublished: 0,
+    },
+  });
+  const categories = normalizeCollectionBatch({
+    ...common,
+    batchId: input.categoriesBatchId,
+    kind: 'store-categories',
+    observations: input.result.categories.map((category) =>
+      sanitizeCollectorPayloadV1({
+        memberId: input.result.cursor.memberId,
+        category,
+        observedAt: input.result.cursor.categoriesObservedAt,
+      }) as Record<string, unknown>
+    ),
+    completeness: {
+      ...completeness,
+      uniqueItems: input.result.categories.length,
+    },
+    metrics: {
+      remoteRequests: 0,
+      categoryItems: input.result.categories.length,
+    },
+  });
+  const profile = normalizeCollectionBatch({
+    ...common,
+    batchId: input.profileBatchId,
+    kind: 'store-profile',
+    observations: input.result.pages.length === 0
+      ? []
+      : [sanitizeCollectorPayloadV1({
+          ...input.result.profileObservation,
+          authority: 'authoritative-required',
+          sourceAction: 'store-sample',
+        }) as Record<string, unknown>],
+    completeness: {
+      ...completeness,
+      uniqueItems: input.result.pages.length === 0 ? 0 : 1,
+    },
+    metrics: {
+      remoteRequests: 0,
+      profileObservations: input.result.pages.length === 0 ? 0 : 1,
+    },
+  });
+  return [catalog, categories, profile];
 }
 
 export async function executeCatalogBatch(

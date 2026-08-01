@@ -3,6 +3,34 @@ import {
   mapConsignmentPayload,
   mapShopCardPayload,
 } from '../src/session/offer-evidence.js';
+import { readOfferSourceCorrelationScopeV1 } from '../src/commands/offer.js';
+
+describe('offer source response scope', () => {
+  it('derives correlation only from the captured request and response identities', () => {
+    const requestUrl = `https://h5api.m.1688.com/h5/source/1.0/?data=${encodeURIComponent(JSON.stringify({
+      offerId: '100', memberId: 'member-1',
+    }))}`;
+    expect(readOfferSourceCorrelationScopeV1(requestUrl, {
+      data: { offerId: '100', memberId: 'member-1' },
+    })).toEqual({ correlatedOfferId: '100', correlatedMemberId: 'member-1' });
+
+    expect(readOfferSourceCorrelationScopeV1(requestUrl, {
+      data: { offerId: '999', memberId: 'member-1' },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: 'member-1' });
+
+    expect(readOfferSourceCorrelationScopeV1(
+      'https://h5api.m.1688.com/h5/source/1.0/',
+      { data: { value: 'available-without-scope' } },
+    )).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+
+    expect(readOfferSourceCorrelationScopeV1(
+      `https://h5api.m.1688.com/h5/source/1.0/?data=${encodeURIComponent(JSON.stringify({
+        offerId: '100', loginId: 'member-1',
+      }))}`,
+      { data: { offerId: '100', sellerLoginId: 'member-1' } },
+    )).toEqual({ correlatedOfferId: '100', correlatedMemberId: null });
+  });
+});
 
 describe('shop-card evidence', () => {
   it('maps the modern shop card and normalizes percentage metrics to ratios', () => {

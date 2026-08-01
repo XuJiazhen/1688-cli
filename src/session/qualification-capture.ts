@@ -14,10 +14,17 @@ import {
   type ResponseCaptureDiagnostics,
 } from './response-capture.js';
 import { withTimeout } from './wait.js';
+import {
+  createSourceMediaReferenceV2,
+  type SourceMediaReferenceV2,
+} from './offer-media.js';
+import { createHash } from 'node:crypto';
+import { sanitizeCollectorPayloadV1 } from './collector-raw-archive.js';
 
 export interface SupplierQualificationCaptureOptions {
   memberId?: string;
   timeoutMs?: number;
+  onRawResponse?: (rawResponseText: string) => Promise<void>;
 }
 
 export interface SupplierQualificationRuntimeOptions {
@@ -28,6 +35,7 @@ export interface SupplierQualificationRuntimeOptions {
 export interface SupplierQualificationCaptureResult<TResult> {
   actionResult: TResult;
   qualification: SupplierQualification | null;
+  sanitizedRawPayload?: unknown;
   diagnostics: ResponseCaptureDiagnostics;
 }
 
@@ -51,6 +59,151 @@ export function isSafeSupplierMemberKey(value: unknown): value is string {
     value.length <= SUPPLIER_MEMBER_KEY_MAX_LENGTH &&
     SUPPLIER_MEMBER_KEY_RE.test(value)
   );
+}
+
+export function buildSupplierQualificationPageUrl(memberId: string): string {
+  if (!isSafeSupplierMemberKey(memberId)) {
+    throw new TypeError('Supplier qualification page requires a safe memberId.');
+  }
+  const url = new URL('https://wp.m.1688.com/page/businessinfor.html');
+  url.searchParams.set('memberId', memberId);
+  return url.toString();
+}
+
+export function assertSupplierQualificationScope(
+  requestMemberId: string,
+  qualification: SupplierQualification,
+): SupplierQualification {
+  if (!isSafeSupplierMemberKey(requestMemberId)) {
+    throw new CliError(2, 'QUALIFICATION_REQUEST_SCOPE_INVALID', 'Qualification request memberId is invalid.', {
+      category: 'contract',
+      retryable: false,
+      recoveryAction: 'repair-store-identity',
+    });
+  }
+  if (qualification.memberId !== requestMemberId) {
+    throw new CliError(9, 'QUALIFICATION_RESPONSE_SCOPE_MISMATCH', 'Qualification response belongs to another member scope.', {
+      category: 'protocol',
+      retryable: false,
+      recoveryAction: 'inspect-qualification-correlation',
+    });
+  }
+  return qualification;
+}
+
+export interface QualificationMediaManifestV1 {
+  memberId: string;
+  sourceQualificationGeneration: string;
+  role: 'qualification';
+  sourceCoverage: 'complete' | 'authoritative-empty' | 'failed';
+  items: SourceMediaReferenceV2[];
+  itemSetHash: string;
+  reasonCode: string | null;
+}
+
+export function buildQualificationMediaManifestV1(input: {
+  memberId: string;
+  sourceQualificationGeneration: string;
+  sourceObservationId: string;
+  sourcePayloadContentSha256: string;
+  qualification: SupplierQualification | null;
+  responseObserved: boolean;
+  responseSucceeded: boolean;
+  correlationMatched: boolean;
+}): QualificationMediaManifestV1 {
+  if (!isSafeSupplierMemberKey(input.memberId)) throw new TypeError('Qualification media memberId is invalid.');
+  const completeSource = input.responseObserved &&
+    input.responseSucceeded &&
+    input.correlationMatched &&
+    input.qualification !== null &&
+    input.qualification.certificateListAvailability !== 'failed';
+  const rawImages = [
+    ...(input.qualification?.certificates ?? []).flatMap((certificate, index) =>
+      certificate.imageUrl
+        ? [{
+            url: certificate.imageUrl,
+            sourceField: `data.certList[${index}].imageUrl`,
+          }]
+        : []
+    ),
+    ...(input.qualification?.certificationImages ?? []).map((image, index) => ({
+      url: image.url,
+      sourceField: `data.propaganda.companyImg[${index}].url`,
+    })),
+  ];
+  const items: SourceMediaReferenceV2[] = [];
+  let invalidUrls = 0;
+  rawImages.forEach((image, sourceOrdinal) => {
+    const created = createSourceMediaReferenceV2({
+      role: 'qualification',
+      owner: { ownerKind: 'store-qualification', memberId: input.memberId },
+      order: sourceOrdinal,
+      sourceOrdinal,
+      originalUrl: image.url,
+      sourceField: image.sourceField,
+      sourceObservationId: input.sourceObservationId,
+      sourcePayloadContentSha256: input.sourcePayloadContentSha256,
+    });
+    if (created.reference) items.push(created.reference);
+    else invalidUrls++;
+  });
+  const sourceCoverage: QualificationMediaManifestV1['sourceCoverage'] =
+    !completeSource || invalidUrls > 0
+      ? 'failed'
+      : items.length === 0
+        ? 'authoritative-empty'
+        : 'complete';
+  return Object.freeze({
+    memberId: input.memberId,
+    sourceQualificationGeneration: input.sourceQualificationGeneration,
+    role: 'qualification',
+    sourceCoverage,
+    items: Object.freeze(items) as SourceMediaReferenceV2[],
+    itemSetHash: qualificationMediaHash(items),
+    reasonCode:
+      sourceCoverage === 'failed'
+        ? !input.responseObserved
+          ? 'QUALIFICATION_RESPONSE_NOT_OBSERVED'
+          : !input.responseSucceeded
+            ? 'QUALIFICATION_RESPONSE_NOT_SUCCESS'
+            : !input.correlationMatched
+              ? 'QUALIFICATION_RESPONSE_SCOPE_MISMATCH'
+              : invalidUrls > 0
+                ? 'QUALIFICATION_MEDIA_URL_INVALID'
+                : 'QUALIFICATION_PARSE_FAILED'
+        : sourceCoverage === 'authoritative-empty'
+          ? 'QUALIFICATION_MEDIA_SOURCE_EMPTY'
+          : null,
+  });
+}
+
+export function assertQualificationMediaManifestV1(
+  manifest: QualificationMediaManifestV1,
+): void {
+  const coverageMatchesItems = manifest.sourceCoverage === 'complete'
+    ? manifest.items.length > 0 && manifest.reasonCode === null
+    : manifest.sourceCoverage === 'authoritative-empty'
+      ? manifest.items.length === 0 && manifest.reasonCode === 'QUALIFICATION_MEDIA_SOURCE_EMPTY'
+      : manifest.reasonCode !== null;
+  if (
+    !isSafeSupplierMemberKey(manifest.memberId) ||
+    !manifest.sourceQualificationGeneration.trim() ||
+    manifest.role !== 'qualification' ||
+    manifest.itemSetHash !== qualificationMediaHash(manifest.items) ||
+    !coverageMatchesItems ||
+    manifest.items.some(
+      (item) =>
+        item.role !== 'qualification' ||
+        item.ownerKind !== 'store-qualification' ||
+        item.memberId !== manifest.memberId,
+    )
+  ) {
+    throw new TypeError('Qualification media manifest is incomplete, corrupted, or belongs to another scope.');
+  }
+}
+
+function qualificationMediaHash(value: unknown): string {
+  return `sha256:${createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex')}`;
 }
 
 export function buildSupplierQualificationRuntimeRequest(
@@ -164,7 +317,10 @@ export async function captureSupplierQualificationForAction<TResult>(
   options: SupplierQualificationCaptureOptions,
   action: () => Promise<TResult>,
 ): Promise<SupplierQualificationCaptureResult<TResult>> {
-  const capture = startResponseCapture<SupplierQualification>({
+  const capture = startResponseCapture<{
+    qualification: SupplierQualification;
+    sanitizedRawPayload: unknown;
+  }>({
     page,
     timeoutMs: options.timeoutMs ?? 15_000,
     matcher: (response) => {
@@ -178,24 +334,39 @@ export async function captureSupplierQualificationForAction<TResult>(
         (options.memberId === undefined || meta.memberId === options.memberId)
       );
     },
-    parse: async (response) =>
-      mapSupplierQualificationPayload(
-        parseMtopJsonp(await response.text()),
-        new Date().toISOString(),
-      ),
+    parse: async (response) => {
+      const rawResponseText = await response.text();
+      await options.onRawResponse?.(rawResponseText);
+      const rawPayload = parseMtopJsonp(rawResponseText);
+      return {
+        qualification: mapSupplierQualificationPayload(
+          rawPayload,
+          new Date().toISOString(),
+        ),
+        sanitizedRawPayload: sanitizeCollectorPayloadV1(rawPayload),
+      };
+    },
   });
   const result = await capture.waitForAction(action);
   return {
     actionResult: result.actionResult,
-    qualification: result.response,
+    qualification: result.response?.qualification ?? null,
+    ...(result.response === null
+      ? {}
+      : { sanitizedRawPayload: result.response.sanitizedRawPayload }),
     diagnostics: result.diagnostics,
   };
 }
 
 export function requireSupplierQualificationResponse(
   result: SupplierQualificationCaptureResult<unknown>,
+  requestMemberId?: string,
 ): SupplierQualification {
-  if (result.qualification) return result.qualification;
+  if (result.qualification) {
+    return requestMemberId === undefined
+      ? result.qualification
+      : assertSupplierQualificationScope(requestMemberId, result.qualification);
+  }
   throw new CliError(
     9,
     'QUALIFICATION_RESPONSE_TIMEOUT',

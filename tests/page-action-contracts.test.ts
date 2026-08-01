@@ -14,6 +14,7 @@ import {
   computeExecutionLineageHashV1,
   computeLogicalLineageHashV1,
   computePageActionPayloadBusinessHashV1,
+  computeSearchRecoveryHandleSignatureV1,
   computeStoreSampleExpansionApprovalSignatureV1,
   effectivePageActionDeadlineV1,
   normalizeCollectorWireResponseV1,
@@ -288,6 +289,75 @@ function rebindStoreSampleAction(
   };
 }
 
+function rebindSearchAction(
+  request: ReturnType<typeof requestFixture>,
+  action: Record<string, unknown>,
+) {
+  const pageActionBusinessHash = computePageActionPayloadBusinessHashV1({
+    ...action,
+    executionHandle: {},
+  } as never);
+  const logicalLineage = {
+    ...request.logicalLineage,
+    pageActionBusinessHash,
+  };
+  const logicalLineageHash = computeLogicalLineageHashV1(logicalLineage as never);
+  const executionLineage = {
+    ...request.executionLineage,
+    logicalLineageHash,
+  };
+  const { signature: _oldSignature, ...oldHandle } = request.action.executionHandle;
+  const unsignedHandle = {
+    ...oldHandle,
+    actionPayloadBusinessHash: pageActionBusinessHash,
+    allowedRequestKeysHash: canonicalCollectorSha256V1(
+      pageActionBusinessFieldPathsV1({ ...action, executionHandle: {} } as never),
+    ),
+  };
+  const executionHandle = {
+    ...unsignedHandle,
+    signature: computeCollectorExecutionHandleSignatureV1(
+      unsignedHandle as never,
+      SIGNING_KEY,
+    ),
+  };
+  return {
+    ...request,
+    pageActionBusinessHash,
+    logicalLineage,
+    logicalLineageHash,
+    executionLineage,
+    executionLineageHash: computeExecutionLineageHashV1(executionLineage as never),
+    action: { ...action, executionHandle },
+  };
+}
+
+function searchRecoveryHandle(overrides: Record<string, unknown> = {}) {
+  const content = {
+    schema: 'search-recovery-handle-v1',
+    handleId: 'search-recovery-1',
+    recoveryReceiptId: 'attempt-receipt-1',
+    recoveryReceiptHash: hash('attempt-receipt-1'),
+    searchQueryKeyHash: hash('search-query'),
+    previousSearchSegmentId: 'search-segment-1',
+    checkpointPage: 1,
+    allowedNextPage: 2,
+    recoveryMode: 'safe-replay',
+    maxSafeReplayPages: 2,
+    encryptedNavigationArchiveRef: 'artifact:search-navigation-1',
+    expiresAt: '2026-07-31T00:20:00.000Z',
+    signingKeyId: 'signing-key-1',
+    ...overrides,
+  };
+  return {
+    ...content,
+    signature: computeSearchRecoveryHandleSignatureV1(
+      content as never,
+      SIGNING_KEY,
+    ),
+  };
+}
+
 function expansionApproval(overrides: Record<string, unknown> = {}) {
   const content = {
     schema: 'store-sample-expansion-approval-v1',
@@ -398,6 +468,7 @@ function receiptFixture(request: ReturnType<typeof requestFixture>, outcome: 'fa
       baselinePages: 1,
       createdPages: 1,
       closedPages: 1,
+      transferredPages: 0,
       remainingOwnedPages: 0,
     },
     metrics: { requests: 1 },
@@ -515,6 +586,93 @@ describe('PageAction V1 wire contracts', () => {
         },
       }, verification)).toThrow(/canonical unpadded HMAC-SHA256 base64url/);
     }
+  });
+
+  it('requires Search recovery authorization and binds it to the predecessor segment', () => {
+    const firstAttempt = requestFixture('search-list');
+    const unapprovedContinuation = rebindSearchAction(firstAttempt, {
+      ...firstAttempt.action,
+      request: {
+        ...firstAttempt.action.request,
+        searchSegmentId: 'search-segment-2',
+        requestedStartPage: 2,
+      },
+    });
+    expect(() => normalizePageActionRequestV1(
+      unapprovedContinuation,
+      verificationFixture(unapprovedContinuation as never),
+    )).toThrow(/requires a signed recovery handle/);
+
+    const predecessor = {
+      receiptId: 'attempt-receipt-1',
+      receiptHash: hash('attempt-receipt-1'),
+    };
+    const retry = requestFixture('search-list', 2, predecessor);
+    expect(() => normalizePageActionRequestV1(
+      retry,
+      verificationFixture(retry),
+    )).toThrow(/requires a signed recovery handle/);
+
+    const approvedFirstPageRetry = rebindSearchAction(retry, {
+      ...retry.action,
+      request: { ...retry.action.request, searchSegmentId: 'search-segment-2' },
+      recoveryHandle: searchRecoveryHandle({
+        checkpointPage: 0,
+        allowedNextPage: 1,
+        maxSafeReplayPages: 0,
+      }),
+    });
+    expect(() => normalizePageActionRequestV1(
+      approvedFirstPageRetry,
+      verificationFixture(approvedFirstPageRetry as never),
+    )).not.toThrow();
+
+    const approved = rebindSearchAction(retry, {
+      ...retry.action,
+      request: {
+        ...retry.action.request,
+        searchSegmentId: 'search-segment-2',
+        requestedStartPage: 2,
+      },
+      recoveryHandle: searchRecoveryHandle(),
+    });
+    expect(normalizePageActionRequestV1(
+      approved,
+      verificationFixture(approved as never),
+    ).action).toMatchObject({
+      request: { searchSegmentId: 'search-segment-2', requestedStartPage: 2 },
+      recoveryHandle: {
+        previousSearchSegmentId: 'search-segment-1',
+        recoveryReceiptId: predecessor.receiptId,
+        recoveryReceiptHash: predecessor.receiptHash,
+      },
+    });
+
+    const wrongPredecessor = rebindSearchAction(retry, {
+      ...retry.action,
+      request: {
+        ...retry.action.request,
+        searchSegmentId: 'search-segment-2',
+        requestedStartPage: 2,
+      },
+      recoveryHandle: searchRecoveryHandle({
+        recoveryReceiptHash: hash('another-attempt'),
+      }),
+    });
+    expect(() => normalizePageActionRequestV1(
+      wrongPredecessor,
+      verificationFixture(wrongPredecessor as never),
+    )).toThrow(/recovery handle receiptHash\/predecessor receiptHash/);
+
+    const repeatedSegment = rebindSearchAction(retry, {
+      ...retry.action,
+      request: { ...retry.action.request, requestedStartPage: 2 },
+      recoveryHandle: searchRecoveryHandle(),
+    });
+    expect(() => normalizePageActionRequestV1(
+      repeatedSegment,
+      verificationFixture(repeatedSegment as never),
+    )).toThrow(/advance to a new searchSegmentId/);
   });
 
   it('requires an independently signed fresh dormant baseline for approved expansion', () => {

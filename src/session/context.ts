@@ -45,6 +45,13 @@ export async function withSession<T>(
   fn: (ctx: BrowserContext) => Promise<T>,
   meta?: RunMeta,
 ): Promise<T> {
+  if (process.env.BB1688_SUPERVISOR_MANAGED === '1') {
+    throw new CliError(
+      20,
+      'SUPERVISOR_SECOND_CONTEXT_FORBIDDEN',
+      'Supervisor-managed daemons must use their existing persistent Context.',
+    );
+  }
   const release = await acquireLock(opts.profile);
   const dir = profilePath(opts.profile);
   await fs.mkdir(dir, { recursive: true });

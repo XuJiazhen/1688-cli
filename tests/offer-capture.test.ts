@@ -1,5 +1,7 @@
+import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import {
+  executeRaw,
   mapContextSkuBizModel,
   requireSkuSelectorModel,
   selectSkuSelectorModel,
@@ -28,6 +30,52 @@ function diagnostics(
 }
 
 describe('requireSkuSelectorModel', () => {
+  it('drains a deferred component archive before early navigation failure returns', async () => {
+    const page = new EarlyFailureOfferPage();
+    let archiveStarted!: () => void;
+    const started = new Promise<void>((resolve) => { archiveStarted = resolve; });
+    let releaseArchive!: () => void;
+    const gate = new Promise<void>((resolve) => { releaseArchive = resolve; });
+    let archived = false;
+    let returned = false;
+    const pending = executeRaw(
+      { newPage: async () => page } as never,
+      {
+        offerId: '1001', headed: false, captureTimeoutMs: 5,
+        onRawComponent: async (component) => {
+          if (component !== 'sku') return;
+          archiveStarted();
+          await gate;
+          archived = true;
+        },
+      },
+    ).finally(() => { returned = true; });
+    await started;
+    expect(returned).toBe(false);
+    releaseArchive();
+    await expect(pending).rejects.toMatchObject({ code: 'NETWORK_ERROR' });
+    expect(archived).toBe(true);
+  });
+
+  it('delivers received component bytes before SKU parsing or required-component failure', async () => {
+    const page = new RawFirstOfferPage();
+    const captured: Array<{ component: string; payload: unknown }> = [];
+    await expect(executeRaw(
+      { newPage: async () => page } as never,
+      {
+        offerId: '1001', headed: false, captureTimeoutMs: 5,
+        onRawComponent: async (component, payload) => {
+          captured.push({ component, payload });
+          if (component === 'core') page.coreArchived = true;
+        },
+      },
+    )).rejects.toMatchObject({ code: 'OFFER_SKU_RESPONSE_TIMEOUT' });
+    expect(captured).toEqual(expect.arrayContaining([
+      { component: 'sku', payload: '{malformed-sku-response' },
+      { component: 'core', payload: '<html>fixture core</html>' },
+    ]));
+  });
+
   it('rejects a missing SKU selector model as a retryable response timeout', () => {
     expect(() => requireSkuSelectorModel(null, diagnostics())).toThrowError(
       expect.objectContaining({
@@ -64,6 +112,44 @@ describe('requireSkuSelectorModel', () => {
     ).toBe(model);
   });
 });
+
+class RawFirstOfferPage extends EventEmitter {
+  private currentUrl = 'about:blank';
+  coreArchived = false;
+
+  async goto(url: string): Promise<null> {
+    this.currentUrl = url;
+    this.emit('response', {
+      url: () => 'https://h5api.m.1688.com/h5/mtop.1688.wosc.queryofferskuselectormodel/1.0/',
+      text: async () => '{malformed-sku-response',
+      headers: () => ({ 'content-type': 'application/json' }),
+    });
+    return null;
+  }
+
+  url(): string { return this.currentUrl; }
+  async title(): Promise<string> { return 'Fixture Offer - Alibaba'; }
+  async waitForFunction(): Promise<never> { throw new Error('no SSR context'); }
+  async content(): Promise<string> { return '<html>fixture core</html>'; }
+  async evaluate(fn: unknown): Promise<unknown> {
+    if (!this.coreArchived) throw new Error('core raw page must be archived before extraction');
+    return String(fn).includes('document.body')
+      ? ''
+      : { supplierName: null, mainImage: null };
+  }
+}
+
+class EarlyFailureOfferPage extends EventEmitter {
+  async goto(): Promise<never> {
+    this.emit('response', {
+      url: () => 'https://h5api.m.1688.com/h5/mtop.1688.wosc.queryofferskuselectormodel/1.0/',
+      text: async () => '{"data":{}}',
+      headers: () => ({ 'content-type': 'application/json' }),
+    });
+    await Promise.resolve();
+    throw new Error('fixture early navigation failure');
+  }
+}
 
 describe('SSR SKU selector fallback', () => {
   it('normalizes the redacted SSR model and enriches stock from tradeModel', () => {

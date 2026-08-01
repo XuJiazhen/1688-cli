@@ -19,15 +19,27 @@ Benefits:
 - Allows different profiles to run at the same time without sharing one
   process lock.
 
-Use `1688 daemon start` near the beginning of a session with multiple 1688
-commands. Use `1688 daemon start --profile <name>` for a non-default profile.
-The daemon auto-stops after inactivity. Run `1688 daemon reload --profile
-<name>` after package updates or after manually resolving profile-specific
-browser issues.
+`1688 daemon start` and `daemon reload` are now explicit legacy rollback
+commands. They start `serve --legacy-rollback`, retain command-oriented idle
+shutdown, and must not be used for a Supervisor cohort.
+
+A production cohort starts with `1688 daemon managed-start
+--supervisor-config <absolute-0600-path>`. The config binds the daemon,
+Profile, Context generation, credential key registry, PageAction route
+allowlist, artifact root, and a sampled database clock. Managed daemons are
+headful, do not idle-shutdown, reject every legacy command frame, and accept
+only the framed Supervisor RPC allowlist. See
+[Profile Supervisor Daemon](./PROFILE_SUPERVISOR_DAEMON.md).
 
 `login`, `logout`, and `doctor` stay inline because they need interactive UI,
 browser windows, or environment checks. `login --profile <name>` can
 auto-start that profile daemon after the login state is available.
+
+Every managed WorkUnit owns one temporary Page in the daemon's single
+PersistentContext. Acceptance is durably recorded before Page creation. A
+terminal path closes that exact Page before committing its immutable receipt;
+drain and cancellation also close owned Pages. Context restart increments the
+generation exactly once and updates `daemon.owner.json` before the RPC reply.
 
 ## Watch Mode
 

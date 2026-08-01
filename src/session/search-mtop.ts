@@ -1,4 +1,14 @@
+import { createHash } from 'node:crypto';
 import { parseMtopJsonp } from './mtop.js';
+import { CliError } from '../io/errors.js';
+import {
+  SEARCH_FILTER_REQUEST_KEYS,
+} from './search-contract.js';
+import type { CapturedSearchRequestBusinessV1 } from './search-compiler.js';
+import {
+  redactCollectorTextV1,
+  sanitizeCollectorPayloadV1,
+} from './collector-raw-archive.js';
 
 export const SEARCH_MTOP_API = 'mtop.relationrecommend.wirelessrecommend.recommend';
 export const SEARCH_APP_ID = '32517';
@@ -123,6 +133,20 @@ export interface SearchMtopRequestMeta {
   method?: string;
   beginPage?: number;
   sortType?: string;
+  keywords?: string;
+  beginPageRaw?: string;
+  pageSize?: number;
+  pageId?: string;
+  descendOrder?: boolean;
+  filterParams?: Record<string, string | boolean | number>;
+}
+
+export interface SearchMtopPageV1 {
+  offers: Offer[];
+  rawItems: RawOfferItem[];
+  hasMore: boolean;
+  found: string | number | null;
+  responseBusinessHash: string;
 }
 
 function bool(s?: string | boolean): boolean {
@@ -190,7 +214,9 @@ function parseMinimumQuantity(value: string | null | undefined): number | null {
 export function mapOffer(item: RawOfferItem): Offer | null {
   const d = item.data;
   if (!d?.offerId) return null;
-  const title = (d.title ?? '').replace(/<\/?font[^>]*>/g, '').trim();
+  const title = redactCollectorTextV1(
+    (d.title ?? '').replace(/<[^>]*>/gu, '').trim(),
+  );
   const priceRaw = d.priceInfo?.price;
   const price = priceRaw ? parseFloat(priceRaw) : null;
   const yearsRaw = d.shop?.tpYear;
@@ -296,7 +322,7 @@ export function mapOffer(item: RawOfferItem): Offer | null {
       shopReturnRateText,
       shopReturnRate: parsePercentText(shopReturnRateText),
     },
-    isP4P: bool(d.isP4P),
+    isP4P: bool(d.isP4P) || /(?:^|[_-])p4p(?:[_-]|$)/iu.test(item.cellType ?? ''),
     turnover: d.bookedCount ?? null,
     url: `https://detail.1688.com/offer/${d.offerId}.html`,
     image: images[0] ?? null,
@@ -317,17 +343,125 @@ export function readSearchMtopRequestMeta(url: string): SearchMtopRequestMeta | 
       method?: string;
       beginPage?: number | string;
       sortType?: string;
+      keywords?: string;
+      pageSize?: number | string;
+      pageId?: string;
+      descendOrder?: boolean | string;
+      [key: string]: unknown;
     };
     const beginPage = params.beginPage === undefined ? undefined : Number(params.beginPage);
+    const filterParams: Record<string, string | boolean | number> = {};
+    for (const key of SEARCH_FILTER_REQUEST_KEYS) {
+      const value = params[key];
+      if (typeof value === 'string' || typeof value === 'boolean' || typeof value === 'number') {
+        filterParams[key] = value;
+      }
+    }
+    const extended =
+      params.keywords !== undefined || params.pageSize !== undefined ||
+      params.pageId !== undefined || params.descendOrder !== undefined ||
+      Object.keys(filterParams).length > 0;
     return {
       appId: String(dataObj.appId),
       method: params.method,
       beginPage,
       sortType: params.sortType,
+      ...(typeof params.keywords === 'string' ? { keywords: params.keywords } : {}),
+      ...(!extended || params.beginPage === undefined ? {} : { beginPageRaw: String(params.beginPage) }),
+      ...(params.pageSize === undefined ? {} : { pageSize: Number(params.pageSize) }),
+      ...(typeof params.pageId === 'string' ? { pageId: params.pageId } : {}),
+      ...(typeof params.descendOrder === 'boolean'
+        ? { descendOrder: params.descendOrder }
+        : params.descendOrder === 'true'
+          ? { descendOrder: true }
+          : params.descendOrder === 'false'
+            ? { descendOrder: false }
+            : {}),
+      ...(Object.keys(filterParams).length ? { filterParams } : {}),
     };
   } catch {
     return null;
   }
+}
+
+export function readCapturedSearchRequestBusinessV1(
+  url: string,
+): CapturedSearchRequestBusinessV1 | null {
+  const meta = readSearchMtopRequestMeta(url);
+  if (
+    !meta?.appId ||
+    !meta.method ||
+    meta.keywords === undefined ||
+    meta.beginPageRaw === undefined ||
+    meta.pageSize === undefined ||
+    !meta.pageId ||
+    !meta.sortType ||
+    meta.descendOrder === undefined
+  ) {
+    return null;
+  }
+  return {
+    appId: meta.appId,
+    method: meta.method,
+    keywords: meta.keywords,
+    beginPage: meta.beginPageRaw,
+    pageSize: meta.pageSize,
+    pageId: meta.pageId,
+    sortType: meta.sortType,
+    descendOrder: meta.descendOrder,
+    filterParams: meta.filterParams ?? {},
+  };
+}
+
+export function parseSearchMtopPageV1(text: string): SearchMtopPageV1 {
+  const json = parseMtopJsonp<{
+    ret?: unknown;
+    data?: {
+      code?: unknown;
+      success?: unknown;
+      data?: {
+        OFFER?: {
+          items?: unknown;
+          hasMore?: unknown;
+          found?: unknown;
+        };
+      };
+    };
+  }>(text);
+  const ret = Array.isArray(json?.ret) ? json.ret : [];
+  if (!ret.some((entry) => typeof entry === 'string' && /SUCCESS/i.test(entry))) {
+    searchProtocolError('SEARCH_RESPONSE_RET_NOT_SUCCESS', 'Search response ret is not successful.');
+  }
+  const data = json?.data;
+  if (
+    data?.success !== true ||
+    !(data.code === 200 || data.code === '200' || data.code === 'SUCCESS')
+  ) {
+    searchProtocolError('SEARCH_RESPONSE_STATUS_NOT_SUCCESS', 'Search response code/success contract failed.');
+  }
+  const offer = data.data?.OFFER;
+  if (!offer || !Array.isArray(offer.items)) {
+    searchProtocolError('SEARCH_RESPONSE_SCHEMA_DRIFT', 'Search response lacks OFFER.items[].');
+  }
+  const hasMore = normalizeHasMore(offer.hasMore);
+  const rawItems = offer.items as RawOfferItem[];
+  const offers = rawItems.map(mapOffer).filter((item): item is Offer => item !== null);
+  return {
+    offers,
+    rawItems,
+    hasMore,
+    found:
+      typeof offer.found === 'string' || typeof offer.found === 'number'
+        ? offer.found
+        : null,
+    responseBusinessHash: searchResponseHash({
+      schema: 'search-response-business-v1',
+      rawItems: sanitizeCollectorPayloadV1(rawItems),
+      offers,
+      hasMore,
+      found: offer.found ?? null,
+    }),
+  };
 }
 
 export function parseOfferItemsFromMtopText(text: string): Offer[] {
@@ -336,4 +470,23 @@ export function parseOfferItemsFromMtopText(text: string): Offer[] {
   }>(text);
   const items = json?.data?.data?.OFFER?.items ?? [];
   return items.map(mapOffer).filter((o): o is Offer => o !== null);
+}
+
+function normalizeHasMore(value: unknown): boolean {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  searchProtocolError('SEARCH_RESPONSE_HAS_MORE_INVALID', 'Search response OFFER.hasMore is missing or invalid.');
+}
+
+function searchProtocolError(code: string, message: string): never {
+  throw new CliError(9, code, message, {
+    category: 'protocol',
+    retryable: false,
+    recoveryAction: 'refresh-search-contract',
+  });
+}
+
+function searchResponseHash(value: unknown): string {
+  const canonical = JSON.stringify(value);
+  return `sha256:${createHash('sha256').update(canonical, 'utf8').digest('hex')}`;
 }

@@ -13,7 +13,15 @@ export function profilesDir(): string {
 
 export function defaultProfileName(profile?: string): string {
   const name = profile?.trim();
-  return name ? name : 'default';
+  const normalized = name || 'default';
+  if (
+    !/^[A-Za-z0-9._-]{1,128}$/u.test(normalized)
+    || normalized === '.'
+    || normalized === '..'
+  ) {
+    throw new TypeError('Profile name must be a safe local identifier.');
+  }
+  return normalized;
 }
 
 export function profileRuntimeDir(profile?: string): string {
@@ -101,9 +109,12 @@ export function profilePath(name = 'default'): string {
 }
 
 export async function ensureRoot(): Promise<void> {
-  await fs.mkdir(root(), { recursive: true });
+  await fs.mkdir(root(), { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') await fs.chmod(root(), 0o700);
 }
 
 export async function ensureProfileRuntimeDir(profile?: string): Promise<void> {
-  await fs.mkdir(profileRuntimeDir(profile), { recursive: true });
+  const directory = profileRuntimeDir(profile);
+  await fs.mkdir(directory, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') await fs.chmod(directory, 0o700);
 }

@@ -1,11 +1,21 @@
 import type { Page, Response as PWResponse } from 'playwright';
+import { CliError } from '../io/errors.js';
 import { waitWithDeadline } from './wait.js';
 import {
   SEARCH_APP_ID,
   parseOfferItemsFromMtopText,
+  parseSearchMtopPageV1,
+  readCapturedSearchRequestBusinessV1,
   readSearchMtopRequestMeta,
   type Offer,
+  type SearchMtopPageV1,
 } from './search-mtop.js';
+import {
+  assertCapturedSearchRequestParityV1,
+  type CompiledSearchPageRequestV1,
+} from './search-compiler.js';
+import { sanitizeCollectorPayloadV1 } from './collector-raw-archive.js';
+import { parseMtopJsonp } from './mtop.js';
 import {
   redactTextForDiagnostics,
   redactUrlForDiagnostics,
@@ -61,6 +71,7 @@ export interface SearchOfferCaptureWaitOptions {
 export interface SearchOfferCaptureWaitResult {
   status: SearchOfferCaptureWaitStatus;
   offers: Offer[];
+  remoteHasMore: boolean | null;
   diagnostics: SearchOfferCaptureDiagnostics;
 }
 
@@ -68,6 +79,7 @@ export interface SearchOfferCaptureResult<TResult> {
   actionResult: TResult;
   status: SearchOfferCaptureWaitStatus;
   offers: Offer[];
+  remoteHasMore: boolean | null;
   diagnostics: SearchOfferCaptureDiagnostics;
 }
 
@@ -89,6 +101,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
   let finalStatus: SearchOfferCaptureWaitStatus | undefined;
   let timedOut = false;
   let offers: Offer[] = [];
+  let remoteHasMore: boolean | null = null;
   let seenCount = 0;
   let matchedCount = 0;
   let parsedCount = 0;
@@ -138,6 +151,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
     finalStatus = undefined;
     timedOut = false;
     offers = [];
+    remoteHasMore = null;
     seenCount = 0;
     matchedCount = 0;
     parsedCount = 0;
@@ -170,7 +184,10 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
       }
       matchedCount++;
       lastMatchedUrl = diagnosticUrl;
-      const parsed = parseOfferItemsFromMtopText(await resp.text());
+      const responseText = await resp.text();
+      const parsed = parseOfferItemsFromMtopText(responseText);
+      const observedHasMore = readRemoteHasMore(responseText);
+      remoteHasMore = observedHasMore;
       if (parsed.length === 0) return;
       if (opts.keep === 'largest') {
         if (parsed.length > offers.length) offers = parsed;
@@ -215,7 +232,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
     finalStatus = result;
     timedOut = result === 'timeout';
     endedAt ??= new Date().toISOString();
-    return { status: result, offers, diagnostics: diagnostics() };
+    return { status: result, offers, remoteHasMore, diagnostics: diagnostics() };
   };
 
   const waitForAction = async <TResult>(
@@ -229,6 +246,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
         actionResult,
         status: result.status,
         offers: result.offers,
+        remoteHasMore: result.remoteHasMore,
         diagnostics: result.diagnostics,
       };
     } finally {
@@ -247,4 +265,174 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
     diagnostics,
     offers: () => offers,
   };
+}
+
+function readRemoteHasMore(text: string): boolean | null {
+  try {
+    const parsed = JSON.parse(
+      text.trim().replace(/^[^(]*\(/, '').replace(/\)\s*;?\s*$/, ''),
+    ) as { data?: { data?: { OFFER?: { hasMore?: unknown } } } };
+    const value = parsed.data?.data?.OFFER?.hasMore;
+    if (value === true || value === 'true') return true;
+    if (value === false || value === 'false') return false;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export interface SearchPageCaptureV1 {
+  page: SearchMtopPageV1;
+  /** Sanitized but otherwise structurally exact response envelope for immutable archiving. */
+  sanitizedRawPayload?: unknown;
+  compiledRequest: CompiledSearchPageRequestV1;
+  observedAt: string;
+  sanitizedRequest: {
+    appId: string;
+    method: string;
+    page: number;
+    pageSize: number;
+    sort: string;
+    descendOrder: boolean;
+    pageSessionHash: string;
+    filterParams: Record<string, string | boolean | number>;
+    requestBusinessHash: string;
+  };
+}
+
+/** Strict production capture: request parity and response completeness settle atomically. */
+export function startSearchPageCaptureV1(input: {
+  page: Page;
+  compiledRequest: CompiledSearchPageRequestV1;
+  timeoutMs: number;
+  onRawResponse?: (rawResponseText: string) => Promise<void>;
+}) {
+  let settled = false;
+  let disposed = false;
+  const drainDeadlineAt = Date.now() + input.timeoutMs;
+  const inFlight = new Set<Promise<void>>();
+  let resolveResult!: (value: SearchPageCaptureV1) => void;
+  let rejectResult!: (error: unknown) => void;
+  const result = new Promise<SearchPageCaptureV1>((resolve, reject) => {
+    resolveResult = resolve;
+    rejectResult = reject;
+  });
+  const handleResponse = async (response: PWResponse) => {
+    if (settled || disposed) return;
+    const captured = readCapturedSearchRequestBusinessV1(response.url());
+    if (!captured || captured.method !== 'getOfferList') return;
+    if (captured.beginPage !== String(input.compiledRequest.page)) return;
+    try {
+      const responseText = await response.text();
+      await input.onRawResponse?.(responseText);
+      assertCapturedSearchRequestParityV1({
+        compiled: input.compiledRequest,
+        captured,
+      });
+      const parsed = parseSearchMtopPageV1(responseText);
+      settled = true;
+      resolveResult({
+        page: parsed,
+        sanitizedRawPayload: sanitizeCollectorPayloadV1(
+          parseMtopJsonp(responseText),
+        ),
+        compiledRequest: input.compiledRequest,
+        observedAt: new Date().toISOString(),
+        sanitizedRequest: {
+          appId: captured.appId,
+          method: captured.method,
+          page: input.compiledRequest.page,
+          pageSize: captured.pageSize,
+          sort: captured.sortType,
+          descendOrder: captured.descendOrder,
+          pageSessionHash: input.compiledRequest.pageSessionHash,
+          filterParams: captured.filterParams,
+          requestBusinessHash: input.compiledRequest.requestBusinessHash,
+        },
+      });
+    } catch (error) {
+      settled = true;
+      rejectResult(error);
+    }
+  };
+  const onResponse = (response: PWResponse) => {
+    const task = handleResponse(response).catch((error) => {
+      if (settled) return;
+      settled = true;
+      rejectResult(error);
+    });
+    inFlight.add(task);
+    void task.finally(() => inFlight.delete(task));
+  };
+  input.page.on('response', onResponse);
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    input.page.off('response', onResponse);
+  };
+  const disposeAndDrain = async (): Promise<void> => {
+    dispose();
+    while (inFlight.size > 0) {
+      const remainingMs = drainDeadlineAt - Date.now();
+      if (remainingMs <= 0) throw strictSearchDrainTimeoutError();
+      await Promise.race([
+        Promise.allSettled([...inFlight]),
+        new Promise<never>((_, reject) => {
+          const timer = setTimeout(
+            () => reject(strictSearchDrainTimeoutError()),
+            remainingMs,
+          );
+          timer.unref?.();
+        }),
+      ]);
+    }
+  };
+  return {
+    async waitForAction<T>(action: () => Promise<T>): Promise<{
+      actionResult: T;
+      capture: SearchPageCaptureV1;
+    }> {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        const capturePromise = Promise.race([
+          result,
+          new Promise<never>((_, reject) => {
+            timer = setTimeout(
+              () => reject(new CliError(
+                9,
+                'SEARCH_RESPONSE_TIMEOUT',
+                'Strict Search capture timed out before a correlated response arrived.',
+                {
+                  category: 'timeout',
+                  retryable: true,
+                  recoveryAction: 'retry-search-page',
+                },
+              )),
+              input.timeoutMs,
+            );
+          }),
+        ]);
+        void capturePromise.catch(() => {});
+        const actionResult = await action();
+        return { actionResult, capture: await capturePromise };
+      } finally {
+        if (timer) clearTimeout(timer);
+        await disposeAndDrain();
+      }
+    },
+    dispose,
+  };
+}
+
+function strictSearchDrainTimeoutError(): CliError {
+  return new CliError(
+    9,
+    'COLLECTOR_CAPTURE_DRAIN_TIMEOUT',
+    'Search capture cleanup exceeded its bounded response deadline.',
+    {
+      category: 'protocol',
+      retryable: false,
+      recoveryAction: 'quarantine-capture-and-inspect-archive-writer',
+    },
+  );
 }

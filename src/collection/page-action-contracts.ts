@@ -440,6 +440,7 @@ export interface PageActionExecutionAttemptReceiptV1 {
     baselinePages: number;
     createdPages: number;
     closedPages: number;
+    transferredPages: number;
     remainingOwnedPages: 0;
   };
   metrics: Record<string, number>;
@@ -579,10 +580,29 @@ export function computeLogicalLineageHashV1(
   return canonicalCollectorSha256V1(lineage);
 }
 
+export function normalizeLogicalLineageV1(value: unknown): LogicalPageActionLineageV1 {
+  return normalizeLogicalLineage(value);
+}
+
 export function computeExecutionLineageHashV1(
   lineage: PageActionExecutionLineageV1,
 ): string {
   return canonicalCollectorSha256V1(lineage);
+}
+
+export function normalizeExecutionLineageV1(value: unknown): PageActionExecutionLineageV1 {
+  return normalizeExecutionLineage(value);
+}
+
+export function normalizePredecessorExecutionAttemptReceiptV1(
+  value: unknown,
+  executionAttemptOrdinal: number,
+): PageActionRequestV1['predecessorExecutionAttemptReceipt'] {
+  return normalizePredecessor(
+    value,
+    executionAttemptOrdinal,
+    'predecessorExecutionAttemptReceipt',
+  );
 }
 
 export function computeExecutionAttemptReceiptHashV1(
@@ -752,24 +772,52 @@ export function normalizePageActionRequestV1(
   ) {
     invalid('PageActionRequestV1 effective deadline must not exceed execution handle expiry.');
   }
-  if (action.kind === 'search-list' && action.recoveryHandle !== undefined) {
-    verifySignedPayload(
-      action.recoveryHandle,
-      action.recoveryHandle.signingKeyId,
-      action.recoveryHandle.signature,
-      verification,
-      'search recovery handle',
-    );
-    equal(
-      action.recoveryHandle.allowedNextPage,
-      action.request.requestedStartPage,
-      'recovery handle allowedNextPage/requestedStartPage',
-    );
-    if (
-      action.recoveryHandle.recoveryMode === 'safe-replay' &&
-      action.recoveryHandle.checkpointPage > action.recoveryHandle.maxSafeReplayPages
-    ) {
-      invalid('Safe replay recovery checkpoint exceeds its signed replay bound.');
+  if (action.kind === 'search-list') {
+    const recoveryRequired =
+      action.request.requestedStartPage > 1 || executionAttemptOrdinal > 1;
+    if (recoveryRequired && action.recoveryHandle === undefined) {
+      invalid('Search continuation or retry requires a signed recovery handle.');
+    }
+    if (action.recoveryHandle !== undefined) {
+      if (executionAttemptOrdinal === 1 || predecessorExecutionAttemptReceipt === undefined) {
+        invalid('Search recovery requires a predecessor execution attempt receipt.');
+      }
+      verifySignedPayload(
+        action.recoveryHandle,
+        action.recoveryHandle.signingKeyId,
+        action.recoveryHandle.signature,
+        verification,
+        'search recovery handle',
+      );
+      equal(
+        action.recoveryHandle.recoveryReceiptId,
+        predecessorExecutionAttemptReceipt.receiptId,
+        'recovery handle receiptId/predecessor receiptId',
+      );
+      equal(
+        action.recoveryHandle.recoveryReceiptHash,
+        predecessorExecutionAttemptReceipt.receiptHash,
+        'recovery handle receiptHash/predecessor receiptHash',
+      );
+      if (action.recoveryHandle.previousSearchSegmentId === action.request.searchSegmentId) {
+        invalid('Search recovery must advance to a new searchSegmentId.');
+      }
+      equal(
+        action.recoveryHandle.allowedNextPage,
+        action.request.requestedStartPage,
+        'recovery handle allowedNextPage/requestedStartPage',
+      );
+      if (
+        action.recoveryHandle.maxSafeReplayPages > action.request.maxSafeReplayPages
+      ) {
+        invalid('Recovery handle replay bound exceeds the canonical Search request bound.');
+      }
+      if (
+        action.recoveryHandle.recoveryMode === 'safe-replay' &&
+        action.recoveryHandle.checkpointPage > action.recoveryHandle.maxSafeReplayPages
+      ) {
+        invalid('Safe replay recovery checkpoint exceeds its signed replay bound.');
+      }
     }
   }
   if (action.kind === 'store-sample' && action.expansionApproval !== undefined) {
@@ -1525,7 +1573,7 @@ function normalizeRecoveryHandle(value: unknown): SignedSearchRecoveryHandleV1 {
     'encryptedNavigationArchiveRef', 'expiresAt', 'signingKeyId', 'signature',
   ]);
   requireLiteral(record.schema, 'search-recovery-handle-v1', 'recovery handle schema');
-  const checkpointPage = requirePositiveInteger(record.checkpointPage, 'recovery checkpointPage');
+  const checkpointPage = requireNonNegativeInteger(record.checkpointPage, 'recovery checkpointPage');
   const allowedNextPage = requirePositiveInteger(record.allowedNextPage, 'recovery allowedNextPage');
   if (allowedNextPage !== checkpointPage + 1) {
     invalid('SignedSearchRecoveryHandleV1.allowedNextPage must immediately follow checkpointPage.');
@@ -1947,16 +1995,24 @@ function normalizeRequestSnapshot(value: unknown, index: number): SanitizedRemot
 
 function normalizePageLifecycle(value: unknown): PageActionExecutionAttemptReceiptV1['pageLifecycle'] {
   const record = strictRecord(value, 'pageLifecycle', [
-    'baselinePages', 'createdPages', 'closedPages', 'remainingOwnedPages',
+    'baselinePages', 'createdPages', 'closedPages', 'transferredPages',
+    'remainingOwnedPages',
   ]);
   const createdPages = requireNonNegativeInteger(record.createdPages, 'pageLifecycle.createdPages');
   const closedPages = requireNonNegativeInteger(record.closedPages, 'pageLifecycle.closedPages');
-  if (closedPages !== createdPages) invalid('pageLifecycle.closedPages must equal createdPages at terminal receipt.');
+  const transferredPages = requireNonNegativeInteger(
+    record.transferredPages,
+    'pageLifecycle.transferredPages',
+  );
+  if (closedPages + transferredPages !== createdPages) {
+    invalid('pageLifecycle closed and transferred pages must exactly account for created pages.');
+  }
   requireLiteral(record.remainingOwnedPages, 0, 'pageLifecycle.remainingOwnedPages');
   return {
     baselinePages: requireNonNegativeInteger(record.baselinePages, 'pageLifecycle.baselinePages'),
     createdPages,
     closedPages,
+    transferredPages,
     remainingOwnedPages: 0,
   };
 }

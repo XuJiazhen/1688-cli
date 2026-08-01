@@ -4,6 +4,7 @@ import {
   STORE_CATALOG_COMPONENT_KEY,
 } from './alisite-module.js';
 import { isSafeSupplierMemberKey } from './qualification-capture.js';
+import type { StoreCatalogParseResult } from './alisite-module.js';
 
 export interface StoreCatalogRuntimeRequestInput {
   memberId: string;
@@ -32,6 +33,301 @@ export interface CatalogRuntimeDeadlineOptions {
 
 const CATALOG_PAGE_MAX = 100_000;
 const CATALOG_PAGE_SIZE_MAX = 100;
+
+export interface StoreSampleCursorV1 {
+  memberId: string;
+  canonicalShopUrl: string;
+  sortType: 'wangpu_score';
+  count: 30;
+  generation: string;
+  observedPages: number[];
+  nextPage: number | null;
+  sourceOfferCount: number | null;
+  sourceTotalPages: number | null;
+  categoriesObservedAt: string | null;
+  baselineObservedAt: string;
+  baselineExpiresAt: string;
+  checkpointState: 'incomplete' | 'dormant' | 'approved-expansion-active' | 'exhausted';
+  exhausted: boolean;
+}
+
+export interface StoreSampleRuntimeResultV1 {
+  status: 'completed' | 'partial';
+  mode: 'phase-1-bounded' | 'approved-expansion';
+  pages: Array<{ page: number; parsed: StoreCatalogParseResult }>;
+  uniqueOffers: StoreCatalogParseResult['offers'];
+  categories: StoreCatalogParseResult['categories'];
+  profileObservation: {
+    memberId: string;
+    canonicalShopUrl: string;
+    observedAt: string;
+  };
+  cursor: StoreSampleCursorV1;
+  taskCandidateEligible: false;
+  evidenceUsage: 'baseline-evidence' | 'cache-seed-only';
+  remoteRequests: number;
+  failedPages: number[];
+  errorCode: string | null;
+}
+
+export async function collectBoundedStoreSampleV1(input: {
+  memberId: string;
+  canonicalShopUrl: string;
+  mode: 'phase-1-bounded' | 'approved-expansion';
+  firstPage: number;
+  lastPageInclusive: number;
+  generation: string;
+  baselineExpiresAt: string;
+  previousCursor?: StoreSampleCursorV1;
+  now?: () => Date;
+  collectPage(page: number): Promise<StoreCatalogParseResult>;
+  afterPageCommitted?(page: number): Promise<void>;
+}): Promise<StoreSampleRuntimeResultV1> {
+  if (!isSafeSupplierMemberKey(input.memberId)) throw new TypeError('Store sample memberId is invalid.');
+  const now = input.now ?? (() => new Date());
+  const observedAt = now().toISOString();
+  if (!Number.isFinite(Date.parse(input.baselineExpiresAt)) || Date.parse(input.baselineExpiresAt) <= Date.parse(observedAt)) {
+    throw new CliError(2, 'STORE_SAMPLE_BASELINE_EXPIRY_INVALID', 'Store sample generation expiry must be in the future.');
+  }
+  if (input.mode === 'phase-1-bounded') {
+    if (input.firstPage !== 1 || input.lastPageInclusive !== 3) {
+      throw new CliError(2, 'STORE_SAMPLE_BASELINE_SCOPE_INVALID', 'Phase-1 Store Sample scope is exactly pages 1 through 3.', {
+        category: 'contract',
+        retryable: false,
+        recoveryAction: 'repair-page-action-scope',
+      });
+    }
+  } else {
+    assertApprovedExpansionScope(input);
+  }
+
+  const pages: StoreSampleRuntimeResultV1['pages'] = [];
+  const uniqueOffers = new Map<string, StoreCatalogParseResult['offers'][number]>();
+  let sourceOfferCount: number | null = input.mode === 'approved-expansion'
+    ? input.previousCursor!.sourceOfferCount
+    : null;
+  let sourceTotalPages: number | null = input.mode === 'approved-expansion'
+    ? input.previousCursor!.sourceTotalPages
+    : null;
+  let categories: StoreCatalogParseResult['categories'] = [];
+  const failedPages: number[] = [];
+  let errorCode: string | null = null;
+  for (let page = input.firstPage; page <= input.lastPageInclusive; page++) {
+    let parsed: StoreCatalogParseResult;
+    try {
+      parsed = await input.collectPage(page);
+      if (parsed.kind !== 'offer-list' || parsed.page.pageNum !== page) {
+        throw catalogProtocolError('STORE_SAMPLE_RESPONSE_PAGE_MISMATCH', `Store sample response does not match page ${page}.`);
+      }
+      if (parsed.page.memberId !== input.memberId) {
+        throw catalogProtocolError('STORE_SAMPLE_MEMBER_SCOPE_MISMATCH', 'Store sample response belongs to another member.');
+      }
+      if (parsed.page.pageSize !== 30 || parsed.page.sortType !== 'wangpu_score') {
+        throw catalogProtocolError('STORE_SAMPLE_REQUEST_PARITY_MISMATCH', 'Store sample count/sort differs from the frozen contract.');
+      }
+      if (page === input.firstPage) {
+        if (input.mode === 'phase-1-bounded') {
+          sourceOfferCount = parsed.offerCount;
+          sourceTotalPages = parsed.totalPages;
+          categories = parsed.categories;
+          if (
+            parsed.offerCount === null
+            || parsed.totalPages === null
+            || parsed.categories.length === 0
+          ) {
+            throw catalogProtocolError(
+              'STORE_SAMPLE_PAGE1_SUMMARY_INCOMPLETE',
+              'Page 1 must authoritatively expose offer totals, page totals, and categories.',
+            );
+          }
+        } else {
+          assertExpansionTotalsMatchBaseline(input.previousCursor!, parsed);
+          sourceOfferCount ??= parsed.offerCount;
+          sourceTotalPages ??= parsed.totalPages;
+        }
+      } else if (
+        (parsed.offerCount !== null && sourceOfferCount !== null && parsed.offerCount !== sourceOfferCount) ||
+        (parsed.totalPages !== null && sourceTotalPages !== null && parsed.totalPages !== sourceTotalPages)
+      ) {
+        throw catalogProtocolError('STORE_SAMPLE_TOTAL_DRIFT', 'Store sample total changed within one bounded action.');
+      }
+      for (const offer of parsed.offers) {
+        if (offer.memberId !== input.memberId) {
+          throw catalogProtocolError('STORE_SAMPLE_OFFER_MEMBER_MISMATCH', `Catalog offer ${offer.offerId} belongs to another member.`);
+        }
+        if (!uniqueOffers.has(offer.offerId)) uniqueOffers.set(offer.offerId, offer);
+      }
+      pages.push({ page, parsed });
+    } catch (error) {
+      if (pages.length === 0) throw error;
+      failedPages.push(page);
+      errorCode = storeSampleFailureCode(error);
+      break;
+    }
+    if (parsed.totalPages !== null && page >= parsed.totalPages) break;
+    if (input.afterPageCommitted !== undefined) {
+      try {
+        await input.afterPageCommitted(page);
+      } catch (error) {
+        errorCode = storeSampleFailureCode(error);
+        break;
+      }
+    }
+  }
+
+  const lastObserved = pages.at(-1)?.page ?? input.firstPage - 1;
+  const exhausted = sourceTotalPages !== null && lastObserved >= sourceTotalPages;
+  const nextPage = exhausted ? null : lastObserved + 1;
+  const result: StoreSampleRuntimeResultV1 = {
+    status: errorCode === null ? 'completed' : 'partial',
+    mode: input.mode,
+    pages,
+    uniqueOffers: [...uniqueOffers.values()],
+    categories,
+    profileObservation: {
+      memberId: input.memberId,
+      canonicalShopUrl: canonicalShopUrl(input.canonicalShopUrl),
+      observedAt,
+    },
+    cursor: {
+      memberId: input.memberId,
+      canonicalShopUrl: canonicalShopUrl(input.canonicalShopUrl),
+      sortType: 'wangpu_score' as const,
+      count: 30 as const,
+      generation: input.generation,
+      observedPages: input.mode === 'phase-1-bounded'
+        ? pages.map((entry) => entry.page)
+        : [...input.previousCursor!.observedPages, ...pages.map((entry) => entry.page)],
+      nextPage,
+      sourceOfferCount,
+      sourceTotalPages,
+      categoriesObservedAt:
+        input.mode === 'phase-1-bounded' ? observedAt : input.previousCursor?.categoriesObservedAt ?? null,
+      baselineObservedAt:
+        input.mode === 'phase-1-bounded' ? observedAt : input.previousCursor!.baselineObservedAt,
+      baselineExpiresAt: input.baselineExpiresAt,
+      checkpointState: errorCode !== null
+        ? 'incomplete'
+        : exhausted
+        ? 'exhausted'
+        : input.mode === 'phase-1-bounded'
+          ? 'dormant'
+          : 'approved-expansion-active',
+      exhausted,
+    },
+    taskCandidateEligible: false,
+    evidenceUsage: input.mode === 'phase-1-bounded' ? 'baseline-evidence' : 'cache-seed-only',
+    remoteRequests: pages.length + failedPages.length,
+    failedPages,
+    errorCode,
+  };
+  return Object.freeze(result);
+}
+
+function storeSampleFailureCode(error: unknown): string {
+  if (
+    error !== null
+    && typeof error === 'object'
+    && typeof (error as { code?: unknown }).code === 'string'
+  ) {
+    return (error as { code: string }).code;
+  }
+  return 'STORE_SAMPLE_PAGE_FAILED';
+}
+
+export function materializeFreshStoreSampleCacheV1(input: {
+  cursor: StoreSampleCursorV1;
+  parserRevisionMatches: boolean;
+  now: string;
+  originBatchRefs: string[];
+  contentHash: string;
+}): {
+  hit: true;
+  remoteRequests: 0;
+  originBatchRefs: string[];
+  observedAt: string;
+  contentHash: string;
+  cursor: StoreSampleCursorV1;
+} | { hit: false; remoteRequests: 0; reason: 'expired' | 'parser-revision-changed' } {
+  const now = Date.parse(input.now);
+  if (!input.parserRevisionMatches) return { hit: false, remoteRequests: 0, reason: 'parser-revision-changed' };
+  if (!Number.isFinite(now) || now >= Date.parse(input.cursor.baselineExpiresAt)) {
+    return { hit: false, remoteRequests: 0, reason: 'expired' };
+  }
+  return {
+    hit: true,
+    remoteRequests: 0,
+    originBatchRefs: [...new Set(input.originBatchRefs)].sort(),
+    observedAt: input.cursor.baselineObservedAt,
+    contentHash: input.contentHash,
+    cursor: structuredClone(input.cursor),
+  };
+}
+
+function assertApprovedExpansionScope(input: {
+  memberId: string;
+  canonicalShopUrl: string;
+  firstPage: number;
+  lastPageInclusive: number;
+  previousCursor?: StoreSampleCursorV1;
+  generation: string;
+  baselineExpiresAt: string;
+}): void {
+  const pageCount = input.lastPageInclusive - input.firstPage + 1;
+  if (!Number.isInteger(pageCount) || pageCount < 3 || pageCount > 10) {
+    throw new CliError(2, 'STORE_SAMPLE_EXPANSION_SCOPE_INVALID', 'Approved expansion page count must be an integer from 3 through 10.');
+  }
+  const cursor = input.previousCursor;
+  if (
+    !cursor ||
+    cursor.checkpointState !== 'dormant' ||
+    cursor.nextPage !== input.firstPage ||
+    cursor.generation !== input.generation ||
+    cursor.memberId !== input.memberId ||
+    cursor.canonicalShopUrl !== canonicalShopUrl(input.canonicalShopUrl) ||
+    cursor.sortType !== 'wangpu_score' ||
+    cursor.count !== 30 ||
+    cursor.baselineExpiresAt !== input.baselineExpiresAt ||
+    JSON.stringify(cursor.observedPages) !== JSON.stringify(
+      Array.from({ length: input.firstPage - 1 }, (_, index) => index + 1),
+    ) ||
+    cursor.exhausted
+  ) {
+    throw new CliError(2, 'STORE_SAMPLE_EXPANSION_CURSOR_INVALID', 'Approved expansion must start at a fresh dormant checkpoint.');
+  }
+}
+
+function assertExpansionTotalsMatchBaseline(
+  cursor: StoreSampleCursorV1,
+  parsed: StoreCatalogParseResult,
+): void {
+  if (
+    (cursor.sourceOfferCount !== null && parsed.offerCount !== null && cursor.sourceOfferCount !== parsed.offerCount) ||
+    (cursor.sourceTotalPages !== null && parsed.totalPages !== null && cursor.sourceTotalPages !== parsed.totalPages)
+  ) {
+    throw catalogProtocolError(
+      'STORE_SAMPLE_BASELINE_TOTAL_DRIFT',
+      'Approved expansion no longer matches its fresh baseline totals.',
+    );
+  }
+}
+
+function canonicalShopUrl(value: string): string {
+  const url = new URL(value);
+  if (url.protocol !== 'https:' || !/(?:^|\.)1688\.com$/i.test(url.hostname)) {
+    throw new TypeError('Store sample canonicalShopUrl must be an HTTPS 1688 URL.');
+  }
+  url.hash = '';
+  return url.toString();
+}
+
+function catalogProtocolError(code: string, message: string): CliError {
+  return new CliError(9, code, message, {
+    category: 'protocol',
+    retryable: false,
+    recoveryAction: 'retry-store-sample-generation',
+  });
+}
 
 export function buildStoreCatalogRuntimeRequest(
   input: StoreCatalogRuntimeRequestInput,

@@ -1,5 +1,9 @@
 import net from 'node:net';
 import fs from 'node:fs/promises';
+import path from 'node:path';
+import { createHash, randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import {
   defaultProfileName,
   socketPath,
@@ -18,12 +22,32 @@ import { loadExecutor } from '../session/dispatch.js';
 import { CliError } from '../io/errors.js';
 import { throttle } from './throttle.js';
 import type { Request, Response } from './protocol.js';
+import {
+  SUPERVISOR_RPC_MAX_FRAME_BYTES,
+  SUPERVISOR_RPC_RESPONSE_SCHEMA,
+  SUPERVISOR_EXECUTION_RENEWAL_SCHEMA,
+  SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_SCHEMA,
+  SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA,
+  SupervisorRpcError,
+  parseExecutionRenewalFrame,
+  parseRemoteAttemptAdmissionResponseFrame,
+  parseSupervisorRpcRequest,
+  type ParsedSupervisorRpcRequestV1,
+  type RemoteAttemptAdmissionReceiptV1,
+  type RemoteAttemptAdmissionRequestV1,
+  type SupervisorRpcResponseV1,
+} from './supervisor-rpc.js';
+import type { PageActionVerificationConfigV1 } from '../collection/page-action-contracts.js';
+import type { ProfileDaemonRuntime } from './supervisor-runtime.js';
 import pkg from '../../package.json' with { type: 'json' };
 
-interface ServerOpts {
+export interface ServerOpts {
   profile?: string;
   idleTimeoutMs?: number;
   prewarm?: boolean;
+  headful?: boolean;
+  supervisorRuntime?: ProfileDaemonRuntime;
+  pageActionVerification?: PageActionVerificationConfigV1;
 }
 
 interface DaemonHealth {
@@ -74,6 +98,8 @@ let activeClients = 0;
 let lastActivityMs = Date.now();
 let server: net.Server | null = null;
 let shuttingDown = false;
+let activeManagedRuntime: ProfileDaemonRuntime | null = null;
+const signalHandlers = new Map<NodeJS.Signals, () => void>();
 
 export async function start(opts: ServerOpts = {}): Promise<void> {
   const profile = defaultProfileName(opts.profile);
@@ -81,6 +107,7 @@ export async function start(opts: ServerOpts = {}): Promise<void> {
   await ensureRoot();
   await ensureProfileRuntimeDir(profile);
   stats.profile = profile;
+  activeManagedRuntime = opts.supervisorRuntime ?? null;
 
   // Clean any stale socket. If pidfile points to a live process, refuse.
   await refuseIfAlive(profile);
@@ -93,22 +120,57 @@ export async function start(opts: ServerOpts = {}): Promise<void> {
     }
   }
 
-  await fs.writeFile(pidFile(profile), String(process.pid));
-  await fs.writeFile(daemonVersionFile(profile), pkg.version);
+  await fs.writeFile(pidFile(profile), String(process.pid), { mode: 0o600 });
+  await fs.writeFile(daemonVersionFile(profile), pkg.version, { mode: 0o600 });
+  if (process.platform !== 'win32') {
+    await Promise.all([
+      fs.chmod(pidFile(profile), 0o600),
+      fs.chmod(daemonVersionFile(profile), 0o600),
+    ]);
+  }
 
   log(`profile ${profile}, pid ${process.pid}, socket ${socketPath(profile)}`);
 
-  if (opts.prewarm) {
+  if (opts.supervisorRuntime !== undefined) {
+    log('warming Supervisor-managed headful Chromium...');
+    const managedStatus = await opts.supervisorRuntime.ensureWarm();
+    await fs.writeFile(
+      managedOwnerFile(profile),
+      JSON.stringify({
+        profileId: managedStatus.profileId,
+        profileName: managedStatus.profileName,
+        daemonInstanceId: managedStatus.daemonInstanceId,
+        supervisorGeneration: managedStatus.supervisorGeneration,
+        contextGeneration: managedStatus.contextGeneration,
+        daemonPid: process.pid,
+        chromiumPid: managedStatus.chromiumPid,
+        daemonProcessIdentity: await processStartIdentity(process.pid),
+        chromiumProcessIdentity: managedStatus.chromiumPid === null
+          ? null
+          : await processStartIdentity(managedStatus.chromiumPid),
+        headful: managedStatus.headful,
+        writtenAt: new Date().toISOString(),
+      }),
+      { mode: 0o600 },
+    );
+    log('Supervisor-managed Chromium ready');
+  } else if (opts.prewarm) {
     log('prewarming Chromium...');
-    await getSharedContext(profile);
+    await getSharedContext(profile, { headful: opts.headful === true });
     log('Chromium ready');
   }
 
-  server = net.createServer((sock) => handleClient(sock));
+  server = net.createServer((sock) => handleClient(sock, opts));
+  const previousUmask = process.platform === 'win32' ? null : process.umask(0o177);
   await new Promise<void>((resolve, reject) => {
-    server!.once('error', reject);
+    const fail = (error: Error): void => {
+      if (previousUmask !== null) process.umask(previousUmask);
+      reject(error);
+    };
+    server!.once('error', fail);
     server!.listen(socketPath(profile), () => {
-      server!.off('error', reject);
+      server!.off('error', fail);
+      if (previousUmask !== null) process.umask(previousUmask);
       resolve();
     });
   });
@@ -116,6 +178,7 @@ export async function start(opts: ServerOpts = {}): Promise<void> {
 
   const idleTimer = setInterval(() => {
     if (
+      opts.supervisorRuntime === undefined &&
       !shuttingDown &&
       activeClients === 0 &&
       Date.now() - lastActivityMs > idleMs
@@ -127,41 +190,175 @@ export async function start(opts: ServerOpts = {}): Promise<void> {
   idleTimer.unref();
 
   for (const sig of ['SIGTERM', 'SIGINT'] as const) {
-    process.on(sig, () => {
+    const handler = () => {
       log(`received ${sig}`);
       void shutdown(profile);
-    });
+    };
+    signalHandlers.set(sig, handler);
+    process.on(sig, handler);
   }
 }
 
-function handleClient(sock: net.Socket): void {
+function handleClient(sock: net.Socket, opts: ServerOpts): void {
   activeClients++;
   lastActivityMs = Date.now();
   sock.setEncoding('utf8');
   let buf = '';
+  const pendingAdmissions = new Map<string, {
+    rpcId: string;
+    resolve(receipt: RemoteAttemptAdmissionReceiptV1): void;
+    reject(error: Error): void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
   sock.on('data', (chunk: string) => {
     buf += chunk;
+    if (Buffer.byteLength(buf) > SUPERVISOR_RPC_MAX_FRAME_BYTES) {
+      sock.write(JSON.stringify({
+        id: '?',
+        ok: false,
+        exitCode: 2,
+        code: 'RPC_FRAME_TOO_LARGE',
+        message: `Request exceeds ${SUPERVISOR_RPC_MAX_FRAME_BYTES} bytes.`,
+      }) + '\n');
+      sock.destroy();
+      return;
+    }
     let nl: number;
     while ((nl = buf.indexOf('\n')) !== -1) {
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
       if (!line) continue;
-      let req: Request;
+      let req: Request | ParsedSupervisorRpcRequestV1;
+      let supervisorRequest = false;
+      let candidateRpcId = '?';
       try {
-        req = JSON.parse(line) as Request;
-      } catch {
+        const parsed: unknown = JSON.parse(line);
+        if (
+          parsed !== null
+          && typeof parsed === 'object'
+          && !Array.isArray(parsed)
+          && (parsed as Record<string, unknown>)['schema']
+            === SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA
+        ) {
+          const response = parseRemoteAttemptAdmissionResponseFrame(parsed);
+          const pending = pendingAdmissions.get(response.admissionId);
+          if (pending === undefined || pending.rpcId !== response.rpcId) {
+            throw new SupervisorRpcError(
+              'REMOTE_ATTEMPT_ADMISSION_RESPONSE_UNEXPECTED',
+              'Remote-attempt admission response does not match an active challenge.',
+              false,
+            );
+          }
+          clearTimeout(pending.timer);
+          pendingAdmissions.delete(response.admissionId);
+          if (response.ok) {
+            pending.resolve(response.receipt);
+          } else {
+            pending.reject(new SupervisorRpcError(
+              response.error.code,
+              response.error.message,
+              response.error.retryable,
+            ));
+          }
+          continue;
+        }
+        if (
+          parsed !== null
+          && typeof parsed === 'object'
+          && !Array.isArray(parsed)
+          && (parsed as Record<string, unknown>)['schema']
+            === SUPERVISOR_EXECUTION_RENEWAL_SCHEMA
+        ) {
+          if (
+            opts.supervisorRuntime === undefined
+            || opts.pageActionVerification === undefined
+          ) {
+            throw new SupervisorRpcError(
+              'SUPERVISOR_RUNTIME_DISABLED',
+              'This daemon was not started by a Profile Supervisor.',
+              false,
+            );
+          }
+          const renewal = parseExecutionRenewalFrame(parsed, {
+            verification: opts.pageActionVerification,
+          });
+          void opts.supervisorRuntime.renewExecution(
+            renewal.rpcId,
+            renewal.request,
+          ).catch((error) => {
+            if (sock.writable) {
+              sock.write(JSON.stringify(supervisorFailure(renewal.rpcId, error)) + '\n');
+            }
+          });
+          continue;
+        }
+        if (
+          parsed !== null
+          && typeof parsed === 'object'
+          && !Array.isArray(parsed)
+          && typeof (parsed as Record<string, unknown>)['rpcId'] === 'string'
+        ) {
+          candidateRpcId = (parsed as Record<string, unknown>)['rpcId'] as string;
+        }
+        if (
+          parsed !== null
+          && typeof parsed === 'object'
+          && !Array.isArray(parsed)
+          && (parsed as Record<string, unknown>)['schema']
+            === 'profile-supervisor.rpc.v1'
+        ) {
+          if (
+            opts.supervisorRuntime === undefined
+            || opts.pageActionVerification === undefined
+          ) {
+            throw new SupervisorRpcError(
+              'SUPERVISOR_RUNTIME_DISABLED',
+              'This daemon was not started by a Profile Supervisor.',
+              false,
+            );
+          }
+          req = parseSupervisorRpcRequest(parsed, {
+            verification: opts.pageActionVerification,
+          });
+          supervisorRequest = true;
+        } else {
+          req = parseLegacyRequest(parsed);
+        }
+      } catch (error) {
+        if (error instanceof SupervisorRpcError) {
+          sock.write(JSON.stringify(supervisorFailure(candidateRpcId, error)) + '\n');
+          continue;
+        }
         sock.write(
           JSON.stringify({
             id: '?',
             ok: false,
             exitCode: 1,
             code: 'BAD_REQUEST',
-            message: 'invalid JSON',
+            message: 'invalid request frame',
           }) + '\n',
         );
         continue;
       }
-      void handleRequest(req).then((resp) => {
+      const response = supervisorRequest
+        ? handleSupervisorRequest(
+            opts.supervisorRuntime!,
+            req as ParsedSupervisorRpcRequestV1,
+            opts.profile,
+            (req as ParsedSupervisorRpcRequestV1).method === 'collector.pageAction.execute'
+              ? {
+                  authorize: (input) => requestRemoteAttemptAdmission({
+                    sock,
+                    pendingAdmissions,
+                    rpcId: (req as ParsedSupervisorRpcRequestV1).rpcId,
+                    deadlineAt: (req as ParsedSupervisorRpcRequestV1).deadlineAt,
+                    input,
+                  }),
+                }
+              : undefined,
+          )
+        : handleRequest(req as Request, opts.supervisorRuntime !== undefined);
+      void response.then((resp) => {
         if (!sock.writable) return;
         sock.write(JSON.stringify(resp) + '\n');
       });
@@ -171,16 +368,153 @@ function handleClient(sock: net.Socket): void {
     /* swallow client errors */
   });
   sock.on('close', () => {
+    for (const pending of pendingAdmissions.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new SupervisorRpcError(
+        'REMOTE_ATTEMPT_ADMISSION_CHANNEL_CLOSED',
+        'Supervisor admission channel closed before database authority was granted.',
+        true,
+      ));
+    }
+    pendingAdmissions.clear();
     activeClients--;
     lastActivityMs = Date.now();
   });
 }
 
-async function handleRequest(req: Request): Promise<Response> {
+async function handleSupervisorRequest(
+  runtime: ProfileDaemonRuntime,
+  request: ParsedSupervisorRpcRequestV1,
+  profile?: string,
+  remoteAttemptAdmission?: {
+    authorize(input: RemoteAttemptAdmissionRequestV1): Promise<RemoteAttemptAdmissionReceiptV1>;
+  },
+): Promise<SupervisorRpcResponseV1> {
+  const response = await runtime.handle(request, { remoteAttemptAdmission });
+  if (request.method === 'supervisor.restart' && response.ok) {
+    await persistManagedOwner(defaultProfileName(profile), runtime.status());
+  }
+  return response;
+}
+
+function requestRemoteAttemptAdmission(input: {
+  sock: net.Socket;
+  pendingAdmissions: Map<string, {
+    rpcId: string;
+    resolve(receipt: RemoteAttemptAdmissionReceiptV1): void;
+    reject(error: Error): void;
+    timer: ReturnType<typeof setTimeout>;
+  }>;
+  rpcId: string;
+  deadlineAt: string;
+  input: RemoteAttemptAdmissionRequestV1;
+}): Promise<RemoteAttemptAdmissionReceiptV1> {
+  if (!input.sock.writable) {
+    return Promise.reject(new SupervisorRpcError(
+      'REMOTE_ATTEMPT_ADMISSION_CHANNEL_CLOSED',
+      'Supervisor admission channel is unavailable.',
+      true,
+    ));
+  }
+  const remainingMs = Date.parse(input.deadlineAt) - Date.now();
+  if (remainingMs <= 0) {
+    return Promise.reject(new SupervisorRpcError(
+      'REMOTE_ATTEMPT_ADMISSION_DEADLINE_EXCEEDED',
+      'Remote-attempt admission deadline has expired.',
+      true,
+    ));
+  }
+  const admissionId = randomUUID();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      input.pendingAdmissions.delete(admissionId);
+      reject(new SupervisorRpcError(
+        'REMOTE_ATTEMPT_ADMISSION_TIMEOUT',
+        'Database authority did not answer the remote-attempt admission challenge.',
+        true,
+      ));
+    }, remainingMs);
+    timer.unref();
+    input.pendingAdmissions.set(admissionId, {
+      rpcId: input.rpcId,
+      resolve,
+      reject,
+      timer,
+    });
+    try {
+      input.sock.write(`${JSON.stringify({
+        schema: SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_SCHEMA,
+        rpcId: input.rpcId,
+        admissionId,
+        deadlineAt: input.deadlineAt,
+        request: input.input,
+      })}\n`);
+    } catch (error) {
+      clearTimeout(timer);
+      input.pendingAdmissions.delete(admissionId);
+      reject(new SupervisorRpcError(
+        'REMOTE_ATTEMPT_ADMISSION_CHANNEL_CLOSED',
+        error instanceof Error ? error.message : 'Supervisor admission channel write failed.',
+        true,
+      ));
+    }
+  });
+}
+
+async function persistManagedOwner(
+  profile: string,
+  status: ReturnType<ProfileDaemonRuntime['status']>,
+): Promise<void> {
+  await fs.writeFile(
+    managedOwnerFile(profile),
+    JSON.stringify({
+      profileId: status.profileId,
+      profileName: status.profileName,
+      daemonInstanceId: status.daemonInstanceId,
+      supervisorGeneration: status.supervisorGeneration,
+      contextGeneration: status.contextGeneration,
+      daemonPid: process.pid,
+      chromiumPid: status.chromiumPid,
+      daemonProcessIdentity: await processStartIdentity(process.pid),
+      chromiumProcessIdentity: status.chromiumPid === null
+        ? null
+        : await processStartIdentity(status.chromiumPid),
+      headful: status.headful,
+      writtenAt: new Date().toISOString(),
+    }),
+    { mode: 0o600 },
+  );
+}
+
+function parseLegacyRequest(value: unknown): Request {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new TypeError('Legacy daemon request must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  if (
+    typeof record['id'] !== 'string'
+    || record['id'].length === 0
+    || typeof record['cmd'] !== 'string'
+    || record['cmd'].length === 0
+    || !Object.hasOwn(record, 'args')
+  ) {
+    throw new TypeError('Legacy daemon request requires id, cmd, and args.');
+  }
+  return { id: record['id'], cmd: record['cmd'], args: record['args'] };
+}
+
+async function handleRequest(req: Request, supervisorManaged: boolean): Promise<Response> {
   lastActivityMs = Date.now();
   stats.lastRequestAt = new Date().toISOString();
   stats.commandCount++;
   try {
+    if (supervisorManaged) {
+      throw new CliError(
+        20,
+        'SUPERVISOR_RPC_REQUIRED',
+        'Supervisor-managed daemons reject legacy command dispatch.',
+      );
+    }
     if (req.cmd === 'status') {
       const browser = await getSharedContextStatus();
       return {
@@ -236,6 +570,23 @@ async function handleRequest(req: Request): Promise<Response> {
       message: (e as Error).message ?? String(e),
     };
   }
+}
+
+function supervisorFailure(
+  rpcId: string,
+  error: SupervisorRpcError,
+): SupervisorRpcResponseV1 {
+  return {
+    schema: SUPERVISOR_RPC_RESPONSE_SCHEMA,
+    rpcId,
+    ok: false,
+    error: {
+      code: error.code,
+      message: error.message,
+      retryable: error.retryable,
+      ...(error.details === undefined ? {} : { details: error.details }),
+    },
+  };
 }
 
 async function enforceHealthPause(): Promise<void> {
@@ -326,6 +677,18 @@ async function refuseIfAlive(profile: string): Promise<void> {
 async function shutdown(profile = stats.profile): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
+  const clean = await drainManagedRuntime('process_shutdown', false, 120_000);
+  if (!clean) {
+    shuttingDown = false;
+    setTimeout(() => void shutdown(profile), 1_000).unref();
+    return;
+  }
+  await closeServer(profile);
+  log('bye');
+  process.exit(0);
+}
+
+async function closeServer(profile: string): Promise<void> {
   log(`shutting down profile ${profile}`);
   if (server) {
     await new Promise<void>((r) => server!.close(() => r()));
@@ -348,10 +711,68 @@ async function shutdown(profile = stats.profile): Promise<void> {
   } catch {
     /* ignore */
   }
-  log('bye');
-  process.exit(0);
+  try {
+    await fs.unlink(managedOwnerFile(profile));
+  } catch {
+    /* ignore */
+  }
+}
+
+/** Test-only close path for framed socket integration without terminating Vitest. */
+export async function stopServerForTesting(profile = stats.profile): Promise<void> {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error('stopServerForTesting is available only under NODE_ENV=test.');
+  }
+  if (!shuttingDown) shuttingDown = true;
+  await drainManagedRuntime('test_shutdown', true, 5_000);
+  await closeServer(profile);
+  removeSignalHandlers();
+  server = null;
+  shuttingDown = false;
+  activeClients = 0;
+  activeManagedRuntime = null;
+}
+
+async function drainManagedRuntime(
+  reason: string,
+  cancelInFlight: boolean,
+  timeoutMs: number,
+): Promise<boolean> {
+  if (activeManagedRuntime === null) return true;
+  const receipt = await activeManagedRuntime.drain({
+    reason,
+    deadlineAt: new Date(Date.now() + timeoutMs).toISOString(),
+    cancelInFlight,
+  }).catch(() => null);
+  return receipt?.clean === true && receipt.activePageCount === 0;
+}
+
+function removeSignalHandlers(): void {
+  for (const [signal, handler] of signalHandlers) {
+    process.removeListener(signal, handler);
+  }
+  signalHandlers.clear();
+}
+
+const execFileAsync = promisify(execFile);
+
+async function processStartIdentity(pid: number): Promise<string | null> {
+  if (process.platform === 'win32') return null;
+  try {
+    const { stdout } = await execFileAsync('ps', ['-p', String(pid), '-o', 'lstart=']);
+    const started = stdout.trim();
+    return started.length === 0
+      ? null
+      : createHash('sha256').update(`${pid}\0${started}`).digest('hex');
+  } catch {
+    return null;
+  }
 }
 
 function log(msg: string): void {
   process.stderr.write(`[daemon ${new Date().toISOString()}] ${msg}\n`);
+}
+
+function managedOwnerFile(profile: string): string {
+  return path.join(path.dirname(pidFile(profile)), 'daemon.owner.json');
 }

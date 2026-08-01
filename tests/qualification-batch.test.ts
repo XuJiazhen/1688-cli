@@ -21,6 +21,30 @@ const unit = {
 };
 
 describe('createQualificationBatch', () => {
+  it('recursively sanitizes contacts in Qualification Batch facts', () => {
+    const batch = createQualificationBatch({
+      unit,
+      batchId: 'batch-qualification-private',
+      payload: {
+        data: {
+          memberId: 'b2b-sanitized-supplier',
+          companyName: '工厂 电话：010-12345678',
+          summary: '微信号: fixture_shop',
+          certList: [],
+          businessInfo: {},
+        },
+      },
+      collectedAt: '2026-07-22T00:00:01.000Z',
+      startedAt: '2026-07-22T00:00:00.000Z',
+      completedAt: '2026-07-22T00:00:02.000Z',
+    });
+    expect(batch.observations[0]).toMatchObject({
+      memberId: 'b2b-sanitized-supplier',
+      companyName: { value: '工厂 [redacted]' },
+      shopSummary: { value: '[redacted]' },
+    });
+  });
+
   it('keeps registered business scope independent from an empty certificate list', () => {
     const batch = createQualificationBatch({
       unit,
@@ -112,6 +136,13 @@ describe('createQualificationBatch', () => {
           summary: '店铺自述内容',
           productionService: '帐篷加工；户外用品加工',
           businessLine: '户外用品',
+          sellerType: '生产厂家',
+          strengthSignals: [
+            { code: 'factoryInspection', label: '深度验厂', enabled: true },
+          ],
+          guaranteeItems: [
+            { code: 'returnFreight', label: '退货包运费', status: 'enabled' },
+          ],
           certList: [
             {
               certName: '质量管理体系认证',
@@ -123,6 +154,7 @@ describe('createQualificationBatch', () => {
             companyBusinessLine: '一般项目：户外用品制造及销售。',
             companyYearStarted: '2024-05-27',
             socialCreditCode: 'SANITIZED-CREDIT-CODE',
+            registeredAddress: '浙江省某市某工业园区',
           },
           propaganda: {
             companyImg: [
@@ -162,12 +194,22 @@ describe('createQualificationBatch', () => {
         value: 'SANITIZED-CREDIT-CODE',
       },
       establishedAt: { availability: 'available', value: '2024-05-27' },
+      registeredAddress: { availability: 'available', value: '浙江省某市某工业园区' },
+      sellerType: { availability: 'available', value: '生产厂家' },
       shopSummary: { availability: 'available', value: '店铺自述内容' },
       productionService: {
         availability: 'available',
         value: '帐篷加工；户外用品加工',
       },
       businessLine: { availability: 'available', value: '户外用品' },
+      strengthSignals: [
+        { key: 'factoryInspection', label: '深度验厂', value: true },
+      ],
+      strengthSignalsAvailability: 'available',
+      guaranteeItems: [
+        { key: 'returnFreight', label: '退货包运费', value: 'enabled' },
+      ],
+      guaranteeItemsAvailability: 'available',
       certificates: [
         {
           name: '质量管理体系认证',

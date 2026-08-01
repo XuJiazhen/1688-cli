@@ -15,12 +15,13 @@ describe('search options', () => {
     const url = buildSearchUrl('雨伞', 'best-selling');
 
     expect(url).toContain('keywords=%D3%EA%C9%A1');
-    expect(url).toContain('sortType=va_rmdarkgmv30');
+    expect(url).toContain('sortType=va_sales360');
+    expect(url).toContain('descendOrder=true');
   });
 
-  it('does not add a sortType for relevance', () => {
+  it('compiles relevance to the explicit current remote pair', () => {
     expect(buildSearchUrl('hat', 'relevance')).toBe(
-      'https://s.1688.com/selloffer/offer_search.htm?keywords=%68%61%74',
+      'https://s.1688.com/selloffer/offer_search.htm?keywords=%68%61%74&sortType=normal&descendOrder=true',
     );
   });
 

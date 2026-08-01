@@ -151,12 +151,13 @@
       "baselinePages": 1,
       "createdPages": 1,
       "closedPages": 1,
+      "transferredPages": 0,
       "remainingOwnedPages": 0
     },
     "metrics": {
       "remoteRequests": 1
     },
-    "receiptHash": "sha256:46c642e1986c36b77c7dcf34a9eb667b524b71a76aed42e94288fa17f8f96b5d"
+    "receiptHash": "sha256:256f2d3789acc844199773edb7c49a9fdefe80da8c643be97e7baa48b0ebfa52"
   },
   "completionReceipt": {
     "schema": "collector.page-action.completion-receipt.v1",
@@ -188,7 +189,7 @@
         "pageActionExecutionAttemptId": "fixture-page-action-attempt-envelope-001",
         "executionAttemptOrdinal": 1,
         "receiptId": "fixture-attempt-receipt-envelope-001",
-        "receiptHash": "sha256:46c642e1986c36b77c7dcf34a9eb667b524b71a76aed42e94288fa17f8f96b5d",
+        "receiptHash": "sha256:256f2d3789acc844199773edb7c49a9fdefe80da8c643be97e7baa48b0ebfa52",
         "executionLineageHash": "sha256:7f8f96e198fa7b253d610001fb8f58ec01028d08de2392ac24274519e7e7ab86"
       }
     ],
@@ -196,7 +197,7 @@
       "pageActionExecutionAttemptId": "fixture-page-action-attempt-envelope-001",
       "executionAttemptOrdinal": 1,
       "receiptId": "fixture-attempt-receipt-envelope-001",
-      "receiptHash": "sha256:46c642e1986c36b77c7dcf34a9eb667b524b71a76aed42e94288fa17f8f96b5d",
+      "receiptHash": "sha256:256f2d3789acc844199773edb7c49a9fdefe80da8c643be97e7baa48b0ebfa52",
       "executionLineageHash": "sha256:7f8f96e198fa7b253d610001fb8f58ec01028d08de2392ac24274519e7e7ab86"
     },
     "batches": [
@@ -255,6 +256,6 @@
       }
     ],
     "completedAt": "2026-07-31T00:04:01.000Z",
-    "completionReceiptHash": "sha256:843735c8c3e0429bb283734c269e2b7bd1dc9195b92166aeac93fbf47eafcdb1"
+    "completionReceiptHash": "sha256:1dac02520fe92d0e3c1fd2b0dc28ab9ff51f9b3a139aaa54659f7ab1566b5006"
   }
 }

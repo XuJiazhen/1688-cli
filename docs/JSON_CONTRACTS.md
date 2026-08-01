@@ -1139,6 +1139,67 @@ budget, and operational readiness for the execution Profile. The initial
 to `3`; unregistered future revisions fail closed. The requested contiguous
 page range must start at the dormant next page and exactly match that limit.
 
+### Runtime enforcement
+
+The production runtime resolves signed artifact references before creating a
+Page. Search parameter sets and canonical shop identities are content-hash
+verified; requests never carry caller-provided URLs, headers, Cookie, MTOP
+tokens, or signing material. The runtime dispatch table is closed over the
+four action discriminators above.
+
+Search uses `search-compiler-v1@1`. Its only remote sort pairs are
+`normal/true`, `va_sales360/true`, `price/false`, and `price/true`. Every filter
+selection resolves against a keyword-scoped filter snapshot and a separately
+versioned serializer capability snapshot. A captured `getOfferList` request
+must match every canonical business key. Pagination reads `OFFER.hasMore`; a
+55- or 59-item page can continue. `hasMore=true` with an empty, duplicate,
+zero-new, or repeated-fingerprint response is a bounded protocol retry and
+cannot produce a completion receipt.
+The canonical parameter-set artifact contains only the resolved business sort;
+legacy compatibility input is retained in the Search Batch audit projection,
+not in the parameter-set hash or cache identity. Chinese keywords remain
+single-encoded GBK percent bytes in both the navigation URL and inner request.
+Under `exclude-p4p`, advertising observations remain archived in page evidence
+but are excluded from the eligible SearchHit set and its terminal hash.
+
+Offer Detail publishes independent terminal ShopCard and Offer Consignment
+source receipts. Only a successful, correlated, versioned empty sentinel may
+be `not-present`; timeout, missing response, non-success, parser drift, and
+scope mismatch are `failed`. Each successful source receipt references its own
+persisted, PII-redacted, content-addressed raw-response sidecar; synthetic
+runtime references cannot satisfy source completeness. Source media uses `offer-media-manifest-v2` roles
+`main/gallery/sku/detail/qualification`, deterministic source owner keys, and
+idempotent URL normalization. Collector identities never contain a canonical
+business SKU ID.
+
+Required action evidence is durably embedded in the first applicable Batch
+observation as `collectorPageActionEvidence` with schema
+`collector.page-action-batch-evidence.v1`. Offer Detail stores both source
+receipts, the SKU manifest, and Media V2 manifest; Qualification stores its
+media manifest; Store Sample stores its cursor and evidence usage; the terminal
+Search page stores the complete `SearchQueryTerminalReceiptV1`, including the
+eligible SearchHit observation-set hash and Candidate-set hash. The evidence binds the logical
+PageAction and physical execution-attempt IDs and is included in both execution
+and completion receipt hashes.
+
+Qualification observations keep request and response member IDs separate and
+archive registered address, seller type, explicit strength/factory signals,
+guarantee items, business scope, certificates, and qualification media. Contact
+names, phone numbers, Cookies, and authentication material remain excluded.
+
+Phase-1 Store Sample is one action over pages 1-3 with `count=30` and
+`sortType=wangpu_score`. Page 1 also supplies categories, total, and storefront
+observations. A non-exhausted cursor records `nextPage=4` as `dormant`, not as a
+continuation. Catalog offers always carry `taskCandidateEligible=false`.
+Approved expansion accepts only a signed 3-10 page scope beginning at a fresh
+dormant cursor and remains `cache-seed-only`. Cursor pages are contiguous for
+the full generation, identity/count/sort remain frozen, and remote attempts
+must exactly match the pages added by the action.
+
+Every terminal attempt records Page baseline, create, and close counts with
+`remainingOwnedPages=0`. Cleanup failure is `PAGE_CLEANUP_FAILED` and requires
+a Profile Context rebuild rather than a success receipt.
+
 ## Generated Shape Index
 
 Run `pnpm agent-context` to refresh `docs/generated/json-shapes.md`, which
