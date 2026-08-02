@@ -22,6 +22,7 @@ import {
   HmacRenewalCredentialVerifier,
   InMemoryPageActionAcceptanceRepository,
   ProfileDaemonRuntime,
+  SupervisorRuntimeError,
   fenceDigest,
   signRenewalCredentialTransport,
   type IdentityProbeReceipt,
@@ -171,7 +172,7 @@ describe('ProfileDaemonRuntime', () => {
     await runtime.ensureWarm();
     for (let ordinal = 1; ordinal <= 100; ordinal += 1) {
       const rpc = signedExecuteRequest(ordinal);
-      await expect(runtime.handle(rpc)).resolves.toMatchObject({
+      await expect(handleExecute(runtime, rpc)).resolves.toMatchObject({
         ok: true,
         data: {
           executionAttemptReceipt: {
@@ -202,7 +203,7 @@ describe('ProfileDaemonRuntime', () => {
     await runtime.ensureWarm();
     const request = signedExecuteRequest(1);
     request.binding.supervisor.generation = 2;
-    await expect(runtime.handle(request)).resolves.toMatchObject({
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'RPC_BINDING_MISMATCH' },
     });
@@ -218,7 +219,8 @@ describe('ProfileDaemonRuntime', () => {
       { acceptanceRepository: repository },
     );
     await runtime.ensureWarm();
-    await expect(runtime.handle(signedExecuteRequest(1))).resolves.toMatchObject({
+    const request = signedExecuteRequest(1);
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({
       ok: true,
       data: {
         executionAttemptReceipt: {
@@ -245,7 +247,7 @@ describe('ProfileDaemonRuntime', () => {
       { acceptanceRepository: repository },
     );
     await runtime.ensureWarm();
-    const terminal = await runtime.handle(request);
+    const terminal = await handleExecute(runtime, request);
     expect(terminal).toMatchObject({ ok: true });
     if (!terminal.ok) throw new TypeError('Expected terminal response.');
     const rebound = terminal.data as PageActionExecuteResponseV1;
@@ -284,7 +286,7 @@ describe('ProfileDaemonRuntime', () => {
     });
     await runtime.ensureWarm();
     const request = signedExecuteRequest(1);
-    const execution = runtime.handle(request);
+    const execution = handleExecute(runtime, request);
     await pageEntered;
     await expect(runtime.cancel({
       requestId: request.payload.requestId,
@@ -318,7 +320,7 @@ describe('ProfileDaemonRuntime', () => {
     const request = signedExecuteRequest(1, {
       credentialExpiresAt: '2026-07-31T07:59:59.000Z',
     });
-    await expect(runtime.handle(request)).resolves.toMatchObject({
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'CREDENTIAL_EXPIRED' },
     });
@@ -347,7 +349,7 @@ describe('ProfileDaemonRuntime', () => {
       credentialExpiresAt: '2026-07-31T08:00:00.005Z',
     });
 
-    await expect(runtime.handle(request)).resolves.toMatchObject({
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'CREDENTIAL_EXPIRED' },
     });
@@ -376,7 +378,8 @@ describe('ProfileDaemonRuntime', () => {
     });
     await runtime.ensureWarm();
 
-    await expect(runtime.handle(signedExecuteRequest(1))).resolves.toMatchObject({
+    const request = signedExecuteRequest(1);
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'PAGE_REGISTRATION_EVENT_FAILED' },
     });
@@ -410,7 +413,8 @@ describe('ProfileDaemonRuntime', () => {
       },
     }, { now: () => new Date(current), recoveryStateRepository });
     await runtime.ensureWarm();
-    const execution = runtime.handle(signedExecuteRequest(1));
+    const request = signedExecuteRequest(1);
+    const execution = handleExecute(runtime, request);
     await pageEntered;
     const before = runtime.status();
     const handle = await runtime.beginIntervention({
@@ -446,7 +450,8 @@ describe('ProfileDaemonRuntime', () => {
     );
     await restartedRuntime.ensureWarm();
     expect(restartedRuntime.status().cooldownUntil).toBe('2026-07-31T08:10:00.000Z');
-    await expect(runtime.handle(signedExecuteRequest(2))).resolves.toMatchObject({
+    const blockedRequest = signedExecuteRequest(2);
+    await expect(handleExecute(runtime, blockedRequest)).resolves.toMatchObject({
       ok: false,
       error: { code: 'POST_RECOVERY_COOLDOWN' },
     });
@@ -476,7 +481,8 @@ describe('ProfileDaemonRuntime', () => {
       },
     });
     await runtime.ensureWarm();
-    const terminal = await runtime.handle(signedExecuteRequest(1));
+    const request = signedExecuteRequest(1);
+    const terminal = await handleExecute(runtime, request);
     expect(terminal).toMatchObject({
       ok: true,
       data: {
@@ -552,7 +558,7 @@ describe('ProfileDaemonRuntime', () => {
       },
     );
     await runtime.ensureWarm();
-    const terminal = await runtime.handle(request);
+    const terminal = await handleExecute(runtime, request);
     expect(terminal).toMatchObject({
       ok: true,
       data: {
@@ -591,7 +597,8 @@ describe('ProfileDaemonRuntime', () => {
       }),
     }, { interventionTransferGraceMs: 5 });
     await runtime.ensureWarm();
-    await expect(runtime.handle(signedExecuteRequest(1))).resolves.toMatchObject({ ok: true });
+    const request = signedExecuteRequest(1);
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({ ok: true });
     await new Promise((resolve) => setTimeout(resolve, 25));
     expect(runtime.status()).toMatchObject({
       activeWorkUnitId: null,
@@ -624,7 +631,8 @@ describe('ProfileDaemonRuntime', () => {
     internals.registry.transferToIntervention = async () => {
       throw new Error('injected transfer failure');
     };
-    await expect(runtime.handle(signedExecuteRequest(1))).resolves.toMatchObject({
+    const request = signedExecuteRequest(1);
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'PAGE_LIFECYCLE_FINALIZATION_FAILED' },
     });
@@ -661,7 +669,7 @@ describe('ProfileDaemonRuntime', () => {
     const initial = signedExecuteRequest(1, {
       credentialExpiresAt: '2026-07-31T08:01:00.000Z',
     });
-    const execution = runtime.handle(initial);
+    const execution = handleExecute(runtime, initial);
     await pageEntered;
     const renewal = signedExecuteRequest(1, {
       credentialExpiresAt: '2026-07-31T08:05:00.000Z',
@@ -683,7 +691,7 @@ describe('ProfileDaemonRuntime', () => {
     );
     await runtime.ensureWarm();
     const request = signedExecuteRequest(1);
-    await expect(runtime.handle(request)).resolves.toMatchObject({
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'PAGE_LIFECYCLE_FINALIZATION_FAILED', retryable: false },
     });
@@ -730,7 +738,7 @@ describe('ProfileDaemonRuntime', () => {
     });
     expect(executions).toBe(0);
 
-    await expect(runtime.handle(request)).resolves.toMatchObject({
+    await expect(handleExecute(runtime, request)).resolves.toMatchObject({
       ok: true,
       data: first.ok ? first.data : undefined,
     });
@@ -922,6 +930,7 @@ describe('ProfileDaemonRuntime', () => {
     await runtime.ensureWarm();
     await expect(runtime.handle(request, {
       remoteAttemptAdmission: {
+        ...boundAdmissionChannel(request),
         authorize: async () => ({
           remoteActionStartId: 'remote-action-start-1',
           admittedAt: now.toISOString(),
@@ -999,6 +1008,7 @@ describe('ProfileDaemonRuntime', () => {
 
     await expect(runtime.handle(request, {
       remoteAttemptAdmission: {
+        ...boundAdmissionChannel(request),
         authorize: async () => ({
           remoteActionStartId: 'remote-action-start-1',
           admittedAt: current.toISOString(),
@@ -1045,6 +1055,7 @@ describe('ProfileDaemonRuntime', () => {
     await runtime.ensureWarm();
     await expect(runtime.handle(request, {
       remoteAttemptAdmission: {
+        ...boundAdmissionChannel(request),
         authorize: async () => ({
           remoteActionStartId: 'remote-action-start-mismatch',
           admittedAt: now.toISOString(),
@@ -1064,6 +1075,67 @@ describe('ProfileDaemonRuntime', () => {
       .resolves.toMatchObject({
         acceptance: { remoteAttemptAdmissions: [], remoteAttemptStartedAt: null },
       });
+  });
+
+  it('rejects an absent admission channel before durable acceptance or Page creation', async () => {
+    const repository = new InMemoryPageActionAcceptanceRepository();
+    const host = new FakeHost();
+    const request = signedExecuteRequest(1);
+    const runtime = makeRuntime(host, { execute: async (input) => fakeResponse(input) }, {
+      acceptanceRepository: repository,
+    });
+    await runtime.ensureWarm();
+
+    await expect(runtime.handle(request)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'REMOTE_ATTEMPT_ADMISSION_CHANNEL_REQUIRED', retryable: false },
+    });
+    expect(host.ownedPages).toHaveLength(0);
+    await expect(repository.inspect(signedLookupRequest(request).payload)).resolves.toBeNull();
+  });
+
+  it.each([
+    ['mode', { mode: 'live_remote' }],
+    ['authority document id', {
+      executionAuthorityDocumentId: '60000000-0000-4000-8000-000000000099',
+    }],
+    ['authority document hash', { executionAuthorityDocumentSha256: 'c'.repeat(64) }],
+    ['subject document id', {
+      executionSubjectDocumentId: '60000000-0000-4000-8000-000000000098',
+    }],
+    ['subject document hash', { executionSubjectDocumentSha256: 'd'.repeat(64) }],
+    ['cohort', { cohortId: '60000000-0000-4000-8000-000000000097' }],
+    ['Run', { runId: '60000000-0000-4000-8000-000000000096' }],
+    ['protocol', { protocolSha256: 'e'.repeat(64) }],
+  ])('rejects mismatched admission %s before durable acceptance or Page creation', async (
+    _name,
+    authorityOverride,
+  ) => {
+    const repository = new InMemoryPageActionAcceptanceRepository();
+    const host = new FakeHost();
+    const request = signedExecuteRequest(1);
+    let admissionCalls = 0;
+    const runtime = makeRuntime(host, { execute: async (input) => fakeResponse(input) }, {
+      acceptanceRepository: repository,
+    });
+    await runtime.ensureWarm();
+
+    await expect(runtime.handle(request, {
+      remoteAttemptAdmission: {
+        transportAuthority: { ...transportAuthority, ...authorityOverride },
+        parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+        authorize: async () => {
+          admissionCalls += 1;
+          throw new Error('must not authorize');
+        },
+      } as never,
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'REMOTE_ATTEMPT_ADMISSION_BINDING_MISMATCH', retryable: false },
+    });
+    expect(admissionCalls).toBe(0);
+    expect(host.ownedPages).toHaveLength(0);
+    await expect(repository.inspect(signedLookupRequest(request).payload)).resolves.toBeNull();
   });
 
   it('fails closed before the local uncertainty marker when DB admission is unavailable', async () => {
@@ -1086,7 +1158,18 @@ describe('ProfileDaemonRuntime', () => {
     );
     await runtime.ensureWarm();
 
-    await expect(runtime.handle(request)).resolves.toMatchObject({
+    await expect(runtime.handle(request, {
+      remoteAttemptAdmission: {
+        ...boundAdmissionChannel(request),
+        authorize: async () => {
+          throw new SupervisorRuntimeError(
+            'REMOTE_ATTEMPT_ADMISSION_UNAVAILABLE',
+            'Database admission is unavailable.',
+            true,
+          );
+        },
+      },
+    })).resolves.toMatchObject({
       ok: false,
       error: { code: 'REMOTE_ATTEMPT_ADMISSION_UNAVAILABLE' },
     });
@@ -1115,6 +1198,7 @@ describe('ProfileDaemonRuntime', () => {
 
     await expect(runtime.handle(request, {
       remoteAttemptAdmission: {
+        ...boundAdmissionChannel(request),
         authorize: async () => {
           admissions += 1;
           return { remoteActionStartId: 'remote-start-1', admittedAt: now.toISOString() };
@@ -1178,6 +1262,32 @@ function makeRuntime(
     ...(overrides.interventionTransferGraceMs === undefined
       ? {}
       : { interventionTransferGraceMs: overrides.interventionTransferGraceMs }),
+  });
+}
+
+function boundAdmissionChannel(
+  request: ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' },
+) {
+  return {
+    transportAuthority: structuredClone(request.binding.transportAuthority),
+    parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+  };
+}
+
+function handleExecute(
+  runtime: ProfileDaemonRuntime,
+  request: ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' },
+) {
+  return runtime.handle(request, {
+    remoteAttemptAdmission: {
+      ...boundAdmissionChannel(request),
+      authorize: async () => ({
+        remoteActionStartId: '60000000-0000-4000-8000-000000000095',
+        admittedAt: now.toISOString(),
+        transportAuthority: structuredClone(request.binding.transportAuthority),
+        parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+      }),
+    },
   });
 }
 

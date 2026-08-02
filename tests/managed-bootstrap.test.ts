@@ -134,8 +134,14 @@ describe('managed daemon bootstrap', () => {
     for (const [index, kind] of [
       'search-list', 'offer-detail', 'store-qualification', 'store-sample',
     ].entries()) {
+      const request = signedRequest(
+        kind as PageActionRequestV1['actionKind'],
+        index + 1,
+        sampled,
+      );
       await expect(options.supervisorRuntime!.handle(
-        signedRequest(kind as PageActionRequestV1['actionKind'], index + 1, sampled),
+        request,
+        boundAdmissionHooks(request),
       )).resolves.toMatchObject({ ok: true });
     }
     expect(reached).toEqual([
@@ -400,8 +406,25 @@ function signedRequest(
   actionKind: PageActionRequestV1['actionKind'],
   ordinal: number,
   now: Date,
-): ParsedSupervisorRpcRequestV2 {
+): ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' } {
   return signedStrictPageActionRequest(pageActionFixture(actionKind, ordinal, now), now);
+}
+
+function boundAdmissionHooks(
+  request: ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' },
+) {
+  return {
+    remoteAttemptAdmission: {
+      transportAuthority: structuredClone(request.binding.transportAuthority),
+      parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+      authorize: async () => ({
+        remoteActionStartId: '40000000-0000-4000-8000-000000000099',
+        admittedAt: new Date().toISOString(),
+        transportAuthority: structuredClone(request.binding.transportAuthority),
+        parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+      }),
+    },
+  };
 }
 
 function pageActionFixture(

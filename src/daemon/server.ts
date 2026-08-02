@@ -437,6 +437,11 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
             opts.profile,
             (req as ParsedSupervisorRpcRequestV2).method === 'collector.pageAction.execute'
               ? {
+                  transportAuthority:
+                    (req as ParsedSupervisorRpcRequestV2).binding.transportAuthority,
+                  parentCanonicalRequestHash: canonicalAuthorizedRequestHashV2(
+                    req as ParsedSupervisorRpcRequestV2,
+                  ),
                   authorize: (input) => requestRemoteAttemptAdmission({
                     sock,
                     pendingAdmissions,
@@ -482,6 +487,8 @@ async function handleSupervisorRequest(
   request: ParsedSupervisorRpcRequestV2,
   profile?: string,
   remoteAttemptAdmission?: {
+    transportAuthority: TransportAuthorityV2;
+    parentCanonicalRequestHash: string;
     authorize(input: RemoteAttemptAdmissionRequestV2): Promise<RemoteAttemptAdmissionReceiptV2>;
   },
 ): Promise<SupervisorRpcResponseV2> {

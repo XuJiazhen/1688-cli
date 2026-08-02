@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -143,13 +143,37 @@ describe('runtime-derived PageAction fixtures', () => {
       ))).resolves.toBeDefined();
     } finally {
       if (daemonPid !== undefined) {
-        try { process.kill(daemonPid, 'SIGTERM'); } catch { /* already stopped */ }
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        await terminateDetachedProcess(daemonPid);
       }
       if (previousHome === undefined) delete process.env['BB1688_HOME'];
       else process.env['BB1688_HOME'] = previousHome;
     }
   }, 20_000);
+
+  it('escalates detached-process cleanup and observes exit before returning', async () => {
+    const child = spawn(process.execPath, ['-e', [
+      "process.on('SIGTERM', () => {});",
+      "process.stdout.write('ready\\n');",
+      'setInterval(() => {}, 1000);',
+    ].join('')], { stdio: ['ignore', 'pipe', 'ignore'] });
+    const pid = child.pid;
+    if (pid === undefined || child.stdout === null) throw new Error('Cleanup test child failed.');
+    await new Promise<void>((resolve, reject) => {
+      child.stdout!.once('data', () => resolve());
+      child.once('error', reject);
+    });
+    try {
+      const termination = await terminateDetachedProcess(
+        pid,
+        { termGraceMs: 25, killGraceMs: 2_000 },
+      );
+      expect(processExists(pid)).toBe(false);
+      expect(termination).toBe('sigkill');
+    } finally {
+      if (processExists(pid)) process.kill(pid, 'SIGKILL');
+    }
+  }, 5_000);
+
   it('executes the chain-coherent available and technical-failure scenarios via the real executor', async () => {
     for (const actionKind of [
       'search-list', 'offer-detail', 'store-qualification', 'store-sample',
@@ -556,6 +580,49 @@ describe('runtime-derived PageAction fixtures', () => {
     }
   });
 });
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+async function terminateDetachedProcess(
+  pid: number,
+  options: { termGraceMs: number; killGraceMs: number } = {
+    termGraceMs: 2_000,
+    killGraceMs: 2_000,
+  },
+): Promise<'already_gone' | 'sigterm' | 'sigkill'> {
+  if (!processExists(pid)) return 'already_gone';
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return 'already_gone';
+    throw error;
+  }
+  if (await waitForProcessExit(pid, options.termGraceMs)) return 'sigterm';
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ESRCH') return 'sigterm';
+    throw error;
+  }
+  if (await waitForProcessExit(pid, options.killGraceMs)) return 'sigkill';
+  throw new Error(`Detached process ${pid} survived SIGKILL cleanup.`);
+}
+
+async function waitForProcessExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (processExists(pid)) {
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  return true;
+}
 
 async function tempRoot(prefix: string): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));

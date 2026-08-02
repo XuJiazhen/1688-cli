@@ -178,6 +178,8 @@ export interface PageActionExecutionScope {
 }
 
 export interface RemoteAttemptAdmissionAuthorizerV2 {
+  readonly transportAuthority: TransportAuthorityV2;
+  readonly parentCanonicalRequestHash: string;
   authorize(input: RemoteAttemptAdmissionRequestV2): Promise<RemoteAttemptAdmissionReceiptV2>;
 }
 
@@ -278,7 +280,7 @@ interface ActiveExecution {
   awaitingIntervention: boolean;
   pendingInterventionSessionId: string | null;
   interventionTimer: ReturnType<typeof setTimeout> | null;
-  remoteAttemptAdmission: RemoteAttemptAdmissionAuthorizerV2 | null;
+  remoteAttemptAdmission: RemoteAttemptAdmissionAuthorizerV2;
   lastRemoteAttemptOrdinal: number;
 }
 
@@ -468,9 +470,10 @@ export class ProfileDaemonRuntime {
 
   async execute(
     pageAction: PageActionRequestV1,
-    rpcRequest: ParsedSupervisorRpcRequestV2,
+    rpcRequest: ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' },
     remoteAttemptAdmission?: RemoteAttemptAdmissionAuthorizerV2,
   ): Promise<PageActionExecuteResponseV1> {
+    assertRemoteAttemptAdmissionPreflight(rpcRequest, remoteAttemptAdmission);
     const acceptedExecution = await this.acceptanceSerial(async () => {
       if (this.state !== 'warm') {
       throw new SupervisorRuntimeError(
@@ -554,7 +557,7 @@ export class ProfileDaemonRuntime {
         awaitingIntervention: false,
         pendingInterventionSessionId: null,
         interventionTimer: null,
-        remoteAttemptAdmission: remoteAttemptAdmission ?? null,
+        remoteAttemptAdmission,
         lastRemoteAttemptOrdinal: 0,
       };
       const promise = this.runAcceptedExecution(acceptance, pageAction, active);
@@ -1024,13 +1027,6 @@ export class ProfileDaemonRuntime {
         admitRemoteAttempt: async (input) => {
           await this.assertStillAuthorized(active.authorizedRequest, 'execute');
           assertRemoteAttemptAdmissionInput(request, input, active.lastRemoteAttemptOrdinal);
-          if (active.remoteAttemptAdmission === null) {
-            throw new SupervisorRuntimeError(
-              'REMOTE_ATTEMPT_ADMISSION_UNAVAILABLE',
-              'The executing transport cannot obtain database authority for a remote attempt.',
-              true,
-            );
-          }
           const receipt = await active.remoteAttemptAdmission.authorize({
             ...input,
             pageActionId: request.pageActionId,
@@ -2146,6 +2142,30 @@ function assertRemoteAttemptAdmissionInput(
     throw new SupervisorRuntimeError(
       'REMOTE_ATTEMPT_ADMISSION_INVALID',
       'Remote-attempt admission is not the next canonical request for this PageAction execution.',
+      false,
+    );
+  }
+}
+
+function assertRemoteAttemptAdmissionPreflight(
+  request: ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' },
+  admission: RemoteAttemptAdmissionAuthorizerV2 | undefined,
+): asserts admission is RemoteAttemptAdmissionAuthorizerV2 {
+  if (admission === undefined || typeof admission.authorize !== 'function') {
+    throw new SupervisorRuntimeError(
+      'REMOTE_ATTEMPT_ADMISSION_CHANNEL_REQUIRED',
+      'PageAction execution requires a bound remote-attempt admission channel.',
+      false,
+    );
+  }
+  if (
+    canonicalJson(admission.transportAuthority)
+      !== canonicalJson(request.binding.transportAuthority)
+    || admission.parentCanonicalRequestHash !== canonicalRpcPayloadHash(request)
+  ) {
+    throw new SupervisorRuntimeError(
+      'REMOTE_ATTEMPT_ADMISSION_BINDING_MISMATCH',
+      'Remote-attempt admission channel authority differs from the execute request.',
       false,
     );
   }
