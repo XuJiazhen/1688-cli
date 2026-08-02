@@ -11,9 +11,12 @@ import {
   createRuntimeOfflineScenarioRequestForTest,
   DEFAULT_RUNTIME_PAGE_ACTION_FIXTURE_ROOT,
   generateRuntimeDerivedPageActionFixtures,
+  type RuntimeOfflineSearchParameterSetArtifact,
   verifyRuntimeDerivedPageActionFixtureSet,
 } from '../scripts/generate_runtime_page_action_fixtures.js';
+import type { PageActionRequestV1 } from '../src/collection/page-action-contracts.js';
 import type { PageActionExecutionScope } from '../src/daemon/supervisor-runtime.js';
+import { compileSearchParameterSetV1 } from '../src/session/search-compiler.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -164,6 +167,133 @@ describe('runtime-derived PageAction fixtures', () => {
       error: { code: 'NETWORK_ERROR' },
     });
     expect(failure.completionReceipt).toBeUndefined();
+  });
+
+  it('resolves non-static Search authority without replacing its producer artifact', async () => {
+    const root = await tempRoot('offline-harness-resolved-search-');
+    const fixture = resolvedSearchFixture();
+    const beforeRequest = JSON.stringify(fixture.request);
+    const beforeArtifact = Buffer.from(fixture.artifact.bytes);
+    const resolvedRefs: string[] = [];
+    const response = await createRuntimeOfflinePageActionExecutor({
+      artifactDirectory: root,
+      now: () => new Date('2026-08-02T00:00:00.000Z'),
+      scenario: 'chain-coherent-available-v1',
+      resolveSearchParameterSetArtifact: async (artifactRef) => {
+        resolvedRefs.push(artifactRef);
+        return fixture.artifact;
+      },
+    }).execute(fixture.request, harnessScope('search-list'));
+    expect(response).toMatchObject({
+      executionAttemptReceipt: { actionKind: 'search-list', outcome: 'completed' },
+      completionReceipt: { actionKind: 'search-list', status: 'completed' },
+    });
+    expect(resolvedRefs).toEqual([fixture.artifact.artifactRef]);
+    expect(JSON.stringify(fixture.request)).toBe(beforeRequest);
+    expect(Buffer.from(fixture.artifact.bytes)).toEqual(beforeArtifact);
+    await expect(fs.readdir(root)).resolves.not.toContain(
+      `${fixture.artifact.contentSha256}.json`,
+    );
+  });
+
+  it('fails closed when non-static Search authority cannot be resolved exactly', async () => {
+    const absent = resolvedSearchFixture();
+    await expect(executeResolvedSearch('offline-harness-resolver-absent-', absent.request))
+      .rejects.toThrow(/explicit test-only resolver/u);
+
+    const missing = resolvedSearchFixture();
+    await expect(executeResolvedSearch(
+      'offline-harness-resolver-missing-',
+      missing.request,
+      async () => { throw new Error('parameter-set artifact is missing'); },
+    )).rejects.toThrow(/artifact is missing/u);
+
+    const invalidCases: Array<{
+      name: string;
+      mutate(
+        request: PageActionRequestV1,
+        artifact: RuntimeOfflineSearchParameterSetArtifact,
+      ): RuntimeOfflineSearchParameterSetArtifact;
+      error: RegExp;
+    }> = [
+      {
+        name: 'stale-ref',
+        mutate: (_request, artifact) => ({
+          ...artifact,
+          artifactRef: `sha256:${'0'.repeat(64)}`,
+        }),
+        error: /stale|mismatched/u,
+      },
+      {
+        name: 'content-hash',
+        mutate: (_request, artifact) => ({
+          ...artifact,
+          contentSha256: '0'.repeat(64),
+        }),
+        error: /corrupted|mismatched/u,
+      },
+      {
+        name: 'corrupt-bytes',
+        mutate: (_request, artifact) => ({
+          ...artifact,
+          bytes: Buffer.concat([Buffer.from(artifact.bytes), Buffer.from(' ')]),
+        }),
+        error: /corrupted|mismatched/u,
+      },
+      {
+        name: 'parameter-hash',
+        mutate: (request, artifact) => {
+          const parameterSet = JSON.parse(Buffer.from(artifact.bytes).toString('utf8')) as
+            Record<string, unknown>;
+          parameterSet['parameterSetHash'] = `sha256:${'0'.repeat(64)}`;
+          const bytes = Buffer.from(JSON.stringify(parameterSet));
+          const contentSha256 = digest(bytes);
+          if (request.action.kind !== 'search-list') throw new Error('Search request drifted.');
+          request.action.request.canonicalParameterSetArtifactRef = `sha256:${contentSha256}`;
+          return { artifactRef: `sha256:${contentSha256}`, contentSha256, bytes };
+        },
+        error: /SEARCH_PARAMETER_SET_HASH_MISMATCH|hash verification/u,
+      },
+    ];
+    for (const testCase of invalidCases) {
+      const fixture = resolvedSearchFixture();
+      const artifact = testCase.mutate(fixture.request, fixture.artifact);
+      await expect(executeResolvedSearch(
+        `offline-harness-resolver-${testCase.name}-`,
+        fixture.request,
+        async () => artifact,
+      )).rejects.toThrow(testCase.error);
+    }
+  });
+
+  it('rejects every resolved Search request-to-artifact authority mismatch', async () => {
+    const invalidCases: Array<{
+      name: string;
+      mutate(authority: Record<string, unknown>): void;
+    }> = [
+      { name: 'parameter-set-hash', mutate: (value) => { value['canonicalParameterSetHash'] = `sha256:${'0'.repeat(64)}`; } },
+      { name: 'filter-id', mutate: (value) => { value['filterConfigSnapshotId'] = 'stale-filter'; } },
+      { name: 'filter-hash', mutate: (value) => { value['filterConfigSnapshotHash'] = `sha256:${'0'.repeat(64)}`; } },
+      { name: 'serializer-id', mutate: (value) => { value['serializerCapabilitySnapshotId'] = 'stale-serializer'; } },
+      { name: 'serializer-hash', mutate: (value) => { value['serializerCapabilitySnapshotHash'] = `sha256:${'0'.repeat(64)}`; } },
+      { name: 'keyword', mutate: (value) => { value['keyword'] = 'other keyword'; } },
+      { name: 'compiler', mutate: (value) => { value['compilerRevision'] = 'other-compiler'; } },
+      { name: 'sort', mutate: (value) => { value['sort'] = 'sales'; } },
+      { name: 'start-page', mutate: (value) => { value['requestedStartPage'] = 2; } },
+      { name: 'end-page', mutate: (value) => { value['requestedEndPage'] = 2; } },
+      { name: 'max-offers', mutate: (value) => { value['maxOffers'] = 59; } },
+      { name: 'ad-policy', mutate: (value) => { value['advertisementPolicy'] = 'archive-and-mark'; } },
+    ];
+    for (const testCase of invalidCases) {
+      const fixture = resolvedSearchFixture();
+      if (fixture.request.action.kind !== 'search-list') throw new Error('Search request drifted.');
+      testCase.mutate(fixture.request.action.request as unknown as Record<string, unknown>);
+      await expect(executeResolvedSearch(
+        `offline-harness-authority-${testCase.name}-`,
+        fixture.request,
+        async () => fixture.artifact,
+      )).rejects.toThrow(/parameter-set authority mismatch/u);
+    }
   });
 
   it('keeps offline harness output deterministic and rejects subject, URL, and credential injection', async () => {
@@ -412,6 +542,70 @@ async function tempRoot(prefix: string): Promise<string> {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
   temporaryRoots.push(root);
   return root;
+}
+
+function resolvedSearchFixture(): {
+  request: PageActionRequestV1;
+  artifact: RuntimeOfflineSearchParameterSetArtifact;
+} {
+  const parameterSet = compileSearchParameterSetV1({
+    keyword: 'runtime fixture drill',
+    sort: 'relevance',
+    compatibilitySortInput: null,
+    filterConfigSnapshotId: 'dynamic-filter-snapshot-1',
+    filterConfigSnapshotHash: `sha256:${digest(Buffer.from('dynamic-filter-snapshot-1'))}`,
+    serializerCapabilitySnapshotId: 'dynamic-serializer-snapshot-1',
+    serializerCapabilitySnapshotHash:
+      `sha256:${digest(Buffer.from('dynamic-serializer-snapshot-1'))}`,
+    filterParams: { freeShipping: 'true' },
+    selectedOptions: [],
+    maxPages: 1,
+    maxOffers: 60,
+    advertisementPolicy: 'exclude-p4p',
+  });
+  const bytes = Buffer.from(JSON.stringify(parameterSet));
+  const contentSha256 = digest(bytes);
+  const artifactRef = `sha256:${contentSha256}`;
+  const request = createRuntimeOfflineScenarioRequestForTest('search-list');
+  if (request.action.kind !== 'search-list') throw new Error('Search request drifted.');
+  request.action.request = {
+    ...request.action.request,
+    keyword: parameterSet.keyword,
+    filterConfigSnapshotId: parameterSet.filterConfigSnapshotId,
+    filterConfigSnapshotHash: parameterSet.filterConfigSnapshotHash,
+    compilerRevision: parameterSet.compilerRevision,
+    serializerCapabilitySnapshotId: parameterSet.serializerCapabilitySnapshotId,
+    serializerCapabilitySnapshotHash: parameterSet.serializerCapabilitySnapshotHash,
+    sort: parameterSet.sort,
+    canonicalParameterSetArtifactRef: artifactRef,
+    canonicalParameterSetHash: parameterSet.parameterSetHash,
+    requestedStartPage: 1,
+    requestedEndPage: parameterSet.maxPages,
+    maxOffers: parameterSet.maxOffers,
+    advertisementPolicy: parameterSet.advertisementPolicy,
+  };
+  return {
+    request,
+    artifact: { artifactRef, contentSha256, bytes },
+  };
+}
+
+async function executeResolvedSearch(
+  prefix: string,
+  request: PageActionRequestV1,
+  resolveSearchParameterSetArtifact?: (
+    artifactRef: string,
+  ) => Promise<RuntimeOfflineSearchParameterSetArtifact>,
+) {
+  const root = await tempRoot(prefix);
+  return createRuntimeOfflinePageActionExecutor({
+    artifactDirectory: root,
+    now: () => new Date('2026-08-02T00:00:00.000Z'),
+    scenario: 'chain-coherent-available-v1',
+    ...(resolveSearchParameterSetArtifact === undefined
+      ? {}
+      : { resolveSearchParameterSetArtifact }),
+  }).execute(request, harnessScope('search-list'));
 }
 
 async function fixtureCopy(prefix: string): Promise<string> {

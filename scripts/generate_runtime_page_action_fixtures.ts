@@ -30,6 +30,8 @@ import {
 import {
   compileSearchPageRequestV1,
   compileSearchParameterSetV1,
+  verifyParameterSetHash,
+  type CanonicalSearchParameterSetV1,
 } from '../src/session/search-compiler.js';
 import { SEARCH_MTOP_API } from '../src/session/search-mtop.js';
 import { SUPPLIER_QUALIFICATION_COMPONENT_KEY } from '../src/session/supplier-qualification.js';
@@ -316,11 +318,25 @@ interface ActionManifest {
   readonly archiveFiles: readonly FileReceipt[];
 }
 
-export function createRuntimeOfflinePageActionExecutor(input: {
+export interface RuntimeOfflineSearchParameterSetArtifact {
+  readonly artifactRef: string;
+  /** Bare lowercase SHA-256 of the exact producer-owned bytes. */
+  readonly contentSha256: string;
+  readonly bytes: Uint8Array;
+}
+
+interface RuntimeOfflinePageActionExecutorInput {
   artifactDirectory: string;
   now: () => Date;
   scenario: RuntimeOfflinePageActionScenario;
-}): PageActionExecutor {
+  resolveSearchParameterSetArtifact?: (
+    artifactRef: string,
+  ) => Promise<RuntimeOfflineSearchParameterSetArtifact>;
+}
+
+export function createRuntimeOfflinePageActionExecutor(
+  input: RuntimeOfflinePageActionExecutorInput,
+): PageActionExecutor {
   if (!path.isAbsolute(input.artifactDirectory)) {
     throw new TypeError('Offline PageAction artifact directory must be absolute.');
   }
@@ -332,8 +348,15 @@ export function createRuntimeOfflinePageActionExecutor(input: {
       request: PageActionRequestV1,
       scope: PageActionExecutionScope,
     ): Promise<PageActionExecuteResponseV1> => {
-      assertRuntimeOfflineScenarioRequest(request, input.scenario);
-      await seedArtifacts(request.actionKind, input.artifactDirectory, request);
+      assertRuntimeOfflineRequestSafety(request);
+      const parameterSet = await resolveRuntimeOfflineSearchParameterSet(input, request);
+      assertRuntimeOfflineScenarioRequest(request, input.scenario, parameterSet);
+      await seedArtifacts(
+        request.actionKind,
+        input.artifactDirectory,
+        request,
+        parameterSet !== undefined,
+      );
       let sequence = 0;
       const requestPrefix = createHash('sha256')
         .update(request.pageActionExecutionAttemptId, 'utf8')
@@ -345,6 +368,19 @@ export function createRuntimeOfflinePageActionExecutor(input: {
         idFactory: () => `offline-${requestPrefix}-${String(++sequence).padStart(3, '0')}`,
         pace: async () => {},
         random: () => 0,
+        ...(parameterSet === undefined
+          ? {}
+          : {
+              testOnlyResolveCanonicalSearchParameterSet: async (artifactRef: string) => {
+                if (
+                  request.action.kind !== 'search-list'
+                  || artifactRef !== request.action.request.canonicalParameterSetArtifactRef
+                ) {
+                  throw new TypeError('Offline Search parameter-set artifact ref drifted.');
+                }
+                return structuredClone(parameterSet);
+              },
+            }),
       });
       return withClock(input.now(), () => executor.execute(request, {
         ...scope,
@@ -353,10 +389,55 @@ export function createRuntimeOfflinePageActionExecutor(input: {
           request,
           input.scenario,
           scope.pageSessionId,
+          parameterSet,
         ) as never,
       }));
     },
   };
+}
+
+async function resolveRuntimeOfflineSearchParameterSet(
+  input: RuntimeOfflinePageActionExecutorInput,
+  request: PageActionRequestV1,
+): Promise<CanonicalSearchParameterSetV1 | undefined> {
+  if (request.action.kind !== 'search-list') return undefined;
+  const artifactRef = request.action.request.canonicalParameterSetArtifactRef;
+  if (artifactRef === 'artifact:runtime-parameter-set') return undefined;
+  const expectedContentSha256 = artifactRef.match(/^sha256:([0-9a-f]{64})$/u)?.[1];
+  if (expectedContentSha256 === undefined) {
+    throw new TypeError('Offline Search parameter-set artifact ref is invalid.');
+  }
+  if (input.resolveSearchParameterSetArtifact === undefined) {
+    throw new TypeError(
+      'Non-static offline Search authority requires an explicit test-only resolver.',
+    );
+  }
+  const artifact = await input.resolveSearchParameterSetArtifact(artifactRef);
+  if (!(artifact.bytes instanceof Uint8Array)) {
+    throw new TypeError('Offline Search parameter-set resolver returned invalid bytes.');
+  }
+  const bytes = Buffer.from(artifact.bytes);
+  const actualContentSha256 = createHash('sha256').update(bytes).digest('hex');
+  if (
+    artifact.artifactRef !== artifactRef
+    || artifact.contentSha256 !== expectedContentSha256
+    || actualContentSha256 !== expectedContentSha256
+  ) {
+    throw new TypeError(
+      'Offline Search parameter-set artifact is missing, stale, corrupted, or mismatched.',
+    );
+  }
+  let value: unknown;
+  try {
+    value = JSON.parse(bytes.toString('utf8')) as unknown;
+  } catch {
+    throw new TypeError('Offline Search parameter-set artifact contains invalid JSON.');
+  }
+  if ((value as { schema?: unknown })?.schema !== 'canonical-search-parameter-set-v1') {
+    throw new TypeError('Offline Search parameter-set artifact schema is invalid.');
+  }
+  verifyParameterSetHash(value as CanonicalSearchParameterSetV1);
+  return value as CanonicalSearchParameterSetV1;
 }
 
 export async function generateRuntimeDerivedPageActionFixtures(
@@ -787,9 +868,10 @@ async function seedArtifacts(
   actionKind: ActionKind,
   artifactDirectory: string,
   request: PageActionRequestV1,
+  searchParameterSetResolved = false,
 ): Promise<Set<string>> {
   const seeded = new Set<string>();
-  if (actionKind === 'search-list') {
+  if (actionKind === 'search-list' && !searchParameterSetResolved) {
     if (request.action.kind !== 'search-list') throw new TypeError('Search seed request drifted.');
     const parameterSet = searchParameterSet();
     const artifactId = artifactIdFromRef(
@@ -1093,12 +1175,56 @@ export function createRuntimeOfflineScenarioDescriptor(): {
   };
 }
 
+function assertResolvedSearchAuthority(
+  request: CanonicalSearchRequestV1,
+  parameterSet: CanonicalSearchParameterSetV1,
+): void {
+  const mismatches = [
+    request.keyword !== SEARCH_INPUT.keyword ? 'scenario keyword' : null,
+    request.canonicalParameterSetHash !== parameterSet.parameterSetHash
+      ? 'parameter-set hash'
+      : null,
+    request.keyword !== parameterSet.keyword ? 'keyword' : null,
+    request.compilerRevision !== parameterSet.compilerRevision ? 'compiler revision' : null,
+    request.filterConfigSnapshotId !== parameterSet.filterConfigSnapshotId
+      ? 'Filter Catalog snapshot id'
+      : null,
+    request.filterConfigSnapshotHash !== parameterSet.filterConfigSnapshotHash
+      ? 'Filter Catalog snapshot hash'
+      : null,
+    request.serializerCapabilitySnapshotId !== parameterSet.serializerCapabilitySnapshotId
+      ? 'Serializer Capability snapshot id'
+      : null,
+    request.serializerCapabilitySnapshotHash !== parameterSet.serializerCapabilitySnapshotHash
+      ? 'Serializer Capability snapshot hash'
+      : null,
+    request.sort !== parameterSet.sort ? 'sort' : null,
+    !Number.isInteger(request.page)
+      || !Number.isInteger(request.requestedStartPage)
+      || !Number.isInteger(request.requestedEndPage)
+      || request.page !== request.requestedStartPage
+      || request.page < 1
+      || request.page > request.requestedEndPage
+      || request.requestedEndPage !== parameterSet.maxPages
+      ? 'page range'
+      : null,
+    request.maxOffers !== parameterSet.maxOffers ? 'max offers' : null,
+    request.advertisementPolicy !== parameterSet.advertisementPolicy
+      ? 'advertisement policy'
+      : null,
+  ].filter((value): value is string => value !== null);
+  if (mismatches.length > 0) {
+    throw new TypeError(
+      `Offline Search parameter-set authority mismatch: ${mismatches.join(', ')}.`,
+    );
+  }
+}
+
 function assertRuntimeOfflineScenarioRequest(
   request: PageActionRequestV1,
   scenario: RuntimeOfflinePageActionScenario,
+  resolvedSearchParameterSet?: CanonicalSearchParameterSetV1,
 ): void {
-  scanForSecretsAndPii(request, 'offline PageAction request');
-  scanForExternalUrls(request, 'offline PageAction request');
   if (
     request.actionKind !== request.action.kind
     || request.logicalLineage.actionKind !== request.actionKind
@@ -1112,13 +1238,24 @@ function assertRuntimeOfflineScenarioRequest(
       subject.kind !== 'search-list'
       || subject.searchQueryKeyHash !== request.action.request.searchQueryKeyHash
       || subject.querySnapshotHash !== request.action.request.querySnapshotHash
-      || request.action.request.keyword !== SEARCH_INPUT.keyword
-      || request.action.request.page !== 1
-      || request.action.request.requestedStartPage !== 1
-      || request.action.request.requestedEndPage !== 1
-      || request.action.request.canonicalParameterSetHash !== searchParameterSet().parameterSetHash
     ) {
       throw new TypeError('Offline Search request does not match the chain-coherent scenario.');
+    }
+    if (resolvedSearchParameterSet === undefined) {
+      const legacy = searchParameterSet();
+      if (
+        request.action.request.canonicalParameterSetArtifactRef
+          !== 'artifact:runtime-parameter-set'
+        || request.action.request.keyword !== SEARCH_INPUT.keyword
+        || request.action.request.page !== 1
+        || request.action.request.requestedStartPage !== 1
+        || request.action.request.requestedEndPage !== 1
+        || request.action.request.canonicalParameterSetHash !== legacy.parameterSetHash
+      ) {
+        throw new TypeError('Offline Search request does not match the legacy deterministic scenario.');
+      }
+    } else {
+      assertResolvedSearchAuthority(request.action.request, resolvedSearchParameterSet);
     }
   } else if (request.action.kind === 'offer-detail') {
     if (
@@ -1156,6 +1293,11 @@ function assertRuntimeOfflineScenarioRequest(
   }
 }
 
+function assertRuntimeOfflineRequestSafety(request: PageActionRequestV1): void {
+  scanForSecretsAndPii(request, 'offline PageAction request');
+  scanForExternalUrls(request, 'offline PageAction request');
+}
+
 function scanForExternalUrls(value: unknown, location: string, depth = 0): void {
   if (depth > 64) throw new Error(`${location}: external URL scan depth exceeded.`);
   if (Array.isArray(value)) {
@@ -1188,13 +1330,15 @@ function fakePage(
   request: PageActionRequestV1,
   scenario: RuntimeOfflinePageActionScenario = 'chain-coherent-available-v1',
   pageSessionId = `${actionKind}-fixture-page-session`,
+  resolvedSearchParameterSet?: CanonicalSearchParameterSetV1,
 ): unknown {
   switch (actionKind) {
     case 'search-list': {
-      const parameterSet = searchParameterSet();
+      const parameterSet = resolvedSearchParameterSet ?? searchParameterSet();
+      if (request.action.kind !== 'search-list') throw new TypeError('Search request drifted.');
       const compiled = compileSearchPageRequestV1({
         parameterSet,
-        page: 1,
+        page: request.action.request.page,
         pageSessionId,
       });
       return new RuntimeSearchPage(compiled.outerDataJson);

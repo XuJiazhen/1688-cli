@@ -122,6 +122,10 @@ export interface ProductionPageActionExecutorOptions {
   pace?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
   collectOfferOnPage?: typeof collectOfferOnPage;
+  /** Test-only bridge for content-addressed Search artifacts owned by another repository. */
+  testOnlyResolveCanonicalSearchParameterSet?: (
+    artifactRef: string,
+  ) => Promise<CanonicalSearchParameterSetV1>;
 }
 
 interface IdentityArtifactV1 extends TrustedCanonicalShopIdentityV1 {
@@ -261,7 +265,8 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
       now: this.now,
       createId: (kind) => `${kind}-${this.idFactory()}`,
       resolveCanonicalSearchParameterSet: (artifactRef) =>
-        this.resolveSearchParameterSet(artifactRef),
+        this.options.testOnlyResolveCanonicalSearchParameterSet?.(artifactRef)
+          ?? this.resolveSearchParameterSet(artifactRef),
       resolveCanonicalShopIdentity: (receiptId, receiptHash) =>
         this.resolveShopIdentity(receiptId, receiptHash),
       runSearch: ({ parameterSet, signal }) =>
