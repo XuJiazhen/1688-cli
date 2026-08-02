@@ -323,20 +323,51 @@ function canonicalProfileShopUrl(value: unknown): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new TypeError('Store profile shop URL is missing.');
   }
+  // Validate the raw form before WHATWG erases default ports or normalizes paths and IDNs.
+  const authorityMatch = /^https:\/\/([^/?#]+)\/$/.exec(value);
+  if (authorityMatch === null || authorityMatch[0] !== value) {
+    throw new TypeError('Store profile shop URL is not canonical.');
+  }
+  const rawAuthority = authorityMatch[1]!;
+  const hostname = rawAuthority.toLowerCase();
+  if (
+    rawAuthority.includes('@')
+    || rawAuthority.includes(':')
+    || !isCanonical1688ShopHostname(rawAuthority)
+  ) {
+    throw new TypeError('Store profile shop URL is not canonical.');
+  }
   const url = new URL(value);
   if (
     url.protocol !== 'https:'
-    || !url.hostname.toLowerCase().endsWith('.1688.com')
     || url.username !== ''
     || url.password !== ''
     || url.port !== ''
     || url.search !== ''
     || url.hash !== ''
+    || url.pathname !== '/'
+    || url.hostname !== hostname
+    || url.host !== hostname
   ) {
     throw new TypeError('Store profile shop URL is not canonical.');
   }
-  url.hostname = url.hostname.toLowerCase();
-  return url.toString();
+  return `https://${hostname}/`;
+}
+
+function isCanonical1688ShopHostname(hostname: string): boolean {
+  if (hostname.length > 253 || !/^[\x00-\x7f]+$/.test(hostname)) return false;
+  const labels = hostname.split('.');
+  const normalizedLabels = labels.map((label) => label.toLowerCase());
+  return labels.length >= 3
+    && normalizedLabels.at(-2) === '1688'
+    && normalizedLabels.at(-1) === 'com'
+    && labels.every(isDnsHostnameLabel);
+}
+
+function isDnsHostnameLabel(label: string): boolean {
+  return label.length >= 1
+    && label.length <= 63
+    && /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label);
 }
 
 function recordValue(value: unknown): Record<string, unknown> | null {

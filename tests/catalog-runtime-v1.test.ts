@@ -14,6 +14,48 @@ const SHOP = 'https://fixture.1688.com/';
 const NOW = '2026-07-31T00:00:00.000Z';
 const LATER = '2026-08-01T00:00:00.000Z';
 
+const VALID_CANONICAL_STORE_URL_CASES = [
+  ['single-label shop', 'https://fixture.1688.com/', 'https://fixture.1688.com/'],
+  ['uppercase hostname', 'https://Fixture.1688.COM/', 'https://fixture.1688.com/'],
+  ['multi-label shop', 'https://north.shop-2.1688.com/', 'https://north.shop-2.1688.com/'],
+] as const;
+
+const INVALID_CANONICAL_STORE_URL_CASES = [
+  ['non-HTTPS scheme', 'http://fixture.1688.com/'],
+  ['uppercase scheme', 'HTTPS://fixture.1688.com/'],
+  ['username', 'https://user@fixture.1688.com/'],
+  ['username and password', 'https://user:password@fixture.1688.com/'],
+  ['explicit default port', 'https://fixture.1688.com:443/'],
+  ['explicit zero-padded default port', 'https://fixture.1688.com:0443/'],
+  ['explicit alternate port', 'https://fixture.1688.com:8443/'],
+  ['query', 'https://fixture.1688.com/?member=other'],
+  ['fragment', 'https://fixture.1688.com/#other'],
+  ['missing explicit root path', 'https://fixture.1688.com'],
+  ['non-root path', 'https://fixture.1688.com/offer'],
+  ['double-slash path', 'https://fixture.1688.com//'],
+  ['backslash path delimiter', 'https://fixture.1688.com\\other'],
+  ['dot-normalized path', 'https://fixture.1688.com/a/../'],
+  ['percent-encoded dot path', 'https://fixture.1688.com/%2e/'],
+  ['percent-encoded hostname byte', 'https://%66ixture.1688.com/'],
+  ['percent-encoded hostname dot', 'https://fixture%2e1688.com/'],
+  ['percent-encoded Unicode hostname', 'https://%E5%BA%97%E9%93%BA.1688.com/'],
+  ['Unicode hostname', 'https://店铺.1688.com/'],
+  ['non-ASCII hostname', 'https://café.1688.com/'],
+  ['empty shop label', 'https://.1688.com/'],
+  ['double-dot hostname', 'https://foo..1688.com/'],
+  ['trailing empty hostname label', 'https://foo.1688.com./'],
+  ['hostname underscore', 'https://fixture_shop.1688.com/'],
+  ['leading hostname hyphen', 'https://-fixture.1688.com/'],
+  ['trailing hostname hyphen', 'https://fixture-.1688.com/'],
+  ['oversized hostname label', `https://${'a'.repeat(64)}.1688.com/`],
+  ['apex host', 'https://1688.com/'],
+  ['lookalike suffix', 'https://fixture1688.com/'],
+  ['unapproved suffix', 'https://fixture.1688.com.evil.example/'],
+  ['leading whitespace', ' https://fixture.1688.com/'],
+  ['trailing whitespace', 'https://fixture.1688.com/ '],
+  ['trailing newline', 'https://fixture.1688.com/\n'],
+] as const;
+
 function profileObservation(input: Readonly<{
   memberId?: string;
   memberSourceFieldPath?: string;
@@ -277,6 +319,40 @@ describe('bounded Store Sample runtime', () => {
     })).rejects.toMatchObject({ code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' });
     expect(catalogCalls).toBe(0);
   });
+
+  it.each(VALID_CANONICAL_STORE_URL_CASES)(
+    'accepts a %s and preserves its canonical Store authority',
+    async (_label, shopUrl, canonicalShopUrl) => {
+      const { result, calls } = await baseline({
+        canonicalShopUrl: shopUrl,
+        collectProfileObservation: () => profileObservation({
+          canonicalShopUrl: shopUrl,
+          payloadShopUrl: shopUrl,
+        }),
+      });
+      expect(calls).toEqual([1, 2, 3]);
+      expect(result.cursor.canonicalShopUrl).toBe(canonicalShopUrl);
+    },
+  );
+
+  it.each(INVALID_CANONICAL_STORE_URL_CASES)(
+    'rejects a Store URL with %s before collection',
+    async (_label, shopUrl) => {
+      let catalogCalls = 0;
+      await expect(baseline({
+        canonicalShopUrl: shopUrl,
+        collectProfileObservation: () => profileObservation({
+          canonicalShopUrl: shopUrl,
+          payloadShopUrl: shopUrl,
+        }),
+        collectPage: async (page) => {
+          catalogCalls++;
+          return parsed(page);
+        },
+      })).rejects.toMatchObject({ code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' });
+      expect(catalogCalls).toBe(0);
+    },
+  );
 
   it('parses Store member authority only from the response header payload', () => {
     const profile = mapStoreProfilePayload({
