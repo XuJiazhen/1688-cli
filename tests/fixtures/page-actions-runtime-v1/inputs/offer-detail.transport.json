@@ -1,0 +1,126 @@
+{
+  "offerId": "700000000101",
+  "memberId": "fixture-chain-member-1",
+  "coreHtml": "<html><body>runtime fixture offer core</body></html>",
+  "skuResponse": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "skuSelectorBizModel": {
+        "skuPriceScale": "8.00-10.00",
+        "skuProps": [
+          {
+            "prop": "variant",
+            "value": [
+              {
+                "name": "fixture-a",
+                "imageUrl": "https://img.example.test/runtime-offer-sku-a.jpg"
+              }
+            ]
+          }
+        ],
+        "skuInfoMap": {
+          "fixture-a": {
+            "skuId": "runtime-sku-1",
+            "specAttrs": "variant:fixture-a",
+            "price": "8.00",
+            "canBookCount": "25",
+            "saleCount": 4
+          }
+        },
+        "skuSelectorModel": {
+          "tradeModel": {
+            "beginAmount": 1,
+            "unit": "piece",
+            "offerPriceModel": {
+              "currentPrices": [
+                {
+                  "beginAmount": 1,
+                  "price": "8.00"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "shopCardResponse": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "offerId": "700000000101",
+      "memberId": "fixture-chain-member-1",
+      "model": {
+        "shopName": "Runtime Fixture Offer Store",
+        "shopType": "factory",
+        "mainCategoryName": "Tools",
+        "shopUrl": "https://fixture-offer-store.1688.com/",
+        "tpYear": 3,
+        "shopData": [
+          {
+            "dataKey": "service score",
+            "dataValue": "4.8"
+          }
+        ]
+      }
+    }
+  },
+  "consignmentResponse": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "offerId": "700000000101",
+      "memberId": "fixture-chain-member-1",
+      "data": {
+        "data": {
+          "data": {
+            "name": "Runtime Fixture Consignment",
+            "priceInfoList": [
+              {
+                "price": "8.00",
+                "text": "1 piece price"
+              }
+            ],
+            "adviseList": [
+              {
+                "key": "offerDelivery48hRate",
+                "name": "48h delivery rate",
+                "value": "98%"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "detailScript": "var offer_details={content:'<h2>Runtime fixture detail</h2><img src=\"https://img.example.test/runtime-detail.jpg\">'};",
+  "pageInfo": {
+    "title": "Runtime Fixture Offer",
+    "supplierName": "Runtime Fixture Offer Store",
+    "sellerLoginId": "fixture-offer-login-1",
+    "sellerMemberId": "fixture-chain-member-1",
+    "sellerUserId": "fixture-user-1",
+    "saledCount": null,
+    "mainImage": "https://img.example.test/runtime-main.jpg",
+    "images": [
+      "https://img.example.test/runtime-main.jpg",
+      "https://img.example.test/runtime-gallery.jpg"
+    ],
+    "sendArea": "fixture-region",
+    "province": null,
+    "city": null,
+    "categoryId": "fixture-category-1",
+    "detailUrl": "https://itemcdn.tmall.com/1688offer/runtime-fixture-detail",
+    "attributes": [
+      {
+        "name": "material",
+        "value": "fixture-alloy"
+      }
+    ],
+    "packageInfo": []
+  }
+}

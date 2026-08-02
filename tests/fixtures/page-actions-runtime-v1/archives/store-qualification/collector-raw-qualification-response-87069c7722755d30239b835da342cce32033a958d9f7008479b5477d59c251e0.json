@@ -1,0 +1,47 @@
+{
+  "schema": "collector.sanitized-raw-archive.v1",
+  "kind": "qualification-response",
+  "parserRevision": "supplier-qualification-v1@1",
+  "pageActionId": "runtime-page-action-store-qualification",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-store-qualification-2",
+  "requestBusinessHash": "sha256:f891cc6b7fc633067caef2c337bc56ffd9454872884370b608a8a419760234f4",
+  "sanitizedPayload": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "memberId": "fixture-chain-member-1",
+      "companyName": "Runtime Fixture Qualification Store",
+      "sellerType": "manufacturer",
+      "productionService": "fixture assembly",
+      "businessLine": "fixture tools",
+      "strengthSignals": [
+        {
+          "code": "fixture-factory",
+          "enabled": true
+        }
+      ],
+      "guaranteeItems": [
+        {
+          "code": "fixture-return",
+          "status": "enabled"
+        }
+      ],
+      "certList": [
+        {
+          "certName": "Runtime Fixture Certificate",
+          "certType": "fixture-certificate",
+          "imgUrl": "https://img.example.test/runtime-certificate.jpg"
+        }
+      ],
+      "businessInfo": {
+        "companyBusinessLine": "Fixture tool production and distribution.",
+        "companyYearStarted": "2020-01-01"
+      },
+      "propaganda": {
+        "companyImg": []
+      }
+    }
+  },
+  "payloadHash": "sha256:4e094082fd594ae3b8214c986fc9cfb2bc2870bb6380c22c2aa9fb0c41c47eb6"
+}

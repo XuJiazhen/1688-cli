@@ -1,0 +1,123 @@
+{
+  "memberId": "fixture-chain-member-1",
+  "canonicalShopUrl": "https://fixture-store.1688.com/",
+  "headerResponse": {
+    "api": "mtop.alibaba.alisite.cbu.server.ModuleAsyncService",
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "success": true,
+      "data": {
+        "memberId": "fixture-chain-member-1",
+        "companyName": "Runtime Fixture Store Header",
+        "commonUrl": {
+          "shopUrl": "https://fixture-store.1688.com/"
+        },
+        "mainCate": "Tools",
+        "tpYear": "3 years"
+      }
+    }
+  },
+  "pages": [
+    {
+      "pageNumber": 1,
+      "response": {
+        "ret": [
+          "SUCCESS::ok"
+        ],
+        "data": {
+          "content": {
+            "offerCount": 90,
+            "totalPages": 3,
+            "offerList": [
+              {
+                "id": "700000000201",
+                "memberId": "fixture-chain-member-1",
+                "subject": "Runtime Fixture Store Offer 1",
+                "offerImages": [
+                  "https://img.example.test/runtime-store-1.jpg"
+                ]
+              }
+            ],
+            "offerCategoryDataModel": {
+              "offerCategoryList": [
+                {
+                  "id": "fixture-cat-1",
+                  "name": "Tools",
+                  "count": 90
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "pageNumber": 2,
+      "response": {
+        "ret": [
+          "SUCCESS::ok"
+        ],
+        "data": {
+          "content": {
+            "offerCount": 90,
+            "totalPages": 3,
+            "offerList": [
+              {
+                "id": "700000000202",
+                "memberId": "fixture-chain-member-1",
+                "subject": "Runtime Fixture Store Offer 2",
+                "offerImages": [
+                  "https://img.example.test/runtime-store-2.jpg"
+                ]
+              }
+            ],
+            "offerCategoryDataModel": {
+              "offerCategoryList": [
+                {
+                  "id": "fixture-cat-1",
+                  "name": "Tools",
+                  "count": 90
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "pageNumber": 3,
+      "response": {
+        "ret": [
+          "SUCCESS::ok"
+        ],
+        "data": {
+          "content": {
+            "offerCount": 90,
+            "totalPages": 3,
+            "offerList": [
+              {
+                "id": "700000000203",
+                "memberId": "fixture-chain-member-1",
+                "subject": "Runtime Fixture Store Offer 3",
+                "offerImages": [
+                  "https://img.example.test/runtime-store-3.jpg"
+                ]
+              }
+            ],
+            "offerCategoryDataModel": {
+              "offerCategoryList": [
+                {
+                  "id": "fixture-cat-1",
+                  "name": "Tools",
+                  "count": 90
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -70,6 +70,14 @@ export function createBoundedStoreSampleBatchesV1(input: {
   completedAt: string;
   rawEvidenceRefs: string[];
 }): [CollectionBatch, CollectionBatch, CollectionBatch] {
+  const firstObservedPageByOfferId = new Map<string, number>();
+  input.result.pages.forEach(({ page, parsed }) => {
+    parsed.offers.forEach((offer) => {
+      if (!firstObservedPageByOfferId.has(offer.offerId)) {
+        firstObservedPageByOfferId.set(offer.offerId, page);
+      }
+    });
+  });
   const common = {
     schemaVersion: 1 as const,
     unitId: input.unitId,
@@ -116,6 +124,7 @@ export function createBoundedStoreSampleBatchesV1(input: {
     observations: input.result.uniqueOffers.map((offer) =>
       sanitizeCollectorPayloadV1({
         ...offer,
+        page: firstObservedPageByOfferId.get(offer.offerId),
         storeSample: true,
         taskCandidateEligible: false,
         evidenceUsage: input.result.evidenceUsage,
@@ -156,7 +165,7 @@ export function createBoundedStoreSampleBatchesV1(input: {
     ...common,
     batchId: input.profileBatchId,
     kind: 'store-profile',
-    observations: input.result.pages.length === 0
+    observations: input.result.profileObservation === null
       ? []
       : [sanitizeCollectorPayloadV1({
           ...input.result.profileObservation,
@@ -165,11 +174,11 @@ export function createBoundedStoreSampleBatchesV1(input: {
         }) as Record<string, unknown>],
     completeness: {
       ...completeness,
-      uniqueItems: input.result.pages.length === 0 ? 0 : 1,
+      uniqueItems: input.result.profileObservation === null ? 0 : 1,
     },
     metrics: {
       remoteRequests: 0,
-      profileObservations: input.result.pages.length === 0 ? 0 : 1,
+      profileObservations: input.result.profileObservation === null ? 0 : 1,
     },
   });
   return [catalog, categories, profile];

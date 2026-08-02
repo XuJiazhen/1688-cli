@@ -1,0 +1,10 @@
+{
+  "schema": "collector.sanitized-raw-archive.v1",
+  "kind": "offer-detail",
+  "parserRevision": "offer-detail-media-v2@1",
+  "pageActionId": "runtime-page-action-offer-detail",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+  "requestBusinessHash": "sha256:e00f503a51635f46143ed57fb278b775e9a0864593cc248aa5ba3a8f2fd3de04",
+  "sanitizedPayload": "var offer_details={content:'<h2>Runtime fixture detail</h2><img src=\"https://img.example.test/runtime-detail.jpg\">'};",
+  "payloadHash": "sha256:d60397188e187b3cbf7cba1ddb55869bfdb487528807b7fa7c359bb91d739600"
+}

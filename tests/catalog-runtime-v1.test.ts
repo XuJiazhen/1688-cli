@@ -2,15 +2,56 @@ import { describe, expect, it } from 'vitest';
 import {
   collectBoundedStoreSampleV1,
   materializeFreshStoreSampleCacheV1,
+  parseStoreProfileMemberAuthorityV1,
   type StoreSampleCursorV1,
 } from '../src/session/catalog-runtime.js';
 import type { StoreCatalogParseResult } from '../src/session/alisite-module.js';
 import { createBoundedStoreSampleBatchesV1 } from '../src/collection/catalog-batch.js';
+import { mapStoreProfilePayload } from '../src/session/store-profile.js';
 
 const MEMBER = 'b2b-member-1';
 const SHOP = 'https://fixture.1688.com/';
 const NOW = '2026-07-31T00:00:00.000Z';
 const LATER = '2026-08-01T00:00:00.000Z';
+
+function profileObservation(input: Readonly<{
+  memberId?: string;
+  memberSourceFieldPath?: string;
+  memberSourceRawRef?: string;
+  canonicalShopUrl?: string;
+  payloadShopUrl?: string;
+  companyName?: string;
+}> = {}) {
+  const profile = mapStoreProfilePayload({
+    api: 'mtop.alibaba.alisite.cbu.server.ModuleAsyncService',
+    data: {
+      success: true,
+      data: {
+        memberId: input.memberId ?? MEMBER,
+        companyName: input.companyName ?? 'Fixture Store',
+        commonUrl: { shopUrl: input.payloadShopUrl ?? SHOP },
+      },
+    },
+  }, NOW, {
+    sourceRef: 'fixture:wangpu-header',
+    rawRef: 'artifact:wangpu-header',
+  });
+  return Promise.resolve({
+    memberId: input.memberId ?? MEMBER,
+    memberIdSource: {
+      ...profile.source,
+      fieldPath: input.memberSourceFieldPath ?? 'data.data.memberId',
+      rawRef: input.memberSourceRawRef ?? profile.source.rawRef,
+    },
+    canonicalShopUrl: input.canonicalShopUrl ?? SHOP,
+    observedAt: NOW,
+    profile,
+  });
+}
+
+function collectProfileObservation() {
+  return profileObservation();
+}
 
 function parsed(page: number, options: {
   memberId?: string;
@@ -54,6 +95,7 @@ async function baseline(overrides: Partial<Parameters<typeof collectBoundedStore
     mode: 'phase-1-bounded', firstPage: 1, lastPageInclusive: 3,
     generation: 'generation-1', baselineExpiresAt: LATER,
     now: () => new Date(NOW),
+    collectProfileObservation,
     collectPage: async (page) => { calls.push(page); return parsed(page); },
     ...overrides,
   });
@@ -95,6 +137,7 @@ describe('bounded Store Sample runtime', () => {
       mode: 'phase-1-bounded', firstPage: 2, lastPageInclusive: 4,
       generation: 'generation-1', baselineExpiresAt: LATER,
       now: () => new Date(NOW),
+      collectProfileObservation,
       collectPage: async (page) => { calls++; return parsed(page); },
     })).rejects.toMatchObject({ code: 'STORE_SAMPLE_BASELINE_SCOPE_INVALID' });
     expect(calls).toBe(0);
@@ -146,6 +189,120 @@ describe('bounded Store Sample runtime', () => {
     })).rejects.toMatchObject({ code: 'STORE_SAMPLE_MEMBER_SCOPE_MISMATCH' });
   });
 
+  it('requires archived Wangpu header fields instead of synthesizing a profile', async () => {
+    let catalogCalls = 0;
+    await expect(baseline({
+      collectProfileObservation: async () => {
+        const profile = mapStoreProfilePayload({
+          api: 'mtop.alibaba.alisite.cbu.server.ModuleAsyncService',
+          data: { success: true, data: { memberId: MEMBER, mainCate: 'Tools' } },
+        }, NOW, {
+          sourceRef: 'fixture:incomplete-wangpu-header',
+          rawRef: 'artifact:incomplete-wangpu-header',
+        });
+        return {
+          memberId: MEMBER,
+          memberIdSource: { ...profile.source, fieldPath: 'data.data.memberId' },
+          canonicalShopUrl: SHOP,
+          observedAt: NOW,
+          profile,
+        };
+      },
+      collectPage: async (page) => {
+        catalogCalls++;
+        return parsed(page);
+      },
+    })).rejects.toMatchObject({ code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' });
+    expect(catalogCalls).toBe(0);
+  });
+
+  it.each([
+    {
+      label: 'payload URL from another Store',
+      collect: () => profileObservation({
+        payloadShopUrl: 'https://different-member.1688.com/',
+      }),
+    },
+    {
+      label: 'input-derived observation URL from another Store',
+      collect: () => profileObservation({
+        canonicalShopUrl: 'https://different-member.1688.com/',
+      }),
+    },
+    {
+      label: 'member alias drift',
+      collect: () => profileObservation({ memberId: 'different-member' }),
+    },
+    {
+      label: 'member authority detached from the archived response',
+      collect: () => profileObservation({
+        memberSourceRawRef: 'artifact:different-header',
+      }),
+    },
+    {
+      label: 'member authority from a request-derived field',
+      collect: () => profileObservation({
+        memberSourceFieldPath: 'request.params.memberId',
+      }),
+    },
+    {
+      label: 'ambiguous payload URL',
+      collect: () => profileObservation({
+        payloadShopUrl: `${SHOP}?memberId=different-member`,
+      }),
+    },
+    {
+      label: 'blank parsed name',
+      collect: () => profileObservation({ companyName: '   ' }),
+    },
+    {
+      label: 'fragment-bearing Store URL',
+      collect: () => profileObservation({ payloadShopUrl: `${SHOP}#other` }),
+    },
+    {
+      label: 'apex 1688 host',
+      collect: () => profileObservation({
+        canonicalShopUrl: 'https://1688.com/',
+        payloadShopUrl: 'https://1688.com/',
+      }),
+    },
+  ])('rejects $label before Store catalog collection', async ({ collect }) => {
+    let catalogCalls = 0;
+    await expect(baseline({
+      collectProfileObservation: collect,
+      collectPage: async (page) => {
+        catalogCalls++;
+        return parsed(page);
+      },
+    })).rejects.toMatchObject({ code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' });
+    expect(catalogCalls).toBe(0);
+  });
+
+  it('parses Store member authority only from the response header payload', () => {
+    const profile = mapStoreProfilePayload({
+      data: { data: { memberId: MEMBER, companyName: 'Fixture Store' } },
+    }, NOW, {
+      sourceRef: 'fixture:wangpu-header',
+      rawRef: 'artifact:wangpu-header',
+    });
+    expect(parseStoreProfileMemberAuthorityV1(
+      { data: { data: { memberId: MEMBER } } },
+      profile.source,
+    )).toMatchObject({
+      memberId: MEMBER,
+      memberIdSource: {
+        rawRef: 'artifact:wangpu-header',
+        fieldPath: 'data.data.memberId',
+      },
+    });
+    expect(() => parseStoreProfileMemberAuthorityV1(
+      { data: { data: { companyName: 'Missing member' } } },
+      profile.source,
+    )).toThrowError(expect.objectContaining({
+      code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
+    }));
+  });
+
   it.each(['offer-count', 'total-pages', 'categories'] as const)(
     'cannot complete when page-1 %s authority is missing',
     async (missing) => {
@@ -186,6 +343,7 @@ describe('bounded Store Sample runtime', () => {
       mode: 'approved-expansion', firstPage: 4, lastPageInclusive: 6,
       generation: 'generation-1', previousCursor: base.cursor,
       baselineExpiresAt: LATER, now: () => new Date('2026-07-31T01:00:00.000Z'),
+      collectProfileObservation,
       collectPage: async (page) => parsed(page),
     });
     expect(expand).toMatchObject({
@@ -202,6 +360,7 @@ describe('bounded Store Sample runtime', () => {
         lastPageInclusive: 4 + pageCount - 1,
         generation: 'generation-1', previousCursor: base.cursor,
         baselineExpiresAt: LATER, now: () => new Date(NOW),
+        collectProfileObservation,
         collectPage: async (page) => parsed(page),
       })).rejects.toBeTruthy();
     }
@@ -212,6 +371,7 @@ describe('bounded Store Sample runtime', () => {
       mode: 'approved-expansion', firstPage: 4, lastPageInclusive: 6,
       generation: 'generation-1', previousCursor: wrongIdentity,
       baselineExpiresAt: LATER, now: () => new Date(NOW),
+      collectProfileObservation,
       collectPage: async (page) => parsed(page),
     })).rejects.toMatchObject({ code: 'STORE_SAMPLE_EXPANSION_CURSOR_INVALID' });
 
@@ -220,6 +380,7 @@ describe('bounded Store Sample runtime', () => {
       mode: 'approved-expansion', firstPage: 4, lastPageInclusive: 6,
       generation: 'generation-1', previousCursor: base.cursor,
       baselineExpiresAt: LATER, now: () => new Date(NOW),
+      collectProfileObservation,
       collectPage: async (page) => parsed(page, { offerCount: 591 }),
     })).rejects.toMatchObject({ code: 'STORE_SAMPLE_BASELINE_TOTAL_DRIFT' });
   });

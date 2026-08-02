@@ -1,0 +1,46 @@
+{
+  "schema": "collector.sanitized-raw-archive.v1",
+  "kind": "search-response",
+  "parserRevision": "search-response-v1@1",
+  "pageActionId": "runtime-page-action-search-list",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-search-list-1",
+  "requestBusinessHash": "sha256:6ad8daa527375b8dd7fb9454aa7bfd83e136fb4a5378a8f301af382e42e6afa9",
+  "sanitizedPayload": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "code": 200,
+      "success": true,
+      "data": {
+        "OFFER": {
+          "items": [
+            {
+              "data": {
+                "offerId": "700000000101",
+                "title": "Runtime Fixture Drill",
+                "priceInfo": {
+                  "price": "12.50"
+                },
+                "memberId": "fixture-chain-member-1",
+                "loginId": "[redacted]",
+                "isP4P": "false",
+                "winPortUrl": "https://fixture-search-store.1688.com/",
+                "shop": {
+                  "text": "Runtime Fixture Store",
+                  "tpYear": "3"
+                },
+                "shopAddition": {
+                  "shopLinkUrl": "https://fixture-search-store.1688.com/"
+                }
+              }
+            }
+          ],
+          "hasMore": false,
+          "found": 1
+        }
+      }
+    }
+  },
+  "payloadHash": "sha256:8bbbe121c7436d05783a62218a5ca7d592ad5d129d21ede5259eda6daf2b8ce0"
+}

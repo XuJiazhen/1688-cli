@@ -323,7 +323,7 @@ export function createSearchTerminalReceiptV1(input: {
       'Search terminal receipt requires a contiguous observation universe beginning at page 1.',
     );
   }
-  const eligibleObservations = input.eligibleObservations === undefined
+  const observedEligible = input.eligibleObservations === undefined
     ? input.result.pages.flatMap((capture) =>
         capture.page.offers.flatMap((offer, sourceOrdinal) =>
           isEligibleSearchOffer(input.advertisementPolicy, offer)
@@ -338,11 +338,20 @@ export function createSearchTerminalReceiptV1(input: {
         )
       )
     : input.eligibleObservations.map((observation) => ({ ...observation }));
+  const runtimeCandidateIds = input.result.offers.map((offer) => offer.offerId);
+  const runtimeCandidateSet = new Set(runtimeCandidateIds);
+  const eligibleObservations = observedEligible.filter((observation) =>
+    runtimeCandidateSet.has(observation.offerId)
+  );
   const observationCandidateIds = [...new Set(
     eligibleObservations.map((observation) => observation.offerId),
   )].sort();
   const candidateIds = [...new Set(input.eligibleCandidateIds)].sort();
-  if (JSON.stringify(candidateIds) !== JSON.stringify(observationCandidateIds)) {
+  const expectedCandidateIds = [...new Set(runtimeCandidateIds)].sort();
+  if (
+    JSON.stringify(candidateIds) !== JSON.stringify(expectedCandidateIds)
+    || JSON.stringify(candidateIds) !== JSON.stringify(observationCandidateIds)
+  ) {
     throw new CliError(
       9,
       'SEARCH_TERMINAL_CANDIDATE_UNIVERSE_MISMATCH',

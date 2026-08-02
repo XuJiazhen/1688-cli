@@ -1,0 +1,38 @@
+{
+  "schema": "collector.sanitized-raw-archive.v1",
+  "kind": "offer-consignment",
+  "parserRevision": "offer-consignment-v1@1",
+  "pageActionId": "runtime-page-action-offer-detail",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+  "requestBusinessHash": "sha256:e00f503a51635f46143ed57fb278b775e9a0864593cc248aa5ba3a8f2fd3de04",
+  "sanitizedPayload": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "offerId": "700000000101",
+      "memberId": "fixture-chain-member-1",
+      "data": {
+        "data": {
+          "data": {
+            "name": "Runtime Fixture Consignment",
+            "priceInfoList": [
+              {
+                "price": "8.00",
+                "text": "1 piece price"
+              }
+            ],
+            "adviseList": [
+              {
+                "key": "offerDelivery48hRate",
+                "name": "48h delivery rate",
+                "value": "98%"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "payloadHash": "sha256:a9a64e55557fd1dc208aea384845187408d13ed8bf4457525b2f36472b2da2e2"
+}

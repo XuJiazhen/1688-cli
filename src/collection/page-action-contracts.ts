@@ -295,6 +295,8 @@ export interface CanonicalSearchRequestV1 {
   searchQueryKeyHash: string;
   searchSegmentId: string;
   querySnapshotHash: string;
+  searchQueryIdentity: string;
+  page: number;
   keyword: string;
   filterConfigSnapshotId: string;
   filterConfigSnapshotHash: string;
@@ -1495,6 +1497,7 @@ function normalizePageActionPayload(value: unknown): PageActionPayloadV1 {
 function normalizeCanonicalSearchRequest(value: unknown): CanonicalSearchRequestV1 {
   const record = strictRecord(value, 'CanonicalSearchRequestV1', [
     'schema', 'searchQueryKeyHash', 'searchSegmentId', 'querySnapshotHash',
+    'searchQueryIdentity', 'page',
     'keyword', 'filterConfigSnapshotId', 'filterConfigSnapshotHash',
     'compilerRevision', 'serializerCapabilitySnapshotId',
     'serializerCapabilitySnapshotHash', 'sort', 'canonicalParameterSetArtifactRef',
@@ -1505,7 +1508,11 @@ function normalizeCanonicalSearchRequest(value: unknown): CanonicalSearchRequest
   requireLiteral(record.schema, 'canonical-search-request-v1', 'canonical search schema');
   const requestedStartPage = requirePositiveInteger(record.requestedStartPage, 'requestedStartPage');
   const requestedEndPage = requirePositiveInteger(record.requestedEndPage, 'requestedEndPage');
+  const page = requirePositiveInteger(record.page, 'page');
   if (requestedEndPage < requestedStartPage) invalid('Canonical search page range must be ascending.');
+  if (page < requestedStartPage || page > requestedEndPage) {
+    invalid('Canonical search page authority must fall within the requested page range.');
+  }
   const replayPageBudget = requireNonNegativeInteger(record.replayPageBudget, 'replayPageBudget');
   const maxSafeReplayPages = requireNonNegativeInteger(record.maxSafeReplayPages, 'maxSafeReplayPages');
   if (maxSafeReplayPages > replayPageBudget) {
@@ -1516,6 +1523,8 @@ function normalizeCanonicalSearchRequest(value: unknown): CanonicalSearchRequest
     searchQueryKeyHash: requireHash(record.searchQueryKeyHash, 'searchQueryKeyHash'),
     searchSegmentId: requireId(record.searchSegmentId, 'searchSegmentId'),
     querySnapshotHash: requireHash(record.querySnapshotHash, 'querySnapshotHash'),
+    searchQueryIdentity: requireText(record.searchQueryIdentity, 'searchQueryIdentity'),
+    page,
     keyword: requireText(record.keyword, 'keyword'),
     filterConfigSnapshotId: requireId(record.filterConfigSnapshotId, 'filterConfigSnapshotId'),
     filterConfigSnapshotHash: requireHash(record.filterConfigSnapshotHash, 'filterConfigSnapshotHash'),

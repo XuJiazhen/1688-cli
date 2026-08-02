@@ -1,0 +1,782 @@
+{
+  "executionAttemptReceipt": {
+    "schema": "collector.page-action.execution-attempt-receipt.v1",
+    "receiptId": "execution-receipt-search-list-fixture-002",
+    "receiptHash": "sha256:07744058d39196a643056e8d8c7459e48271d943a53ac4a4fff5c6ab62dfa069",
+    "requestId": "runtime-request-search-list",
+    "idempotencyKey": "runtime-idempotency-search-list",
+    "pageActionId": "runtime-page-action-search-list",
+    "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+    "executionAttemptOrdinal": 1,
+    "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+    "logicalLineage": {
+      "schema": "collector.logical-page-action-lineage.v1",
+      "logicalLineageId": "runtime-logical-search-list",
+      "collectionTaskId": "runtime-collection-task-search-list",
+      "workUnitId": "runtime-work-unit-search-list",
+      "pageActionId": "runtime-page-action-search-list",
+      "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+      "actionKind": "search-list",
+      "businessSubject": {
+        "kind": "search-list",
+        "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f",
+        "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf"
+      }
+    },
+    "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+    "executionLineage": {
+      "schema": "collector.page-action-execution-lineage.v1",
+      "logicalLineageId": "runtime-logical-search-list",
+      "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+      "workUnitAttemptId": "runtime-work-attempt-search-list",
+      "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+      "executionAttemptOrdinal": 1,
+      "requestId": "runtime-request-search-list",
+      "idempotencyKey": "runtime-idempotency-search-list",
+      "profile": {
+        "profileId": "runtime-fixture-profile",
+        "profileName": "runtime-fixture-profile",
+        "daemonInstanceId": "runtime-fixture-daemon",
+        "contextGeneration": 1,
+        "egressId": "runtime-fixture-egress"
+      },
+      "fences": {
+        "supervisor": {
+          "leaseId": "runtime-supervisor-lease",
+          "generation": 1,
+          "fencingToken": "runtime-supervisor-fence",
+          "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+        },
+        "reservation": {
+          "leaseId": "runtime-reservation-lease",
+          "generation": 1,
+          "fencingToken": "runtime-reservation-fence",
+          "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+        },
+        "workUnit": {
+          "leaseId": "runtime-work-unit-lease",
+          "generation": 1,
+          "fencingToken": "runtime-work-unit-fence",
+          "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+        }
+      }
+    },
+    "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c",
+    "outcome": "completed",
+    "terminal": true,
+    "actionKind": "search-list",
+    "remoteRequestAttempts": [
+      {
+        "remoteRequestAttemptId": "remote-runtime-execution-attempt-search-list-1",
+        "ordinal": 1,
+        "logicalPage": 1,
+        "purpose": "forward",
+        "requestBusinessHash": "sha256:6ad8daa527375b8dd7fb9454aa7bfd83e136fb4a5378a8f301af382e42e6afa9",
+        "startedAt": "2026-08-02T00:00:00.001Z",
+        "completedAt": "2026-08-02T00:00:00.001Z",
+        "status": "succeeded",
+        "rawEvidenceRefs": [
+          "artifact:collector-raw-search-response-245ec4a749715be664540a9595fbddc49a44815de58f3c819eb68d7b392fa49d"
+        ]
+      }
+    ],
+    "batches": [
+      {
+        "schemaVersion": 1,
+        "batchId": "batch-search-list-fixture-001",
+        "unitId": "runtime-work-unit-search-list:search:1",
+        "sourceRequestId": "runtime-request-search-list",
+        "kind": "search-page",
+        "status": "completed",
+        "startedAt": "2026-08-02T00:00:00.000Z",
+        "completedAt": "2026-08-02T00:00:00.000Z",
+        "subject": {
+          "keyword": "runtime fixture drill"
+        },
+        "scope": {
+          "collectorPageActionEvidence": {
+            "executionLineage": {
+              "executionAttemptOrdinal": 1,
+              "fences": {
+                "reservation": {
+                  "fencingToken": "runtime-reservation-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-reservation-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "supervisor": {
+                  "fencingToken": "runtime-supervisor-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-supervisor-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "workUnit": {
+                  "fencingToken": "runtime-work-unit-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-work-unit-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                }
+              },
+              "idempotencyKey": "runtime-idempotency-search-list",
+              "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+              "logicalLineageId": "runtime-logical-search-list",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+              "profile": {
+                "contextGeneration": 1,
+                "daemonInstanceId": "runtime-fixture-daemon",
+                "egressId": "runtime-fixture-egress",
+                "profileId": "runtime-fixture-profile",
+                "profileName": "runtime-fixture-profile"
+              },
+              "requestId": "runtime-request-search-list",
+              "schema": "collector.page-action-execution-lineage.v1",
+              "workUnitAttemptId": "runtime-work-attempt-search-list"
+            },
+            "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c",
+            "logicalLineage": {
+              "actionKind": "search-list",
+              "businessSubject": {
+                "kind": "search-list",
+                "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf",
+                "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f"
+              },
+              "collectionTaskId": "runtime-collection-task-search-list",
+              "logicalLineageId": "runtime-logical-search-list",
+              "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+              "pageActionId": "runtime-page-action-search-list",
+              "schema": "collector.logical-page-action-lineage.v1",
+              "workUnitId": "runtime-work-unit-search-list"
+            },
+            "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+            "pageActionId": "runtime-page-action-search-list",
+            "schema": "collector.page-action-batch-evidence.v1",
+            "search": {
+              "terminalReceipt": {
+                "collectionTaskId": "runtime-collection-task-search-list",
+                "completedPageActionIds": [
+                  "runtime-page-action-search-list"
+                ],
+                "completedSearchSegmentIds": [
+                  "runtime-search-segment-1"
+                ],
+                "eligibleCandidateSetHash": "sha256:cb627623104b84616f7c90cc8169420aa6b9abfd8896984a7416dc85df35959e",
+                "eligibleSearchHitObservationSetHash": "sha256:35c37fe554830a63171b7d69a24a371938d4085eb1cb9abdee48bf001b92bf33",
+                "lastCompletedPage": 1,
+                "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf",
+                "receiptHash": "sha256:00e93cbb93c87b1c80c006ac4bd18f53405b49947a492e6247bc39b14fa30a6e",
+                "schema": "search-query-terminal-receipt-v1",
+                "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f",
+                "terminalAt": "2026-08-02T00:00:00.000Z",
+                "terminalReason": "source-end"
+              }
+            },
+            "searchSegmentId": "runtime-search-segment-1"
+          },
+          "cursor": "search-page:v1:eyJuZXh0UGFnZSI6MX0",
+          "page": 1,
+          "pageSize": 60,
+          "remoteHasMore": false,
+          "remotePageSize": 60,
+          "remoteSort": "normal",
+          "requestSnapshot": {
+            "businessSort": "relevance",
+            "compatibilitySortInput": null,
+            "filterConfigSnapshotHash": "sha256:1257e229d427e2292bb5d14b607dbc65c12a8953df557645521ae7edb3f5193b",
+            "filterParams": {},
+            "pageSessionHash": "sha256:fe53e256225dc59d3cf620f82752dbfc71e86f7b201cce08e9cd0ba47630bdee",
+            "parameterSetHash": "sha256:7fa7c4ad4471c85ef792bf3e8dc8c7422812a0ad9b581da5d9bad0af603a5b56",
+            "remoteDescendOrder": true,
+            "remoteSortType": "normal",
+            "requestBusinessHash": "sha256:6ad8daa527375b8dd7fb9454aa7bfd83e136fb4a5378a8f301af382e42e6afa9",
+            "serializerCapabilitySnapshotHash": "sha256:f41f527ada830363ce537a2f0b8efcec478c7ddcbd01c5915309c0e66f2aa851"
+          },
+          "requestedScope": "page",
+          "searchRecoveryCut": {
+            "advertisementPolicy": "exclude-p4p",
+            "eligibleCandidateIdsHash": "sha256:eef9392d9faa8bb741d4c23f0701881f7b3b7c00479791ed06e8fbe33cef9092",
+            "executionAttemptOrdinal": 1,
+            "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c",
+            "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+            "logicalPage": 1,
+            "observationUniverseHash": "sha256:2551d880689ffabb9f0e480845a78da61aa6490beeefbdc96296ed4b18a35b41",
+            "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+            "pageActionId": "runtime-page-action-search-list",
+            "requestId": "runtime-request-search-list",
+            "responseBusinessHash": "sha256:dff5c6d780debf964b2a3e46a024cc5ab463e156f0aa7b0a78e00e595ed21101",
+            "schema": "collector.search-batch-recovery-cut.v1",
+            "searchSegmentId": "runtime-search-segment-1"
+          },
+          "sort": "relevance"
+        },
+        "observations": [
+          {
+            "candidateSelectionState": "selected",
+            "collectedAt": "2026-08-02T00:00:00.000Z",
+            "collectorPageActionEvidence": {
+              "executionLineage": {
+                "executionAttemptOrdinal": 1,
+                "fences": {
+                  "reservation": {
+                    "fencingToken": "runtime-reservation-fence",
+                    "generation": 1,
+                    "leaseId": "runtime-reservation-lease",
+                    "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                  },
+                  "supervisor": {
+                    "fencingToken": "runtime-supervisor-fence",
+                    "generation": 1,
+                    "leaseId": "runtime-supervisor-lease",
+                    "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                  },
+                  "workUnit": {
+                    "fencingToken": "runtime-work-unit-fence",
+                    "generation": 1,
+                    "leaseId": "runtime-work-unit-lease",
+                    "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                  }
+                },
+                "idempotencyKey": "runtime-idempotency-search-list",
+                "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+                "logicalLineageId": "runtime-logical-search-list",
+                "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+                "profile": {
+                  "contextGeneration": 1,
+                  "daemonInstanceId": "runtime-fixture-daemon",
+                  "egressId": "runtime-fixture-egress",
+                  "profileId": "runtime-fixture-profile",
+                  "profileName": "runtime-fixture-profile"
+                },
+                "requestId": "runtime-request-search-list",
+                "schema": "collector.page-action-execution-lineage.v1",
+                "workUnitAttemptId": "runtime-work-attempt-search-list"
+              },
+              "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c",
+              "logicalLineage": {
+                "actionKind": "search-list",
+                "businessSubject": {
+                  "kind": "search-list",
+                  "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf",
+                  "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f"
+                },
+                "collectionTaskId": "runtime-collection-task-search-list",
+                "logicalLineageId": "runtime-logical-search-list",
+                "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+                "pageActionId": "runtime-page-action-search-list",
+                "schema": "collector.logical-page-action-lineage.v1",
+                "workUnitId": "runtime-work-unit-search-list"
+              },
+              "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+              "pageActionId": "runtime-page-action-search-list",
+              "schema": "collector.page-action-batch-evidence.v1",
+              "search": {
+                "terminalReceipt": {
+                  "collectionTaskId": "runtime-collection-task-search-list",
+                  "completedPageActionIds": [
+                    "runtime-page-action-search-list"
+                  ],
+                  "completedSearchSegmentIds": [
+                    "runtime-search-segment-1"
+                  ],
+                  "eligibleCandidateSetHash": "sha256:cb627623104b84616f7c90cc8169420aa6b9abfd8896984a7416dc85df35959e",
+                  "eligibleSearchHitObservationSetHash": "sha256:35c37fe554830a63171b7d69a24a371938d4085eb1cb9abdee48bf001b92bf33",
+                  "lastCompletedPage": 1,
+                  "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf",
+                  "receiptHash": "sha256:00e93cbb93c87b1c80c006ac4bd18f53405b49947a492e6247bc39b14fa30a6e",
+                  "schema": "search-query-terminal-receipt-v1",
+                  "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f",
+                  "terminalAt": "2026-08-02T00:00:00.000Z",
+                  "terminalReason": "source-end"
+                }
+              },
+              "searchSegmentId": "runtime-search-segment-1"
+            },
+            "offer": {
+              "bizType": null,
+              "demand": {
+                "orderCount": null,
+                "orderCountText": null,
+                "repurchaseRate": null,
+                "repurchaseRateText": null,
+                "shopReturnRate": null,
+                "shopReturnRateText": null,
+                "soldCount": null,
+                "soldCountText": null
+              },
+              "image": null,
+              "images": [],
+              "isP4P": false,
+              "location": {
+                "city": null,
+                "province": null
+              },
+              "offerId": "700000000101",
+              "price": {
+                "max": 12.5,
+                "min": 12.5,
+                "text": "¥12.50"
+              },
+              "purchase": {
+                "minimumQuantity": null,
+                "onePieceEligible": null,
+                "priceTiers": []
+              },
+              "supplier": {
+                "badgeImageUrl": null,
+                "loginId": "[redacted]",
+                "memberId": "fixture-chain-member-1",
+                "name": "Runtime Fixture Store",
+                "shopUrl": "https://fixture-search-store.1688.com/",
+                "tradeService": {
+                  "compositeScore": null,
+                  "consultationScore": null,
+                  "disputeScore": null,
+                  "goodsScore": null,
+                  "inspectionCreditUrl": null,
+                  "logisticsScore": null,
+                  "returnScore": null,
+                  "sameDesignUrl": null
+                },
+                "years": 3
+              },
+              "tags": [],
+              "title": "Runtime Fixture Drill",
+              "turnover": null,
+              "url": "https://detail.1688.com/offer/700000000101.html",
+              "verified": {
+                "business": false,
+                "factory": false,
+                "superFactory": false
+              }
+            },
+            "offerId": "700000000101",
+            "pageRank": 1,
+            "rawRank": 1,
+            "remoteSort": "normal",
+            "sourcePage": 1,
+            "sourcePresentation": {
+              "cellType": null,
+              "p4pDeclared": false,
+              "titleHtml": "Runtime Fixture Drill"
+            }
+          }
+        ],
+        "completeness": {
+          "requestedScope": "page",
+          "state": "complete",
+          "observedPages": [
+            1
+          ],
+          "failedPages": [],
+          "uniqueItems": 1
+        },
+        "duplicateObservations": [],
+        "warnings": [],
+        "errors": [],
+        "rawEvidenceRefs": [
+          "artifact:collector-raw-search-response-245ec4a749715be664540a9595fbddc49a44815de58f3c819eb68d7b392fa49d"
+        ],
+        "metrics": {
+          "capturedOffers": 1,
+          "deferredOffers": 0,
+          "duplicateOffers": 0,
+          "emissionLimit": 1,
+          "noProgressAttempts": 0,
+          "remotePageLimit": 20,
+          "replayedOffers": 0,
+          "requestSnapshots": 1,
+          "snapshotBytes": 2,
+          "snapshotPendingOffers": 0,
+          "uniqueNewOffers": 1,
+          "unrecoverablePendingOffers": 0
+        }
+      }
+    ],
+    "requestSnapshots": [
+      {
+        "api": "mtop.relationrecommend.wirelessrecommend.recommend",
+        "pageActionId": "runtime-page-action-search-list",
+        "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+        "remoteRequestAttemptId": "remote-runtime-execution-attempt-search-list-1",
+        "purpose": "forward",
+        "subjectHash": "sha256:ba71e4792c81b3d9b90f3c76117814237eb4a5e3f25c3f687cceccfe66a4823a",
+        "pageSessionHash": "sha256:fe53e256225dc59d3cf620f82752dbfc71e86f7b201cce08e9cd0ba47630bdee",
+        "page": 1,
+        "pageSize": 60,
+        "sort": "normal",
+        "filterParams": {},
+        "requestBusinessHash": "sha256:6ad8daa527375b8dd7fb9454aa7bfd83e136fb4a5378a8f301af382e42e6afa9",
+        "observedAt": "2026-08-02T00:00:00.000Z"
+      }
+    ],
+    "pageLifecycle": {
+      "baselinePages": 0,
+      "createdPages": 1,
+      "closedPages": 1,
+      "transferredPages": 0,
+      "remainingOwnedPages": 0
+    },
+    "metrics": {
+      "remoteRequests": 1,
+      "uniqueOffers": 1
+    }
+  },
+  "completionReceipt": {
+    "schema": "collector.page-action.completion-receipt.v1",
+    "completionReceiptId": "completion-receipt-search-list-fixture-003",
+    "completionReceiptHash": "sha256:1608638559c428bd168c8de59c9cb9a8973e3cfc641fd258832dcb603c2b7055",
+    "pageActionId": "runtime-page-action-search-list",
+    "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+    "logicalLineage": {
+      "schema": "collector.logical-page-action-lineage.v1",
+      "logicalLineageId": "runtime-logical-search-list",
+      "collectionTaskId": "runtime-collection-task-search-list",
+      "workUnitId": "runtime-work-unit-search-list",
+      "pageActionId": "runtime-page-action-search-list",
+      "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+      "actionKind": "search-list",
+      "businessSubject": {
+        "kind": "search-list",
+        "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f",
+        "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf"
+      }
+    },
+    "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+    "actionKind": "search-list",
+    "status": "completed",
+    "terminal": true,
+    "executionAttemptReceiptRefs": [
+      {
+        "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+        "executionAttemptOrdinal": 1,
+        "receiptId": "execution-receipt-search-list-fixture-002",
+        "receiptHash": "sha256:07744058d39196a643056e8d8c7459e48271d943a53ac4a4fff5c6ab62dfa069",
+        "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c"
+      }
+    ],
+    "finalizedByExecutionRef": {
+      "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+      "executionAttemptOrdinal": 1,
+      "receiptId": "execution-receipt-search-list-fixture-002",
+      "receiptHash": "sha256:07744058d39196a643056e8d8c7459e48271d943a53ac4a4fff5c6ab62dfa069",
+      "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c"
+    },
+    "batches": [
+      {
+        "schemaVersion": 1,
+        "batchId": "batch-search-list-fixture-001",
+        "unitId": "runtime-work-unit-search-list:search:1",
+        "sourceRequestId": "runtime-request-search-list",
+        "kind": "search-page",
+        "status": "completed",
+        "startedAt": "2026-08-02T00:00:00.000Z",
+        "completedAt": "2026-08-02T00:00:00.000Z",
+        "subject": {
+          "keyword": "runtime fixture drill"
+        },
+        "scope": {
+          "collectorPageActionEvidence": {
+            "executionLineage": {
+              "executionAttemptOrdinal": 1,
+              "fences": {
+                "reservation": {
+                  "fencingToken": "runtime-reservation-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-reservation-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "supervisor": {
+                  "fencingToken": "runtime-supervisor-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-supervisor-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "workUnit": {
+                  "fencingToken": "runtime-work-unit-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-work-unit-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                }
+              },
+              "idempotencyKey": "runtime-idempotency-search-list",
+              "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+              "logicalLineageId": "runtime-logical-search-list",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+              "profile": {
+                "contextGeneration": 1,
+                "daemonInstanceId": "runtime-fixture-daemon",
+                "egressId": "runtime-fixture-egress",
+                "profileId": "runtime-fixture-profile",
+                "profileName": "runtime-fixture-profile"
+              },
+              "requestId": "runtime-request-search-list",
+              "schema": "collector.page-action-execution-lineage.v1",
+              "workUnitAttemptId": "runtime-work-attempt-search-list"
+            },
+            "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c",
+            "logicalLineage": {
+              "actionKind": "search-list",
+              "businessSubject": {
+                "kind": "search-list",
+                "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf",
+                "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f"
+              },
+              "collectionTaskId": "runtime-collection-task-search-list",
+              "logicalLineageId": "runtime-logical-search-list",
+              "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+              "pageActionId": "runtime-page-action-search-list",
+              "schema": "collector.logical-page-action-lineage.v1",
+              "workUnitId": "runtime-work-unit-search-list"
+            },
+            "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+            "pageActionId": "runtime-page-action-search-list",
+            "schema": "collector.page-action-batch-evidence.v1",
+            "search": {
+              "terminalReceipt": {
+                "collectionTaskId": "runtime-collection-task-search-list",
+                "completedPageActionIds": [
+                  "runtime-page-action-search-list"
+                ],
+                "completedSearchSegmentIds": [
+                  "runtime-search-segment-1"
+                ],
+                "eligibleCandidateSetHash": "sha256:cb627623104b84616f7c90cc8169420aa6b9abfd8896984a7416dc85df35959e",
+                "eligibleSearchHitObservationSetHash": "sha256:35c37fe554830a63171b7d69a24a371938d4085eb1cb9abdee48bf001b92bf33",
+                "lastCompletedPage": 1,
+                "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf",
+                "receiptHash": "sha256:00e93cbb93c87b1c80c006ac4bd18f53405b49947a492e6247bc39b14fa30a6e",
+                "schema": "search-query-terminal-receipt-v1",
+                "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f",
+                "terminalAt": "2026-08-02T00:00:00.000Z",
+                "terminalReason": "source-end"
+              }
+            },
+            "searchSegmentId": "runtime-search-segment-1"
+          },
+          "cursor": "search-page:v1:eyJuZXh0UGFnZSI6MX0",
+          "page": 1,
+          "pageSize": 60,
+          "remoteHasMore": false,
+          "remotePageSize": 60,
+          "remoteSort": "normal",
+          "requestSnapshot": {
+            "businessSort": "relevance",
+            "compatibilitySortInput": null,
+            "filterConfigSnapshotHash": "sha256:1257e229d427e2292bb5d14b607dbc65c12a8953df557645521ae7edb3f5193b",
+            "filterParams": {},
+            "pageSessionHash": "sha256:fe53e256225dc59d3cf620f82752dbfc71e86f7b201cce08e9cd0ba47630bdee",
+            "parameterSetHash": "sha256:7fa7c4ad4471c85ef792bf3e8dc8c7422812a0ad9b581da5d9bad0af603a5b56",
+            "remoteDescendOrder": true,
+            "remoteSortType": "normal",
+            "requestBusinessHash": "sha256:6ad8daa527375b8dd7fb9454aa7bfd83e136fb4a5378a8f301af382e42e6afa9",
+            "serializerCapabilitySnapshotHash": "sha256:f41f527ada830363ce537a2f0b8efcec478c7ddcbd01c5915309c0e66f2aa851"
+          },
+          "requestedScope": "page",
+          "searchRecoveryCut": {
+            "advertisementPolicy": "exclude-p4p",
+            "eligibleCandidateIdsHash": "sha256:eef9392d9faa8bb741d4c23f0701881f7b3b7c00479791ed06e8fbe33cef9092",
+            "executionAttemptOrdinal": 1,
+            "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c",
+            "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+            "logicalPage": 1,
+            "observationUniverseHash": "sha256:2551d880689ffabb9f0e480845a78da61aa6490beeefbdc96296ed4b18a35b41",
+            "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+            "pageActionId": "runtime-page-action-search-list",
+            "requestId": "runtime-request-search-list",
+            "responseBusinessHash": "sha256:dff5c6d780debf964b2a3e46a024cc5ab463e156f0aa7b0a78e00e595ed21101",
+            "schema": "collector.search-batch-recovery-cut.v1",
+            "searchSegmentId": "runtime-search-segment-1"
+          },
+          "sort": "relevance"
+        },
+        "observations": [
+          {
+            "candidateSelectionState": "selected",
+            "collectedAt": "2026-08-02T00:00:00.000Z",
+            "collectorPageActionEvidence": {
+              "executionLineage": {
+                "executionAttemptOrdinal": 1,
+                "fences": {
+                  "reservation": {
+                    "fencingToken": "runtime-reservation-fence",
+                    "generation": 1,
+                    "leaseId": "runtime-reservation-lease",
+                    "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                  },
+                  "supervisor": {
+                    "fencingToken": "runtime-supervisor-fence",
+                    "generation": 1,
+                    "leaseId": "runtime-supervisor-lease",
+                    "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                  },
+                  "workUnit": {
+                    "fencingToken": "runtime-work-unit-fence",
+                    "generation": 1,
+                    "leaseId": "runtime-work-unit-lease",
+                    "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                  }
+                },
+                "idempotencyKey": "runtime-idempotency-search-list",
+                "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+                "logicalLineageId": "runtime-logical-search-list",
+                "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+                "profile": {
+                  "contextGeneration": 1,
+                  "daemonInstanceId": "runtime-fixture-daemon",
+                  "egressId": "runtime-fixture-egress",
+                  "profileId": "runtime-fixture-profile",
+                  "profileName": "runtime-fixture-profile"
+                },
+                "requestId": "runtime-request-search-list",
+                "schema": "collector.page-action-execution-lineage.v1",
+                "workUnitAttemptId": "runtime-work-attempt-search-list"
+              },
+              "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c",
+              "logicalLineage": {
+                "actionKind": "search-list",
+                "businessSubject": {
+                  "kind": "search-list",
+                  "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf",
+                  "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f"
+                },
+                "collectionTaskId": "runtime-collection-task-search-list",
+                "logicalLineageId": "runtime-logical-search-list",
+                "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
+                "pageActionId": "runtime-page-action-search-list",
+                "schema": "collector.logical-page-action-lineage.v1",
+                "workUnitId": "runtime-work-unit-search-list"
+              },
+              "logicalLineageHash": "sha256:0358e1631ea2ac17b9749f75648252f98c13e626262220f014b3d6a7264260be",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
+              "pageActionId": "runtime-page-action-search-list",
+              "schema": "collector.page-action-batch-evidence.v1",
+              "search": {
+                "terminalReceipt": {
+                  "collectionTaskId": "runtime-collection-task-search-list",
+                  "completedPageActionIds": [
+                    "runtime-page-action-search-list"
+                  ],
+                  "completedSearchSegmentIds": [
+                    "runtime-search-segment-1"
+                  ],
+                  "eligibleCandidateSetHash": "sha256:cb627623104b84616f7c90cc8169420aa6b9abfd8896984a7416dc85df35959e",
+                  "eligibleSearchHitObservationSetHash": "sha256:35c37fe554830a63171b7d69a24a371938d4085eb1cb9abdee48bf001b92bf33",
+                  "lastCompletedPage": 1,
+                  "querySnapshotHash": "sha256:531f6cedb85038136a51ff3ad9c3903439cbb02d8c06a25e58a9f5f5aabac4cf",
+                  "receiptHash": "sha256:00e93cbb93c87b1c80c006ac4bd18f53405b49947a492e6247bc39b14fa30a6e",
+                  "schema": "search-query-terminal-receipt-v1",
+                  "searchQueryKeyHash": "sha256:d27244c5fb3b03948c73728c185108774b5f93a87343548be0551020fdf7285f",
+                  "terminalAt": "2026-08-02T00:00:00.000Z",
+                  "terminalReason": "source-end"
+                }
+              },
+              "searchSegmentId": "runtime-search-segment-1"
+            },
+            "offer": {
+              "bizType": null,
+              "demand": {
+                "orderCount": null,
+                "orderCountText": null,
+                "repurchaseRate": null,
+                "repurchaseRateText": null,
+                "shopReturnRate": null,
+                "shopReturnRateText": null,
+                "soldCount": null,
+                "soldCountText": null
+              },
+              "image": null,
+              "images": [],
+              "isP4P": false,
+              "location": {
+                "city": null,
+                "province": null
+              },
+              "offerId": "700000000101",
+              "price": {
+                "max": 12.5,
+                "min": 12.5,
+                "text": "¥12.50"
+              },
+              "purchase": {
+                "minimumQuantity": null,
+                "onePieceEligible": null,
+                "priceTiers": []
+              },
+              "supplier": {
+                "badgeImageUrl": null,
+                "loginId": "[redacted]",
+                "memberId": "fixture-chain-member-1",
+                "name": "Runtime Fixture Store",
+                "shopUrl": "https://fixture-search-store.1688.com/",
+                "tradeService": {
+                  "compositeScore": null,
+                  "consultationScore": null,
+                  "disputeScore": null,
+                  "goodsScore": null,
+                  "inspectionCreditUrl": null,
+                  "logisticsScore": null,
+                  "returnScore": null,
+                  "sameDesignUrl": null
+                },
+                "years": 3
+              },
+              "tags": [],
+              "title": "Runtime Fixture Drill",
+              "turnover": null,
+              "url": "https://detail.1688.com/offer/700000000101.html",
+              "verified": {
+                "business": false,
+                "factory": false,
+                "superFactory": false
+              }
+            },
+            "offerId": "700000000101",
+            "pageRank": 1,
+            "rawRank": 1,
+            "remoteSort": "normal",
+            "sourcePage": 1,
+            "sourcePresentation": {
+              "cellType": null,
+              "p4pDeclared": false,
+              "titleHtml": "Runtime Fixture Drill"
+            }
+          }
+        ],
+        "completeness": {
+          "requestedScope": "page",
+          "state": "complete",
+          "observedPages": [
+            1
+          ],
+          "failedPages": [],
+          "uniqueItems": 1
+        },
+        "duplicateObservations": [],
+        "warnings": [],
+        "errors": [],
+        "rawEvidenceRefs": [
+          "artifact:collector-raw-search-response-245ec4a749715be664540a9595fbddc49a44815de58f3c819eb68d7b392fa49d"
+        ],
+        "metrics": {
+          "capturedOffers": 1,
+          "deferredOffers": 0,
+          "duplicateOffers": 0,
+          "emissionLimit": 1,
+          "noProgressAttempts": 0,
+          "remotePageLimit": 20,
+          "replayedOffers": 0,
+          "requestSnapshots": 1,
+          "snapshotBytes": 2,
+          "snapshotPendingOffers": 0,
+          "uniqueNewOffers": 1,
+          "unrecoverablePendingOffers": 0
+        }
+      }
+    ],
+    "completedAt": "2026-08-02T00:00:00.000Z"
+  }
+}

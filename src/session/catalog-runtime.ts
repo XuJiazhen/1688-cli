@@ -1,10 +1,15 @@
 import type { Page } from 'playwright';
 import { CliError } from '../io/errors.js';
 import {
+  ALISITE_MODULE_API,
   STORE_CATALOG_COMPONENT_KEY,
 } from './alisite-module.js';
 import { isSafeSupplierMemberKey } from './qualification-capture.js';
 import type { StoreCatalogParseResult } from './alisite-module.js';
+import {
+  STORE_PROFILE_COMPONENT_KEY,
+  type StoreProfileSnapshot,
+} from './store-profile.js';
 
 export interface StoreCatalogRuntimeRequestInput {
   memberId: string;
@@ -57,17 +62,21 @@ export interface StoreSampleRuntimeResultV1 {
   pages: Array<{ page: number; parsed: StoreCatalogParseResult }>;
   uniqueOffers: StoreCatalogParseResult['offers'];
   categories: StoreCatalogParseResult['categories'];
-  profileObservation: {
-    memberId: string;
-    canonicalShopUrl: string;
-    observedAt: string;
-  };
+  profileObservation: StoreSampleProfileObservationV1 | null;
   cursor: StoreSampleCursorV1;
   taskCandidateEligible: false;
   evidenceUsage: 'baseline-evidence' | 'cache-seed-only';
   remoteRequests: number;
   failedPages: number[];
   errorCode: string | null;
+}
+
+export interface StoreSampleProfileObservationV1 {
+  memberId: string;
+  memberIdSource: StoreProfileSnapshot['source'];
+  canonicalShopUrl: string;
+  observedAt: string;
+  profile: StoreProfileSnapshot;
 }
 
 export async function collectBoundedStoreSampleV1(input: {
@@ -78,6 +87,7 @@ export async function collectBoundedStoreSampleV1(input: {
   lastPageInclusive: number;
   generation: string;
   baselineExpiresAt: string;
+  collectProfileObservation(): Promise<StoreSampleProfileObservationV1>;
   previousCursor?: StoreSampleCursorV1;
   now?: () => Date;
   collectPage(page: number): Promise<StoreCatalogParseResult>;
@@ -100,6 +110,12 @@ export async function collectBoundedStoreSampleV1(input: {
   } else {
     assertApprovedExpansionScope(input);
   }
+  const profileObservation = await input.collectProfileObservation();
+  assertStoreSampleProfileObservationV1(
+    profileObservation,
+    input.memberId,
+    input.canonicalShopUrl,
+  );
 
   const pages: StoreSampleRuntimeResultV1['pages'] = [];
   const uniqueOffers = new Map<string, StoreCatalogParseResult['offers'][number]>();
@@ -184,11 +200,7 @@ export async function collectBoundedStoreSampleV1(input: {
     pages,
     uniqueOffers: [...uniqueOffers.values()],
     categories,
-    profileObservation: {
-      memberId: input.memberId,
-      canonicalShopUrl: canonicalShopUrl(input.canonicalShopUrl),
-      observedAt,
-    },
+    profileObservation: structuredClone(profileObservation),
     cursor: {
       memberId: input.memberId,
       canonicalShopUrl: canonicalShopUrl(input.canonicalShopUrl),
@@ -222,6 +234,115 @@ export async function collectBoundedStoreSampleV1(input: {
     errorCode,
   };
   return Object.freeze(result);
+}
+
+export function assertStoreSampleProfileObservationV1(
+  observation: StoreSampleProfileObservationV1,
+  expectedMemberId: string,
+  expectedCanonicalShopUrl: string,
+): void {
+  const profile = observation?.profile;
+  const memberIdSource = observation?.memberIdSource;
+  let observedCanonicalShopUrl: string;
+  let expectedShopUrl: string;
+  let payloadShopUrl: string;
+  try {
+    observedCanonicalShopUrl = canonicalProfileShopUrl(
+      observation?.canonicalShopUrl,
+    );
+    expectedShopUrl = canonicalProfileShopUrl(expectedCanonicalShopUrl);
+    payloadShopUrl = canonicalProfileShopUrl(profile?.shopUrl.value);
+  } catch {
+    throw catalogProtocolError(
+      'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
+      'Store Sample requires an unambiguous same-member Wangpu header URL.',
+    );
+  }
+  if (
+    observation?.memberId !== expectedMemberId
+    || memberIdSource === undefined
+    || profile === undefined
+    || memberIdSource.api !== profile.source.api
+    || memberIdSource.componentKey !== profile.source.componentKey
+    || memberIdSource.parserVersion !== profile.source.parserVersion
+    || memberIdSource.rawRef !== profile.source.rawRef
+    || memberIdSource.sourceRef !== profile.source.sourceRef
+    || memberIdSource.fieldPath !== 'data.data.memberId'
+    || observedCanonicalShopUrl !== expectedShopUrl
+    || payloadShopUrl !== expectedShopUrl
+    || profile?.source.api !== ALISITE_MODULE_API
+    || profile.source.componentKey !== STORE_PROFILE_COMPONENT_KEY
+    || !profile.source.rawRef?.startsWith('artifact:')
+    || profile.name.availability !== 'available'
+    || typeof profile.name.value !== 'string'
+    || profile.name.value.trim().length === 0
+    || profile.name.source.api !== profile.source.api
+    || profile.name.source.componentKey !== profile.source.componentKey
+    || profile.name.source.parserVersion !== profile.source.parserVersion
+    || profile.name.source.rawRef !== profile.source.rawRef
+    || profile.name.source.fieldPath !== 'data.data.companyName'
+    || profile.shopUrl.availability !== 'available'
+    || typeof profile.shopUrl.value !== 'string'
+    || profile.shopUrl.source.api !== profile.source.api
+    || profile.shopUrl.source.componentKey !== profile.source.componentKey
+    || profile.shopUrl.source.parserVersion !== profile.source.parserVersion
+    || profile.shopUrl.source.rawRef !== profile.source.rawRef
+    || profile.shopUrl.source.fieldPath !== 'data.data.commonUrl.shopUrl'
+  ) {
+    throw catalogProtocolError(
+      'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
+      'Store Sample requires an archived same-member Wangpu header with name and shop URL.',
+    );
+  }
+}
+
+export function parseStoreProfileMemberAuthorityV1(
+  payload: unknown,
+  source: StoreProfileSnapshot['source'],
+): Pick<StoreSampleProfileObservationV1, 'memberId' | 'memberIdSource'> {
+  const root = recordValue(payload);
+  const envelope = recordValue(root?.['data']);
+  const header = recordValue(envelope?.['data']);
+  const memberId = header?.['memberId'];
+  if (typeof memberId !== 'string' || !isSafeSupplierMemberKey(memberId)) {
+    throw catalogProtocolError(
+      'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
+      'Store Sample requires member authority parsed from data.data.memberId.',
+    );
+  }
+  return {
+    memberId,
+    memberIdSource: {
+      ...source,
+      fieldPath: 'data.data.memberId',
+    },
+  };
+}
+
+function canonicalProfileShopUrl(value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    throw new TypeError('Store profile shop URL is missing.');
+  }
+  const url = new URL(value);
+  if (
+    url.protocol !== 'https:'
+    || !url.hostname.toLowerCase().endsWith('.1688.com')
+    || url.username !== ''
+    || url.password !== ''
+    || url.port !== ''
+    || url.search !== ''
+    || url.hash !== ''
+  ) {
+    throw new TypeError('Store profile shop URL is not canonical.');
+  }
+  url.hostname = url.hostname.toLowerCase();
+  return url.toString();
+}
+
+function recordValue(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }
 
 function storeSampleFailureCode(error: unknown): string {
@@ -313,12 +434,7 @@ function assertExpansionTotalsMatchBaseline(
 }
 
 function canonicalShopUrl(value: string): string {
-  const url = new URL(value);
-  if (url.protocol !== 'https:' || !/(?:^|\.)1688\.com$/i.test(url.hostname)) {
-    throw new TypeError('Store sample canonicalShopUrl must be an HTTPS 1688 URL.');
-  }
-  url.hash = '';
-  return url.toString();
+  return canonicalProfileShopUrl(value);
 }
 
 function catalogProtocolError(code: string, message: string): CliError {

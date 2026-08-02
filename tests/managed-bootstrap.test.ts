@@ -352,6 +352,8 @@ function pageActionFixture(
           searchQueryKeyHash: subject.searchQueryKeyHash!,
           searchSegmentId: 'segment-1',
           querySnapshotHash: subject.querySnapshotHash!,
+          searchQueryIdentity: 'query-1',
+          page: 1,
           keyword: 'fixture',
           filterConfigSnapshotId: 'filter-1',
           filterConfigSnapshotHash: hash('filter'),

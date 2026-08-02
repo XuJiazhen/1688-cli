@@ -1,0 +1,33 @@
+{
+  "schema": "collector.offer-source-sidecar.v1",
+  "source": "shop-card",
+  "offerId": "700000000101",
+  "memberId": "fixture-chain-member-1",
+  "correlatedOfferId": "700000000101",
+  "correlatedMemberId": "fixture-chain-member-1",
+  "pageActionId": "runtime-page-action-offer-detail",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+  "capturedAt": "2026-08-02T00:00:00.001Z",
+  "sanitizedRawPayload": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "offerId": "[redacted]",
+      "memberId": "fixture-chain-member-1",
+      "model": {
+        "shopName": "Runtime Fixture Offer Store",
+        "shopType": "factory",
+        "mainCategoryName": "Tools",
+        "shopUrl": "https://fixture-offer-store.1688.com/",
+        "tpYear": 3,
+        "shopData": [
+          {
+            "dataKey": "service score",
+            "dataValue": "4.8"
+          }
+        ]
+      }
+    }
+  }
+}

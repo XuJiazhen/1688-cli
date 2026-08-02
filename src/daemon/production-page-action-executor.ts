@@ -57,15 +57,26 @@ import {
 import { waitForCollectionPageAvailability } from '../session/recovery.js';
 import {
   collectBoundedStoreSampleV1,
+  assertStoreSampleProfileObservationV1,
+  parseStoreProfileMemberAuthorityV1,
   requestStoreCatalogFromPage,
   waitForStoreCatalogRuntime,
   type StoreSampleCursorV1,
+  type StoreSampleProfileObservationV1,
   type StoreSampleRuntimeResultV1,
 } from '../session/catalog-runtime.js';
 import {
   parseStoreCatalogModule,
   STORE_CATALOG_PARSER_VERSION,
 } from '../session/alisite-module.js';
+import {
+  mapStoreProfilePayload,
+  STORE_PROFILE_PARSER_VERSION,
+} from '../session/store-profile.js';
+import {
+  assertStoreProfilePayloadState,
+  captureStoreProfileForAction,
+} from '../session/store-profile-capture.js';
 import {
   createSearchTerminalReceiptV1,
   runCompiledSearchActionV1,
@@ -110,6 +121,7 @@ export interface ProductionPageActionExecutorOptions {
   idFactory?: () => string;
   pace?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
+  collectOfferOnPage?: typeof collectOfferOnPage;
 }
 
 interface IdentityArtifactV1 extends TrustedCanonicalShopIdentityV1 {
@@ -121,6 +133,46 @@ interface SearchParameterSourceArtifactV1 {
   intent: SearchIntentV1;
   filterSnapshot: SearchFilterConfigSnapshotV1;
   capabilitySnapshot: SearchSerializerCapabilitySnapshotV1;
+}
+
+/** Exact page authority shared by the signed draft and the daemon runtime. */
+export function resolveSearchActionStartPageV1(request: PageActionRequestV1): number {
+  if (request.action.kind !== 'search-list') {
+    throw new TypeError('Search page authority requires a search-list PageAction.');
+  }
+  if (request.action.request.page === 1) return 1;
+  if (request.action.recoveryHandle?.recoveryMode === 'safe-replay') {
+    return request.action.recoveryHandle.allowedNextPage;
+  }
+  throw new CliError(
+    9,
+    'SEARCH_DIRECT_BEGIN_PAGE_PARITY_NOT_VERIFIED',
+    'A page greater than 1 requires a signed safe-replay recovery handle until direct beginPage parity is enabled.',
+    {
+      category: 'contract',
+      retryable: false,
+      recoveryAction: 'use-page-one-or-safe-replay',
+    },
+  );
+}
+
+/** Offer core identity is authoritative and must agree with the signed target. */
+export function assertOfferCoreMemberIdentityV1(
+  offer: Readonly<{ supplier: Readonly<{ memberId: string | null }> }>,
+  expectedMemberId: string,
+): void {
+  if (offer.supplier.memberId !== expectedMemberId) {
+    throw new CliError(
+      9,
+      'OFFER_CORE_MEMBER_MISMATCH',
+      'Offer core supplier identity differs from the signed PageAction member.',
+      {
+        category: 'protocol',
+        retryable: false,
+        recoveryAction: 'reject-cross-member-offer-evidence',
+      },
+    );
+  }
 }
 
 export interface SearchRecoveryArchivePageV1 {
@@ -161,6 +213,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
   private readonly pace: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   private readonly random: () => number;
   private readonly storeSampleFreshnessMs: number;
+  private readonly collectOfferOnPage: typeof collectOfferOnPage;
 
   constructor(private readonly options: ProductionPageActionExecutorOptions) {
     if (!path.isAbsolute(options.artifactDirectory)) {
@@ -170,6 +223,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
     this.idFactory = options.idFactory ?? randomUUID;
     this.pace = options.pace ?? abortableDelay;
     this.random = options.random ?? Math.random;
+    this.collectOfferOnPage = options.collectOfferOnPage ?? collectOfferOnPage;
     this.storeSampleFreshnessMs = options.storeSampleFreshnessMs ?? 24 * 60 * 60_000;
   }
 
@@ -256,12 +310,54 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
     }
     const batchIds = new Map<number, string>();
     const evidenceRefsByAttempt = new Map<number, string[]>();
+    const selectedCandidateIds = new Set<string>();
+    recoveryArchive?.pages.forEach((page) => {
+      verifiedSearchBatchCutV1(
+        page.batch,
+        parameterSet.advertisementPolicy,
+        false,
+      ).eligibleCandidateIds.forEach((offerId) => selectedCandidateIds.add(offerId));
+    });
+    if (selectedCandidateIds.size > parameterSet.maxOffers) {
+      throw new CliError(
+        9,
+        'SEARCH_RECOVERY_ARCHIVE_INVALID',
+        'Search recovery archive exceeds the frozen maxOffers universe.',
+        { category: 'contract', retryable: false, recoveryAction: 'rebuild-recovery-receipt' },
+      );
+    }
+    const selectionStatesByObservation = new Map<
+      string,
+      'selected' | 'promoted-excluded' | 'offer-limit-overflow'
+    >();
+    const selectionStates = (
+      capture: SearchRuntimeResultV1['pages'][number],
+    ) => capture.page.offers.map((offer, index) => {
+      const key = `${capture.page.responseBusinessHash}:${index}`;
+      const existing = selectionStatesByObservation.get(key);
+      if (existing !== undefined) return existing;
+      let state: 'selected' | 'promoted-excluded' | 'offer-limit-overflow';
+      if (parameterSet.advertisementPolicy === 'exclude-p4p' && offer.isP4P) {
+        state = 'promoted-excluded';
+      } else if (
+        selectedCandidateIds.has(offer.offerId)
+        || selectedCandidateIds.size < parameterSet.maxOffers
+      ) {
+        selectedCandidateIds.add(offer.offerId);
+        state = 'selected';
+      } else {
+        state = 'offer-limit-overflow';
+      }
+      selectionStatesByObservation.set(key, state);
+      return state;
+    });
     const buildSearchBatch = (
       capture: SearchRuntimeResultV1['pages'][number],
       binding: SearchPageAttemptBindingV1,
       completedAt: string,
-    ) => bindSearchBatchRecoveryCutV1({
-      batch: normalizeCollectionBatch({ ...createSearchPageBatch({
+    ) => {
+      const states = selectionStates(capture);
+      const baseBatch = normalizeCollectionBatch({ ...createSearchPageBatch({
       unit: {
         schemaVersion: 1,
         unitId: `${request.logicalLineage.workUnitId}:search:${capture.compiledRequest.page}`,
@@ -304,7 +400,17 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
         remoteDescendOrder: parameterSet.descendOrder,
         filterParams: capture.sanitizedRequest.filterParams,
       },
-      }), sourceRequestId: request.requestId }),
+      }), sourceRequestId: request.requestId });
+      const batch = normalizeCollectionBatch({
+        ...baseBatch,
+        observations: baseBatch.observations.map((observation) => ({
+          ...observation,
+          candidateSelectionState:
+            states[Number(observation['pageRank']) - 1],
+        })),
+      });
+      return bindSearchBatchRecoveryCutV1({
+      batch,
       logicalPage: capture.compiledRequest.page,
       responseBusinessHash: capture.page.responseBusinessHash,
       advertisementPolicy: parameterSet.advertisementPolicy,
@@ -322,10 +428,11 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
             predecessorExecutionAttemptReceipt:
               request.predecessorExecutionAttemptReceipt,
           }),
-    });
+      });
+    };
     const runtime = await runCompiledSearchActionV1({
       parameterSet,
-      startPage: request.action.request.requestedStartPage,
+      startPage: resolveSearchActionStartPageV1(request),
       ...(recovery?.recoveryMode === 'safe-replay'
         ? { replayThroughPage: recovery.checkpointPage }
         : {}),
@@ -466,7 +573,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
             request.pageActionId,
           ],
           result: runtime,
-          eligibleCandidateIds: terminalObservations.map((item) => item.offerId),
+          eligibleCandidateIds: runtime.offers.map((offer) => offer.offerId),
           eligibleObservations: terminalObservations,
           advertisementPolicy: parameterSet.advertisementPolicy,
           terminalAt: completedAt,
@@ -514,23 +621,31 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
       remoteLedger.confirmAdmission(ordinal, admission);
       startedAt ||= admission.admittedAt;
       try {
-        offer = await collectOfferOnPage(singlePageContext(scope.page as Page), {
+        offer = await this.collectOfferOnPage(singlePageContext(scope.page as Page), {
           offerId,
           // The daemon retains this already-headful Page for InterventionSession;
           // the Collector must never wait/retry a challenge itself.
           headed: false,
-          onRawComponent: async (component, rawPayload) => {
-            const archive = offerRawArchiveDescriptor(component);
-            const ref = await this.persistRawArchive({
-              ...archive,
-              request,
-              ordinal,
-              requestBusinessHash,
-              payload: rawPayload,
-            });
-            rawEvidenceRefs.push(ref);
-          },
         });
+        assertOfferCoreMemberIdentityV1(offer, memberId);
+        await scope.assertAuthorized('checkpoint');
+        const onRawComponent = async (
+          component: 'core' | 'sku' | 'detail' | 'shop-card' | 'consignment',
+          payload: unknown,
+        ): Promise<void> => {
+          const descriptor = offerRawArchiveDescriptor(component);
+          const ref = await this.persistRawArchive({
+            ...descriptor,
+            request,
+            ordinal,
+            requestBusinessHash,
+            payload,
+          });
+          rawEvidenceRefs.push(ref);
+        };
+        for (const [component, payload] of stagedOfferRawComponentsV1(offer)) {
+          await onRawComponent(component, payload);
+        }
         await scope.assertAuthorized('checkpoint');
         successfulOrdinal = ordinal;
         componentEvidenceRefs = [...rawEvidenceRefs];
@@ -855,7 +970,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
     const page = scope.page as Page;
     const startedAt = this.now().toISOString();
     const evidenceRefs = new Set<string>();
-    let runtimeInitialized = false;
+    let profileObservation: StoreSampleProfileObservationV1 | null = null;
     const resolvedCursor = action.mode === 'approved-expansion'
       ? await resolveStoreSampleCursorArtifactV1({
           artifactDirectory: this.options.artifactDirectory,
@@ -881,46 +996,116 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
         ? {}
         : { previousCursor: cursorInput.previousCursor }),
       now: this.now,
-      collectPage: async (logicalPage) => {
-        throwIfAborted(signal);
-        if (!runtimeInitialized) {
-          const navigationUrl = buildStoreCatalogUrl(
-            identity.canonicalShopUrl,
-            { sort: 'wangpu_score' },
-          );
-          const navigationHash = canonicalCollectorSha256V1({
-            operation: 'store-navigation',
-            memberId: identity.memberId,
+      collectProfileObservation: async () => {
+        const logicalPage = action.pageScope.firstPage;
+        const navigationUrl = buildStoreCatalogUrl(
+          identity.canonicalShopUrl,
+          { sort: 'wangpu_score' },
+        );
+        const navigationHash = canonicalCollectorSha256V1({
+          operation: 'store-navigation-and-header',
+          memberId: identity.memberId,
+          logicalPage,
+          navigationUrl,
+        });
+        for (let retry = 0; retry < 3; retry++) {
+          const ordinal = remoteLedger.nextOrdinal();
+          const rawEvidenceRefs: string[] = [];
+          const receipt = await scope.admitRemoteAttempt({
+            remoteRequestAttemptId: `remote-${request.pageActionExecutionAttemptId}-${ordinal}`,
+            ordinal,
             logicalPage,
-            navigationUrl,
+            purpose: 'discovery',
+            requestBusinessHash: navigationHash,
           });
-          for (let retry = 0; retry < 3; retry++) {
-            const ordinal = remoteLedger.nextOrdinal();
-            const receipt = await scope.admitRemoteAttempt({
-              remoteRequestAttemptId: `remote-${request.pageActionExecutionAttemptId}-${ordinal}`,
-              ordinal,
-              logicalPage,
-              purpose: 'discovery',
-              requestBusinessHash: navigationHash,
-            });
-            remoteLedger.confirmAdmission(ordinal, receipt);
-            try {
-              await page.goto(navigationUrl, {
-                waitUntil: 'domcontentloaded', timeout: 30_000,
-              });
-              await waitForCollectionPageAvailability(page, { headed: false, signal });
-              await waitForStoreCatalogRuntime(page, { timeoutMs: 15_000, signal });
-              remoteLedger.recordSuccess(ordinal, this.now().toISOString(), []);
-              runtimeInitialized = true;
-              break;
-            } catch (error) {
-              const typed = typedNavigationFailure(error, 'STORE_NAVIGATION_FAILED');
-              remoteLedger.recordFailure(ordinal, typed, this.now().toISOString());
-              if (!isRetryableCollectorBoundary(typed) || retry === 2) throw typed;
-              await this.pace(sampleDelay(this.random, 3_000, 10_000), signal);
+          remoteLedger.confirmAdmission(ordinal, receipt);
+          try {
+            const captured = await captureStoreProfileForAction(
+              page,
+              { memberId: identity.memberId, timeoutMs: 15_000 },
+              async () => {
+                await page.goto(navigationUrl, {
+                  waitUntil: 'domcontentloaded', timeout: 30_000,
+                });
+                await waitForCollectionPageAvailability(page, { headed: false, signal });
+                await waitForStoreCatalogRuntime(page, { timeoutMs: 15_000, signal });
+              },
+            );
+            if (captured.captured === null) {
+              throw new CliError(
+                9,
+                'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
+                'Store navigation did not expose the required Wangpu header payload.',
+                {
+                  category: 'protocol',
+                  retryable: false,
+                  recoveryAction: 'refresh-store-header-capture',
+                },
+              );
             }
+            const profileEvidenceRef = await this.persistRawArchive({
+              kind: 'store-response',
+              parserRevision: STORE_PROFILE_PARSER_VERSION,
+              request,
+              ordinal,
+              requestBusinessHash: navigationHash,
+              payload: captured.captured.payload,
+            });
+            rawEvidenceRefs.push(profileEvidenceRef);
+            evidenceRefs.add(profileEvidenceRef);
+            assertStoreProfilePayloadState(
+              captured.captured.payload,
+              captured.diagnostics,
+            );
+            const profile = mapStoreProfilePayload(
+              captured.captured.payload,
+              captured.captured.collectedAt,
+              {
+                sourceRef: captured.captured.sourceRef,
+                rawRef: profileEvidenceRef,
+              },
+            );
+            const memberAuthority = parseStoreProfileMemberAuthorityV1(
+              captured.captured.payload,
+              profile.source,
+            );
+            const capturedProfileObservation: StoreSampleProfileObservationV1 = {
+              ...memberAuthority,
+              canonicalShopUrl: profile.shopUrl.value ?? '',
+              observedAt: captured.captured.collectedAt,
+              profile,
+            };
+            assertStoreSampleProfileObservationV1(
+              capturedProfileObservation,
+              identity.memberId,
+              identity.canonicalShopUrl,
+            );
+            profileObservation = capturedProfileObservation;
+            await scope.assertAuthorized('checkpoint');
+            remoteLedger.recordSuccess(
+              ordinal,
+              captured.captured.collectedAt,
+              rawEvidenceRefs,
+            );
+            return profileObservation;
+          } catch (error) {
+            const typed = error instanceof CliError
+              ? error
+              : typedNavigationFailure(error, 'STORE_NAVIGATION_FAILED');
+            remoteLedger.recordFailure(
+              ordinal,
+              typed,
+              this.now().toISOString(),
+              rawEvidenceRefs,
+            );
+            if (!isRetryableCollectorBoundary(typed) || retry === 2) throw typed;
+            await this.pace(sampleDelay(this.random, 3_000, 10_000), signal);
           }
         }
+        throw new Error('Store navigation retry loop ended without header evidence.');
+      },
+      collectPage: async (logicalPage) => {
+        throwIfAborted(signal);
         const requestBusinessHash = canonicalCollectorSha256V1({
           operation: 'store-runtime-request',
           memberId: identity.memberId,
@@ -1016,6 +1201,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
         error,
         remoteRequests: terminalEvidence.attempts.length,
         observedAt: startedAt,
+        profileObservation,
       });
       remoteLedger.recordBatches(createBoundedStoreSampleBatchesV1({
         result: fallback,
@@ -1230,6 +1416,10 @@ interface VerifiedSearchBatchCutV1 {
     offerId: string;
     isP4P: boolean;
     responseBusinessHash: string;
+    candidateSelectionState?:
+      | 'selected'
+      | 'promoted-excluded'
+      | 'offer-limit-overflow';
   }>;
 }
 
@@ -1254,8 +1444,9 @@ export function bindSearchBatchRecoveryCutV1(input: {
     input.logicalPage,
     input.responseBusinessHash,
   );
-  const eligibleObservations = observations.filter((item) =>
-    input.advertisementPolicy === 'archive-and-mark' || !item.isP4P
+  const eligibleObservations = terminalEligibleSearchObservationsV1(
+    observations,
+    input.advertisementPolicy,
   );
   const cut: SearchBatchRecoveryCutV1 = {
     schema: 'collector.search-batch-recovery-cut.v1',
@@ -1420,8 +1611,9 @@ function verifiedSearchBatchCutV1(
     cut.logicalPage,
     cut.responseBusinessHash,
   );
-  const eligibleObservations = observations.filter((item) =>
-    cut.advertisementPolicy === 'archive-and-mark' || !item.isP4P
+  const eligibleObservations = terminalEligibleSearchObservationsV1(
+    observations,
+    cut.advertisementPolicy,
   );
   const eligibleCandidateIds = uniqueInOrderV1(
     eligibleObservations.map((item) => item.offerId),
@@ -1440,7 +1632,8 @@ function searchBatchObservationUniverseV1(
   logicalPage: number,
   responseBusinessHash: string,
 ): VerifiedSearchBatchCutV1['eligibleObservations'] {
-  return batch.observations.map((observation, index) => {
+  let previousPageRank = 0;
+  return batch.observations.map((observation) => {
     const offer = observation['offer'];
     const offerRecord = offer !== null && typeof offer === 'object' && !Array.isArray(offer)
       ? offer as Record<string, unknown>
@@ -1449,24 +1642,50 @@ function searchBatchObservationUniverseV1(
     const sourcePage = observation['sourcePage'];
     const pageRank = observation['pageRank'];
     const rawRank = observation['rawRank'];
+    const candidateSelectionState = observation['candidateSelectionState'];
     if (
       !/^\d+$/u.test(offerId)
       || sourcePage !== logicalPage
       || !Number.isSafeInteger(pageRank)
-      || Number(pageRank) !== index + 1
+      || Number(pageRank) <= previousPageRank
       || !Number.isSafeInteger(rawRank)
       || Number(rawRank) < Number(pageRank)
       || typeof offerRecord?.['isP4P'] !== 'boolean'
+      || (
+        candidateSelectionState !== undefined
+        && candidateSelectionState !== 'selected'
+        && candidateSelectionState !== 'promoted-excluded'
+        && candidateSelectionState !== 'offer-limit-overflow'
+      )
     ) {
       throw new TypeError('Search recovery Batch observation has invalid page/rank/Offer identity.');
     }
+    previousPageRank = Number(pageRank);
     return {
       logicalPage,
       sourceOrdinal: Number(pageRank) - 1,
       offerId,
       isP4P: offerRecord['isP4P'] as boolean,
       responseBusinessHash,
+      ...(candidateSelectionState === undefined
+        ? {}
+        : { candidateSelectionState }),
     };
+  });
+}
+
+function terminalEligibleSearchObservationsV1(
+  observations: VerifiedSearchBatchCutV1['eligibleObservations'],
+  advertisementPolicy: CanonicalSearchParameterSetV1['advertisementPolicy'],
+): VerifiedSearchBatchCutV1['eligibleObservations'] {
+  return observations.flatMap((observation) => {
+    if (
+      observation.candidateSelectionState === 'offer-limit-overflow'
+      || observation.candidateSelectionState === 'promoted-excluded'
+      || (advertisementPolicy === 'exclude-p4p' && observation.isP4P)
+    ) return [];
+    const { candidateSelectionState: _selectionState, ...terminal } = observation;
+    return [terminal];
   });
 }
 
@@ -1773,6 +1992,7 @@ function failedStoreSampleResultV1(input: {
   error: unknown;
   remoteRequests: number;
   observedAt: string;
+  profileObservation: StoreSampleProfileObservationV1 | null;
 }): StoreSampleRuntimeResultV1 {
   if (input.request.action.kind !== 'store-sample') {
     throw new TypeError('Failed Store Sample materialization requires a Store action.');
@@ -1785,11 +2005,9 @@ function failedStoreSampleResultV1(input: {
     pages: [],
     uniqueOffers: [],
     categories: [],
-    profileObservation: {
-      memberId: input.identity.memberId,
-      canonicalShopUrl: canonical1688ShopUrl(input.identity.canonicalShopUrl),
-      observedAt: input.observedAt,
-    },
+    profileObservation: input.profileObservation === null
+      ? null
+      : structuredClone(input.profileObservation),
     cursor: {
       memberId: input.identity.memberId,
       canonicalShopUrl: canonical1688ShopUrl(input.identity.canonicalShopUrl),
@@ -2370,6 +2588,48 @@ function typedNavigationFailure(error: unknown, code: string): CliError {
     recoveryAction: 'retry-admitted-navigation',
     cause: error instanceof Error ? error.name : 'UnknownNavigationFailure',
   });
+}
+
+function stagedOfferRawComponentsV1(
+  offer: Awaited<ReturnType<typeof collectOfferOnPage>>,
+): Array<readonly [
+  'core' | 'sku' | 'detail' | 'shop-card' | 'consignment',
+  unknown,
+]> {
+  const captured = readOfferSourceCaptureEvidenceV1(offer);
+  if (
+    captured === null
+    || captured.components.core === null
+    || captured.components.core === undefined
+    || captured.components.sku === null
+    || captured.components.sku === undefined
+  ) {
+    throw new CliError(
+      9,
+      'OFFER_RAW_CAPTURE_INCOMPLETE',
+      'Offer authority passed, but required staged core/SKU evidence is unavailable.',
+      {
+        category: 'protocol',
+        retryable: false,
+        recoveryAction: 'recollect-offer-with-staged-raw-evidence',
+      },
+    );
+  }
+  const components: Array<readonly [
+    'core' | 'sku' | 'detail' | 'shop-card' | 'consignment',
+    unknown,
+  ]> = [
+    ['core', captured.components.core],
+    ['sku', captured.components.sku],
+    ['detail', captured.components.detail],
+    ['shop-card', captured.shopCard.rawPayload],
+    ['consignment', captured.consignment.rawPayload],
+  ];
+  return components.flatMap(([component, payload]) =>
+    payload === null || payload === undefined
+      ? []
+      : [[component, payload] as const]
+  );
 }
 
 function offerRawArchiveDescriptor(

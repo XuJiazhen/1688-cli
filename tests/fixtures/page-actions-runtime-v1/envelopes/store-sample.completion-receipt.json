@@ -1,0 +1,1198 @@
+{
+  "schema": "collector.page-action.completion-receipt.v1",
+  "completionReceiptId": "completion-receipt-store-sample-fixture-005",
+  "completionReceiptHash": "sha256:c60e44c9b856f94e28339fd5f20c6ad854322af4e9a2198f43195cdf52d2f6ed",
+  "pageActionId": "runtime-page-action-store-sample",
+  "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+  "logicalLineage": {
+    "schema": "collector.logical-page-action-lineage.v1",
+    "logicalLineageId": "runtime-logical-store-sample",
+    "collectionTaskId": "runtime-collection-task-store-sample",
+    "workUnitId": "runtime-work-unit-store-sample",
+    "pageActionId": "runtime-page-action-store-sample",
+    "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+    "actionKind": "store-sample",
+    "businessSubject": {
+      "kind": "store-sample",
+      "memberId": "fixture-chain-member-1",
+      "canonicalShopIdentityReceiptId": "runtime-store-identity",
+      "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
+      "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
+    }
+  },
+  "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+  "actionKind": "store-sample",
+  "status": "completed",
+  "terminal": true,
+  "executionAttemptReceiptRefs": [
+    {
+      "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+      "executionAttemptOrdinal": 1,
+      "receiptId": "execution-receipt-store-sample-fixture-004",
+      "receiptHash": "sha256:05fcf842552cc87468f967c50c97b1d661c27ab82f2e59c40f0b2850c101f890",
+      "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121"
+    }
+  ],
+  "finalizedByExecutionRef": {
+    "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+    "executionAttemptOrdinal": 1,
+    "receiptId": "execution-receipt-store-sample-fixture-004",
+    "receiptHash": "sha256:05fcf842552cc87468f967c50c97b1d661c27ab82f2e59c40f0b2850c101f890",
+    "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121"
+  },
+  "batches": [
+    {
+      "schemaVersion": 1,
+      "batchId": "batch-store-sample-fixture-001",
+      "unitId": "runtime-work-unit-store-sample",
+      "sourceRequestId": "runtime-request-store-sample",
+      "kind": "store-catalog",
+      "status": "completed",
+      "startedAt": "2026-08-02T00:00:00.000Z",
+      "completedAt": "2026-08-02T00:00:00.000Z",
+      "subject": {
+        "supplier": {
+          "memberId": "fixture-chain-member-1",
+          "shopUrl": "https://fixture-store.1688.com/"
+        }
+      },
+      "scope": {
+        "checkpointState": "exhausted",
+        "collectorPageActionEvidence": {
+          "executionLineage": {
+            "executionAttemptOrdinal": 1,
+            "fences": {
+              "reservation": {
+                "fencingToken": "runtime-reservation-fence",
+                "generation": 1,
+                "leaseId": "runtime-reservation-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "supervisor": {
+                "fencingToken": "runtime-supervisor-fence",
+                "generation": 1,
+                "leaseId": "runtime-supervisor-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "workUnit": {
+                "fencingToken": "runtime-work-unit-fence",
+                "generation": 1,
+                "leaseId": "runtime-work-unit-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              }
+            },
+            "idempotencyKey": "runtime-idempotency-store-sample",
+            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageId": "runtime-logical-store-sample",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+            "profile": {
+              "contextGeneration": 1,
+              "daemonInstanceId": "runtime-fixture-daemon",
+              "egressId": "runtime-fixture-egress",
+              "profileId": "runtime-fixture-profile",
+              "profileName": "runtime-fixture-profile"
+            },
+            "requestId": "runtime-request-store-sample",
+            "schema": "collector.page-action-execution-lineage.v1",
+            "workUnitAttemptId": "runtime-work-attempt-store-sample"
+          },
+          "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+          "logicalLineage": {
+            "actionKind": "store-sample",
+            "businessSubject": {
+              "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
+              "canonicalShopIdentityReceiptId": "runtime-store-identity",
+              "kind": "store-sample",
+              "memberId": "fixture-chain-member-1",
+              "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
+            },
+            "collectionTaskId": "runtime-collection-task-store-sample",
+            "logicalLineageId": "runtime-logical-store-sample",
+            "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+            "pageActionId": "runtime-page-action-store-sample",
+            "schema": "collector.logical-page-action-lineage.v1",
+            "workUnitId": "runtime-work-unit-store-sample"
+          },
+          "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+          "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+          "pageActionId": "runtime-page-action-store-sample",
+          "schema": "collector.page-action-batch-evidence.v1",
+          "storeSample": {
+            "cursor": {
+              "baselineExpiresAt": "2026-08-03T00:00:00.000Z",
+              "baselineObservedAt": "2026-08-02T00:00:00.000Z",
+              "canonicalShopUrl": "https://fixture-store.1688.com/",
+              "categoriesObservedAt": "2026-08-02T00:00:00.000Z",
+              "checkpointState": "exhausted",
+              "count": 30,
+              "exhausted": true,
+              "generation": "runtime-execution-attempt-store-sample",
+              "memberId": "fixture-chain-member-1",
+              "nextPage": null,
+              "observedPages": [
+                1,
+                2,
+                3
+              ],
+              "sortType": "wangpu_score",
+              "sourceOfferCount": 90,
+              "sourceTotalPages": 3
+            },
+            "evidenceUsage": "baseline-evidence"
+          }
+        },
+        "evidenceUsage": "baseline-evidence",
+        "generation": "runtime-execution-attempt-store-sample",
+        "mode": "phase-1-bounded",
+        "nextPage": null,
+        "observedPages": [
+          1,
+          2,
+          3
+        ],
+        "requestedScope": "bounded-pages"
+      },
+      "observations": [
+        {
+          "absolutePosition": 1,
+          "categoryId": null,
+          "collectorPageActionEvidence": {
+            "executionLineage": {
+              "executionAttemptOrdinal": 1,
+              "fences": {
+                "reservation": {
+                  "fencingToken": "runtime-reservation-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-reservation-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "supervisor": {
+                  "fencingToken": "runtime-supervisor-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-supervisor-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "workUnit": {
+                  "fencingToken": "runtime-work-unit-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-work-unit-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                }
+              },
+              "idempotencyKey": "runtime-idempotency-store-sample",
+              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageId": "runtime-logical-store-sample",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+              "profile": {
+                "contextGeneration": 1,
+                "daemonInstanceId": "runtime-fixture-daemon",
+                "egressId": "runtime-fixture-egress",
+                "profileId": "runtime-fixture-profile",
+                "profileName": "runtime-fixture-profile"
+              },
+              "requestId": "runtime-request-store-sample",
+              "schema": "collector.page-action-execution-lineage.v1",
+              "workUnitAttemptId": "runtime-work-attempt-store-sample"
+            },
+            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "logicalLineage": {
+              "actionKind": "store-sample",
+              "businessSubject": {
+                "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
+                "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "kind": "store-sample",
+                "memberId": "fixture-chain-member-1",
+                "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
+              },
+              "collectionTaskId": "runtime-collection-task-store-sample",
+              "logicalLineageId": "runtime-logical-store-sample",
+              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionId": "runtime-page-action-store-sample",
+              "schema": "collector.logical-page-action-lineage.v1",
+              "workUnitId": "runtime-work-unit-store-sample"
+            },
+            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+            "pageActionId": "runtime-page-action-store-sample",
+            "schema": "collector.page-action-batch-evidence.v1",
+            "storeSample": {
+              "cursor": {
+                "baselineExpiresAt": "2026-08-03T00:00:00.000Z",
+                "baselineObservedAt": "2026-08-02T00:00:00.000Z",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "categoriesObservedAt": "2026-08-02T00:00:00.000Z",
+                "checkpointState": "exhausted",
+                "count": 30,
+                "exhausted": true,
+                "generation": "runtime-execution-attempt-store-sample",
+                "memberId": "fixture-chain-member-1",
+                "nextPage": null,
+                "observedPages": [
+                  1,
+                  2,
+                  3
+                ],
+                "sortType": "wangpu_score",
+                "sourceOfferCount": 90,
+                "sourceTotalPages": 3
+              },
+              "evidenceUsage": "baseline-evidence"
+            }
+          },
+          "evidenceUsage": "baseline-evidence",
+          "imageUrl": null,
+          "memberId": "fixture-chain-member-1",
+          "offerId": "700000000201",
+          "page": 1,
+          "pagePosition": 1,
+          "price": null,
+          "quantityBegin": null,
+          "sales": {
+            "bookedCount": null,
+            "modelAgentBookedCount": null,
+            "modelBookedCount": null,
+            "modelQuantitySumMonth": null,
+            "modelSaleQuantity": null,
+            "ninetySaleQuantity": null,
+            "saleQuantity": null,
+            "thirtySaleQuantity": null,
+            "vagueSaleQuantity": null
+          },
+          "storeSample": true,
+          "taskCandidateEligible": false,
+          "title": "Runtime Fixture Store Offer 1",
+          "unit": null,
+          "url": "https://detail.1688.com/offer/700000000201.html"
+        },
+        {
+          "absolutePosition": 31,
+          "categoryId": null,
+          "evidenceUsage": "baseline-evidence",
+          "imageUrl": null,
+          "memberId": "fixture-chain-member-1",
+          "offerId": "700000000202",
+          "page": 2,
+          "pagePosition": 1,
+          "price": null,
+          "quantityBegin": null,
+          "sales": {
+            "bookedCount": null,
+            "modelAgentBookedCount": null,
+            "modelBookedCount": null,
+            "modelQuantitySumMonth": null,
+            "modelSaleQuantity": null,
+            "ninetySaleQuantity": null,
+            "saleQuantity": null,
+            "thirtySaleQuantity": null,
+            "vagueSaleQuantity": null
+          },
+          "storeSample": true,
+          "taskCandidateEligible": false,
+          "title": "Runtime Fixture Store Offer 2",
+          "unit": null,
+          "url": "https://detail.1688.com/offer/700000000202.html"
+        },
+        {
+          "absolutePosition": 61,
+          "categoryId": null,
+          "evidenceUsage": "baseline-evidence",
+          "imageUrl": null,
+          "memberId": "fixture-chain-member-1",
+          "offerId": "700000000203",
+          "page": 3,
+          "pagePosition": 1,
+          "price": null,
+          "quantityBegin": null,
+          "sales": {
+            "bookedCount": null,
+            "modelAgentBookedCount": null,
+            "modelBookedCount": null,
+            "modelQuantitySumMonth": null,
+            "modelSaleQuantity": null,
+            "ninetySaleQuantity": null,
+            "saleQuantity": null,
+            "thirtySaleQuantity": null,
+            "vagueSaleQuantity": null
+          },
+          "storeSample": true,
+          "taskCandidateEligible": false,
+          "title": "Runtime Fixture Store Offer 3",
+          "unit": null,
+          "url": "https://detail.1688.com/offer/700000000203.html"
+        }
+      ],
+      "completeness": {
+        "requestedScope": "bounded-pages",
+        "state": "complete",
+        "observedPages": [
+          1,
+          2,
+          3
+        ],
+        "failedPages": [],
+        "expectedItems": 90,
+        "uniqueItems": 3
+      },
+      "duplicateObservations": [],
+      "warnings": [],
+      "errors": [],
+      "rawEvidenceRefs": [
+        "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+        "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+        "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
+        "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+      ],
+      "metrics": {
+        "candidatesPublished": 0,
+        "remoteRequests": 4,
+        "uniqueCatalogOffers": 3
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "batchId": "batch-store-sample-fixture-002",
+      "unitId": "runtime-work-unit-store-sample",
+      "sourceRequestId": "runtime-request-store-sample",
+      "kind": "store-categories",
+      "status": "completed",
+      "startedAt": "2026-08-02T00:00:00.000Z",
+      "completedAt": "2026-08-02T00:00:00.000Z",
+      "subject": {
+        "supplier": {
+          "memberId": "fixture-chain-member-1",
+          "shopUrl": "https://fixture-store.1688.com/"
+        }
+      },
+      "scope": {
+        "checkpointState": "exhausted",
+        "collectorPageActionEvidence": {
+          "executionLineage": {
+            "executionAttemptOrdinal": 1,
+            "fences": {
+              "reservation": {
+                "fencingToken": "runtime-reservation-fence",
+                "generation": 1,
+                "leaseId": "runtime-reservation-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "supervisor": {
+                "fencingToken": "runtime-supervisor-fence",
+                "generation": 1,
+                "leaseId": "runtime-supervisor-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "workUnit": {
+                "fencingToken": "runtime-work-unit-fence",
+                "generation": 1,
+                "leaseId": "runtime-work-unit-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              }
+            },
+            "idempotencyKey": "runtime-idempotency-store-sample",
+            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageId": "runtime-logical-store-sample",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+            "profile": {
+              "contextGeneration": 1,
+              "daemonInstanceId": "runtime-fixture-daemon",
+              "egressId": "runtime-fixture-egress",
+              "profileId": "runtime-fixture-profile",
+              "profileName": "runtime-fixture-profile"
+            },
+            "requestId": "runtime-request-store-sample",
+            "schema": "collector.page-action-execution-lineage.v1",
+            "workUnitAttemptId": "runtime-work-attempt-store-sample"
+          },
+          "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+          "logicalLineage": {
+            "actionKind": "store-sample",
+            "businessSubject": {
+              "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
+              "canonicalShopIdentityReceiptId": "runtime-store-identity",
+              "kind": "store-sample",
+              "memberId": "fixture-chain-member-1",
+              "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
+            },
+            "collectionTaskId": "runtime-collection-task-store-sample",
+            "logicalLineageId": "runtime-logical-store-sample",
+            "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+            "pageActionId": "runtime-page-action-store-sample",
+            "schema": "collector.logical-page-action-lineage.v1",
+            "workUnitId": "runtime-work-unit-store-sample"
+          },
+          "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+          "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+          "pageActionId": "runtime-page-action-store-sample",
+          "schema": "collector.page-action-batch-evidence.v1",
+          "storeSample": {
+            "cursor": {
+              "baselineExpiresAt": "2026-08-03T00:00:00.000Z",
+              "baselineObservedAt": "2026-08-02T00:00:00.000Z",
+              "canonicalShopUrl": "https://fixture-store.1688.com/",
+              "categoriesObservedAt": "2026-08-02T00:00:00.000Z",
+              "checkpointState": "exhausted",
+              "count": 30,
+              "exhausted": true,
+              "generation": "runtime-execution-attempt-store-sample",
+              "memberId": "fixture-chain-member-1",
+              "nextPage": null,
+              "observedPages": [
+                1,
+                2,
+                3
+              ],
+              "sortType": "wangpu_score",
+              "sourceOfferCount": 90,
+              "sourceTotalPages": 3
+            },
+            "evidenceUsage": "baseline-evidence"
+          }
+        },
+        "evidenceUsage": "baseline-evidence",
+        "generation": "runtime-execution-attempt-store-sample",
+        "mode": "phase-1-bounded",
+        "nextPage": null,
+        "observedPages": [
+          1,
+          2,
+          3
+        ],
+        "requestedScope": "bounded-pages"
+      },
+      "observations": [
+        {
+          "category": {
+            "children": [],
+            "count": 90,
+            "fullName": null,
+            "id": "fixture-cat-1",
+            "name": "Tools"
+          },
+          "collectorPageActionEvidence": {
+            "executionLineage": {
+              "executionAttemptOrdinal": 1,
+              "fences": {
+                "reservation": {
+                  "fencingToken": "runtime-reservation-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-reservation-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "supervisor": {
+                  "fencingToken": "runtime-supervisor-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-supervisor-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "workUnit": {
+                  "fencingToken": "runtime-work-unit-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-work-unit-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                }
+              },
+              "idempotencyKey": "runtime-idempotency-store-sample",
+              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageId": "runtime-logical-store-sample",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+              "profile": {
+                "contextGeneration": 1,
+                "daemonInstanceId": "runtime-fixture-daemon",
+                "egressId": "runtime-fixture-egress",
+                "profileId": "runtime-fixture-profile",
+                "profileName": "runtime-fixture-profile"
+              },
+              "requestId": "runtime-request-store-sample",
+              "schema": "collector.page-action-execution-lineage.v1",
+              "workUnitAttemptId": "runtime-work-attempt-store-sample"
+            },
+            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "logicalLineage": {
+              "actionKind": "store-sample",
+              "businessSubject": {
+                "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
+                "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "kind": "store-sample",
+                "memberId": "fixture-chain-member-1",
+                "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
+              },
+              "collectionTaskId": "runtime-collection-task-store-sample",
+              "logicalLineageId": "runtime-logical-store-sample",
+              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionId": "runtime-page-action-store-sample",
+              "schema": "collector.logical-page-action-lineage.v1",
+              "workUnitId": "runtime-work-unit-store-sample"
+            },
+            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+            "pageActionId": "runtime-page-action-store-sample",
+            "schema": "collector.page-action-batch-evidence.v1",
+            "storeSample": {
+              "cursor": {
+                "baselineExpiresAt": "2026-08-03T00:00:00.000Z",
+                "baselineObservedAt": "2026-08-02T00:00:00.000Z",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "categoriesObservedAt": "2026-08-02T00:00:00.000Z",
+                "checkpointState": "exhausted",
+                "count": 30,
+                "exhausted": true,
+                "generation": "runtime-execution-attempt-store-sample",
+                "memberId": "fixture-chain-member-1",
+                "nextPage": null,
+                "observedPages": [
+                  1,
+                  2,
+                  3
+                ],
+                "sortType": "wangpu_score",
+                "sourceOfferCount": 90,
+                "sourceTotalPages": 3
+              },
+              "evidenceUsage": "baseline-evidence"
+            }
+          },
+          "memberId": "fixture-chain-member-1",
+          "observedAt": "2026-08-02T00:00:00.000Z"
+        }
+      ],
+      "completeness": {
+        "requestedScope": "bounded-pages",
+        "state": "complete",
+        "observedPages": [
+          1,
+          2,
+          3
+        ],
+        "failedPages": [],
+        "uniqueItems": 1
+      },
+      "duplicateObservations": [],
+      "warnings": [],
+      "errors": [],
+      "rawEvidenceRefs": [
+        "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+        "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+        "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
+        "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+      ],
+      "metrics": {
+        "categoryItems": 1,
+        "remoteRequests": 0
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "batchId": "batch-store-sample-fixture-003",
+      "unitId": "runtime-work-unit-store-sample",
+      "sourceRequestId": "runtime-request-store-sample",
+      "kind": "store-profile",
+      "status": "completed",
+      "startedAt": "2026-08-02T00:00:00.000Z",
+      "completedAt": "2026-08-02T00:00:00.000Z",
+      "subject": {
+        "supplier": {
+          "memberId": "fixture-chain-member-1",
+          "shopUrl": "https://fixture-store.1688.com/"
+        }
+      },
+      "scope": {
+        "checkpointState": "exhausted",
+        "collectorPageActionEvidence": {
+          "executionLineage": {
+            "executionAttemptOrdinal": 1,
+            "fences": {
+              "reservation": {
+                "fencingToken": "runtime-reservation-fence",
+                "generation": 1,
+                "leaseId": "runtime-reservation-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "supervisor": {
+                "fencingToken": "runtime-supervisor-fence",
+                "generation": 1,
+                "leaseId": "runtime-supervisor-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "workUnit": {
+                "fencingToken": "runtime-work-unit-fence",
+                "generation": 1,
+                "leaseId": "runtime-work-unit-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              }
+            },
+            "idempotencyKey": "runtime-idempotency-store-sample",
+            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageId": "runtime-logical-store-sample",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+            "profile": {
+              "contextGeneration": 1,
+              "daemonInstanceId": "runtime-fixture-daemon",
+              "egressId": "runtime-fixture-egress",
+              "profileId": "runtime-fixture-profile",
+              "profileName": "runtime-fixture-profile"
+            },
+            "requestId": "runtime-request-store-sample",
+            "schema": "collector.page-action-execution-lineage.v1",
+            "workUnitAttemptId": "runtime-work-attempt-store-sample"
+          },
+          "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+          "logicalLineage": {
+            "actionKind": "store-sample",
+            "businessSubject": {
+              "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
+              "canonicalShopIdentityReceiptId": "runtime-store-identity",
+              "kind": "store-sample",
+              "memberId": "fixture-chain-member-1",
+              "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
+            },
+            "collectionTaskId": "runtime-collection-task-store-sample",
+            "logicalLineageId": "runtime-logical-store-sample",
+            "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+            "pageActionId": "runtime-page-action-store-sample",
+            "schema": "collector.logical-page-action-lineage.v1",
+            "workUnitId": "runtime-work-unit-store-sample"
+          },
+          "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+          "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+          "pageActionId": "runtime-page-action-store-sample",
+          "schema": "collector.page-action-batch-evidence.v1",
+          "storeSample": {
+            "cursor": {
+              "baselineExpiresAt": "2026-08-03T00:00:00.000Z",
+              "baselineObservedAt": "2026-08-02T00:00:00.000Z",
+              "canonicalShopUrl": "https://fixture-store.1688.com/",
+              "categoriesObservedAt": "2026-08-02T00:00:00.000Z",
+              "checkpointState": "exhausted",
+              "count": 30,
+              "exhausted": true,
+              "generation": "runtime-execution-attempt-store-sample",
+              "memberId": "fixture-chain-member-1",
+              "nextPage": null,
+              "observedPages": [
+                1,
+                2,
+                3
+              ],
+              "sortType": "wangpu_score",
+              "sourceOfferCount": 90,
+              "sourceTotalPages": 3
+            },
+            "evidenceUsage": "baseline-evidence"
+          }
+        },
+        "evidenceUsage": "baseline-evidence",
+        "generation": "runtime-execution-attempt-store-sample",
+        "mode": "phase-1-bounded",
+        "nextPage": null,
+        "observedPages": [
+          1,
+          2,
+          3
+        ],
+        "requestedScope": "bounded-pages"
+      },
+      "observations": [
+        {
+          "authority": "authoritative-required",
+          "canonicalShopUrl": "https://fixture-store.1688.com/",
+          "collectorPageActionEvidence": {
+            "executionLineage": {
+              "executionAttemptOrdinal": 1,
+              "fences": {
+                "reservation": {
+                  "fencingToken": "runtime-reservation-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-reservation-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "supervisor": {
+                  "fencingToken": "runtime-supervisor-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-supervisor-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "workUnit": {
+                  "fencingToken": "runtime-work-unit-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-work-unit-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                }
+              },
+              "idempotencyKey": "runtime-idempotency-store-sample",
+              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageId": "runtime-logical-store-sample",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+              "profile": {
+                "contextGeneration": 1,
+                "daemonInstanceId": "runtime-fixture-daemon",
+                "egressId": "runtime-fixture-egress",
+                "profileId": "runtime-fixture-profile",
+                "profileName": "runtime-fixture-profile"
+              },
+              "requestId": "runtime-request-store-sample",
+              "schema": "collector.page-action-execution-lineage.v1",
+              "workUnitAttemptId": "runtime-work-attempt-store-sample"
+            },
+            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "logicalLineage": {
+              "actionKind": "store-sample",
+              "businessSubject": {
+                "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
+                "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "kind": "store-sample",
+                "memberId": "fixture-chain-member-1",
+                "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
+              },
+              "collectionTaskId": "runtime-collection-task-store-sample",
+              "logicalLineageId": "runtime-logical-store-sample",
+              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionId": "runtime-page-action-store-sample",
+              "schema": "collector.logical-page-action-lineage.v1",
+              "workUnitId": "runtime-work-unit-store-sample"
+            },
+            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
+            "pageActionId": "runtime-page-action-store-sample",
+            "schema": "collector.page-action-batch-evidence.v1",
+            "storeSample": {
+              "cursor": {
+                "baselineExpiresAt": "2026-08-03T00:00:00.000Z",
+                "baselineObservedAt": "2026-08-02T00:00:00.000Z",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "categoriesObservedAt": "2026-08-02T00:00:00.000Z",
+                "checkpointState": "exhausted",
+                "count": 30,
+                "exhausted": true,
+                "generation": "runtime-execution-attempt-store-sample",
+                "memberId": "fixture-chain-member-1",
+                "nextPage": null,
+                "observedPages": [
+                  1,
+                  2,
+                  3
+                ],
+                "sortType": "wangpu_score",
+                "sourceOfferCount": 90,
+                "sourceTotalPages": 3
+              },
+              "evidenceUsage": "baseline-evidence"
+            }
+          },
+          "memberId": "fixture-chain-member-1",
+          "memberIdSource": {
+            "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+            "collectedAt": "2026-08-02T00:00:00.000Z",
+            "collectorVersion": "1688-cli",
+            "componentKey": "wp_pc_common_header",
+            "fieldPath": "data.data.memberId",
+            "parserVersion": "store-profile-v1",
+            "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+            "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+            "sourceType": "supplier-payload"
+          },
+          "observedAt": "2026-08-02T00:00:00.000Z",
+          "profile": {
+            "address": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.addr.entAddress",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "attentionOperationType": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.fans",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "badge": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.pcV2SellerTagLogo",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "companyIcons": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.certInfo",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "companyId": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.companyId",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "companyLabel": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.certInfo.certType",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "factoryAuthText": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.certInfo",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "factoryCardUrl": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.factoryCardUrl",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "followersText": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.fans.num",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "iconType": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.pcV2SellerTagLogo",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "isFollowing": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.fans.isFans",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "mainCategoryName": {
+              "availability": "available",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.mainCate",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": "Tools"
+            },
+            "metrics": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.cardDetail",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "name": {
+              "availability": "available",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.companyName",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": "Runtime Fixture Store Header"
+            },
+            "onTimeDeliveryRate": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.cardDetail[code=lgtFulfillGotRate]",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "positiveReviewRate": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.cardDetail[code=goodRate]",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "region": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.addr",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "returnRate": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.cardDetail[code=byrRepeatRate]",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "serviceScore": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.customerStar",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "serviceScores": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.businessTags",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "shopTags": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.shopTags",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "shopType": {
+              "availability": "not-present",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.sellerType",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": null
+            },
+            "shopUrl": {
+              "availability": "available",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.commonUrl.shopUrl",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": "https://fixture-store.1688.com/"
+            },
+            "source": {
+              "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+              "collectedAt": "2026-08-02T00:00:00.000Z",
+              "collectorVersion": "1688-cli",
+              "componentKey": "wp_pc_common_header",
+              "fieldPath": "data.data",
+              "parserVersion": "store-profile-v1",
+              "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+              "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+              "sourceType": "supplier-payload"
+            },
+            "warnings": [],
+            "years": {
+              "availability": "available",
+              "source": {
+                "api": "mtop.alibaba.alisite.cbu.server.moduleasyncservice",
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "componentKey": "wp_pc_common_header",
+                "fieldPath": "data.data.tpYear",
+                "parserVersion": "store-profile-v1",
+                "rawRef": "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+                "sourceRef": "https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/",
+                "sourceType": "supplier-payload"
+              },
+              "value": 3
+            }
+          },
+          "sourceAction": "store-sample"
+        }
+      ],
+      "completeness": {
+        "requestedScope": "bounded-pages",
+        "state": "complete",
+        "observedPages": [
+          1,
+          2,
+          3
+        ],
+        "failedPages": [],
+        "uniqueItems": 1
+      },
+      "duplicateObservations": [],
+      "warnings": [],
+      "errors": [],
+      "rawEvidenceRefs": [
+        "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+        "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
+        "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
+        "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+      ],
+      "metrics": {
+        "profileObservations": 1,
+        "remoteRequests": 0
+      }
+    }
+  ],
+  "completedAt": "2026-08-02T00:00:00.000Z"
+}

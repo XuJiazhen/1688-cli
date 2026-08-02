@@ -1,0 +1,12 @@
+{
+  "schema": "collector.sanitized-raw-archive.v1",
+  "kind": "offer-core",
+  "parserRevision": "offer-core-v1@1",
+  "pageActionId": "runtime-page-action-offer-detail",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+  "requestBusinessHash": "sha256:e00f503a51635f46143ed57fb278b775e9a0864593cc248aa5ba3a8f2fd3de04",
+  "sanitizedPayload": {
+    "fixture": "runtime-offer-core"
+  },
+  "payloadHash": "sha256:9cc31d8a3990dee9233daa58e1d8d818ac2fcbdec0e70e1d1df3170ecd8d3617"
+}

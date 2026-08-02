@@ -1,0 +1,40 @@
+{
+  "schema": "collector.offer-source-sidecar.v1",
+  "source": "offer-consignment",
+  "offerId": "700000000101",
+  "memberId": "fixture-chain-member-1",
+  "correlatedOfferId": "700000000101",
+  "correlatedMemberId": "fixture-chain-member-1",
+  "pageActionId": "runtime-page-action-offer-detail",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+  "capturedAt": "2026-08-02T00:00:00.001Z",
+  "sanitizedRawPayload": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "offerId": "[redacted]",
+      "memberId": "fixture-chain-member-1",
+      "data": {
+        "data": {
+          "data": {
+            "name": "Runtime Fixture Consignment",
+            "priceInfoList": [
+              {
+                "price": "8.00",
+                "text": "1 piece price"
+              }
+            ],
+            "adviseList": [
+              {
+                "key": "offerDelivery48hRate",
+                "name": "48h delivery rate",
+                "value": "98%"
+              }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

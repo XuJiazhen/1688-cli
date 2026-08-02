@@ -58,6 +58,7 @@ function request(kind: PageActionRequestV1['actionKind']): PageActionRequestV1 {
           schema: 'canonical-search-request-v1' as const,
           searchQueryKeyHash: subject.searchQueryKeyHash!, searchSegmentId: 'segment-1',
           querySnapshotHash: subject.querySnapshotHash!, keyword: 'fixture',
+          searchQueryIdentity: 'query-1', page: 1,
           filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: HASH('filter'),
           compilerRevision: 'search-compiler-v1@1',
           serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: HASH('serializer'),

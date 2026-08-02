@@ -1,0 +1,1252 @@
+{
+  "schema": "collector.page-action.completion-receipt.v1",
+  "completionReceiptId": "completion-receipt-offer-detail-fixture-004",
+  "completionReceiptHash": "sha256:96f7a472ce91a8cc909dff2ced93b5798eb0f78bcd74e7c4417d51da1a1e3fd9",
+  "pageActionId": "runtime-page-action-offer-detail",
+  "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
+  "logicalLineage": {
+    "schema": "collector.logical-page-action-lineage.v1",
+    "logicalLineageId": "runtime-logical-offer-detail",
+    "collectionTaskId": "runtime-collection-task-offer-detail",
+    "workUnitId": "runtime-work-unit-offer-detail",
+    "pageActionId": "runtime-page-action-offer-detail",
+    "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
+    "actionKind": "offer-detail",
+    "businessSubject": {
+      "kind": "offer-detail",
+      "offerId": "700000000101",
+      "memberId": "fixture-chain-member-1",
+      "searchOriginReceiptId": "runtime-search-origin-receipt-1",
+      "searchOriginReceiptHash": "sha256:f32347932c30354e155241fff1e7078142b2049400854e38a7be934c064f8123"
+    }
+  },
+  "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+  "actionKind": "offer-detail",
+  "status": "completed",
+  "terminal": true,
+  "executionAttemptReceiptRefs": [
+    {
+      "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+      "executionAttemptOrdinal": 1,
+      "receiptId": "execution-receipt-offer-detail-fixture-003",
+      "receiptHash": "sha256:9566225bd59b7056095dd98a480d6f40268082f7f9c5b7f2336630b5931a43a8",
+      "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7"
+    }
+  ],
+  "finalizedByExecutionRef": {
+    "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+    "executionAttemptOrdinal": 1,
+    "receiptId": "execution-receipt-offer-detail-fixture-003",
+    "receiptHash": "sha256:9566225bd59b7056095dd98a480d6f40268082f7f9c5b7f2336630b5931a43a8",
+    "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7"
+  },
+  "batches": [
+    {
+      "schemaVersion": 1,
+      "batchId": "batch-offer-detail-fixture-001",
+      "unitId": "runtime-work-unit-offer-detail",
+      "sourceRequestId": "runtime-request-offer-detail",
+      "kind": "offer-detail",
+      "status": "completed",
+      "startedAt": "2026-08-02T00:00:00.001Z",
+      "completedAt": "2026-08-02T00:00:00.001Z",
+      "subject": {
+        "offerId": "700000000101"
+      },
+      "scope": {
+        "collectorPageActionEvidence": {
+          "executionLineage": {
+            "executionAttemptOrdinal": 1,
+            "fences": {
+              "reservation": {
+                "fencingToken": "runtime-reservation-fence",
+                "generation": 1,
+                "leaseId": "runtime-reservation-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "supervisor": {
+                "fencingToken": "runtime-supervisor-fence",
+                "generation": 1,
+                "leaseId": "runtime-supervisor-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "workUnit": {
+                "fencingToken": "runtime-work-unit-fence",
+                "generation": 1,
+                "leaseId": "runtime-work-unit-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              }
+            },
+            "idempotencyKey": "runtime-idempotency-offer-detail",
+            "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+            "logicalLineageId": "runtime-logical-offer-detail",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+            "profile": {
+              "contextGeneration": 1,
+              "daemonInstanceId": "runtime-fixture-daemon",
+              "egressId": "runtime-fixture-egress",
+              "profileId": "runtime-fixture-profile",
+              "profileName": "runtime-fixture-profile"
+            },
+            "requestId": "runtime-request-offer-detail",
+            "schema": "collector.page-action-execution-lineage.v1",
+            "workUnitAttemptId": "runtime-work-attempt-offer-detail"
+          },
+          "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7",
+          "logicalLineage": {
+            "actionKind": "offer-detail",
+            "businessSubject": {
+              "kind": "offer-detail",
+              "memberId": "fixture-chain-member-1",
+              "offerId": "700000000101",
+              "searchOriginReceiptHash": "sha256:f32347932c30354e155241fff1e7078142b2049400854e38a7be934c064f8123",
+              "searchOriginReceiptId": "runtime-search-origin-receipt-1"
+            },
+            "collectionTaskId": "runtime-collection-task-offer-detail",
+            "logicalLineageId": "runtime-logical-offer-detail",
+            "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
+            "pageActionId": "runtime-page-action-offer-detail",
+            "schema": "collector.logical-page-action-lineage.v1",
+            "workUnitId": "runtime-work-unit-offer-detail"
+          },
+          "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+          "offer": {
+            "mediaManifestV2": {
+              "availability": "available",
+              "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+              "items": [
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                  "offerId": "700000000101",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                  "ownerKind": "target-offer",
+                  "role": "detail",
+                  "sourceField": "offer_details.content",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 0,
+                  "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                  "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                },
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                  "offerId": "700000000101",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-main.jpg",
+                  "ownerKind": "target-offer",
+                  "role": "gallery",
+                  "sourceField": "gallery.images",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 0,
+                  "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                  "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                },
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-gallery.jpg",
+                  "offerId": "700000000101",
+                  "order": 1,
+                  "originalUrl": "https://img.example.test/runtime-gallery.jpg",
+                  "ownerKind": "target-offer",
+                  "role": "gallery",
+                  "sourceField": "gallery.images",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 1,
+                  "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                  "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                },
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                  "offerId": "700000000101",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-main.jpg",
+                  "ownerKind": "target-offer",
+                  "role": "main",
+                  "sourceField": "gallery.mainImage",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 0,
+                  "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                  "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                },
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                  "offerId": "700000000101",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-main.jpg",
+                  "ownerKind": "target-sku",
+                  "platformSkuId": "runtime-sku-1",
+                  "role": "sku",
+                  "sourceField": "skuProps.imageUrl",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 0,
+                  "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
+                  "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                }
+              ],
+              "offerId": "700000000101",
+              "schema": "offer-media-manifest-v2",
+              "sourceObservationId": "runtime-execution-attempt-offer-detail",
+              "warnings": [
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "gallery.mainImage",
+                  "sourceOrdinal": 0
+                },
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "gallery.images",
+                  "sourceOrdinal": 0
+                },
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "gallery.images",
+                  "sourceOrdinal": 1
+                },
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "skuProps.imageUrl",
+                  "sourceOrdinal": 0
+                },
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "offer_details.content",
+                  "sourceOrdinal": 0
+                }
+              ]
+            },
+            "skuManifest": {
+              "explicitSkuCount": 1,
+              "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+              "nullFactsCarryAvailability": true,
+              "offerId": "700000000101",
+              "optionCount": 1,
+              "schema": "offer-sku-manifest-v1",
+              "singletonSourceKey": null,
+              "skuIds": [
+                "runtime-sku-1"
+              ],
+              "state": "explicit-variants"
+            },
+            "sourceReceipts": {
+              "consignment": {
+                "correlation": "matched",
+                "memberId": "fixture-chain-member-1",
+                "offerId": "700000000101",
+                "pageActionId": "runtime-page-action-offer-detail",
+                "parserRevision": "offer-consignment-parser-v1@1",
+                "rawEvidenceRefs": [
+                  "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f"
+                ],
+                "receiptContentHash": "sha256:2f81919d05cc650853c0d9280ce973897245744bc525651472001dbd0f8c3ae9",
+                "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+                "responseObserved": true,
+                "responseSucceeded": true,
+                "schema": "offer-consignment-observation-receipt-v1",
+                "schemaRevision": "offer-consignment-source-v1@1",
+                "source": "offer-consignment",
+                "state": "available"
+              },
+              "shopCard": {
+                "correlation": "matched",
+                "fieldObservationRefs": [],
+                "memberId": "fixture-chain-member-1",
+                "offerId": "700000000101",
+                "pageActionId": "runtime-page-action-offer-detail",
+                "parserRevision": "shop-card-parser-v1@1",
+                "rawEvidenceRefs": [
+                  "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
+                ],
+                "receiptContentHash": "sha256:4b1bece86dcde6b286b0ab97fbd1043d8e60ca120cdcd36c6cb93ed5b9cce92e",
+                "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+                "responseObserved": true,
+                "responseSucceeded": true,
+                "schema": "offer-shop-card-observation-receipt-v1",
+                "schemaRevision": "shop-card-source-v1@1",
+                "source": "shop-card",
+                "state": "available"
+              }
+            }
+          },
+          "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+          "pageActionId": "runtime-page-action-offer-detail",
+          "schema": "collector.page-action-batch-evidence.v1"
+        },
+        "requestedScope": "page"
+      },
+      "observations": [
+        {
+          "collectedAt": "2026-08-02T00:00:00.001Z",
+          "collectorPageActionEvidence": {
+            "executionLineage": {
+              "executionAttemptOrdinal": 1,
+              "fences": {
+                "reservation": {
+                  "fencingToken": "runtime-reservation-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-reservation-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "supervisor": {
+                  "fencingToken": "runtime-supervisor-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-supervisor-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "workUnit": {
+                  "fencingToken": "runtime-work-unit-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-work-unit-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                }
+              },
+              "idempotencyKey": "runtime-idempotency-offer-detail",
+              "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+              "logicalLineageId": "runtime-logical-offer-detail",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+              "profile": {
+                "contextGeneration": 1,
+                "daemonInstanceId": "runtime-fixture-daemon",
+                "egressId": "runtime-fixture-egress",
+                "profileId": "runtime-fixture-profile",
+                "profileName": "runtime-fixture-profile"
+              },
+              "requestId": "runtime-request-offer-detail",
+              "schema": "collector.page-action-execution-lineage.v1",
+              "workUnitAttemptId": "runtime-work-attempt-offer-detail"
+            },
+            "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7",
+            "logicalLineage": {
+              "actionKind": "offer-detail",
+              "businessSubject": {
+                "kind": "offer-detail",
+                "memberId": "fixture-chain-member-1",
+                "offerId": "700000000101",
+                "searchOriginReceiptHash": "sha256:f32347932c30354e155241fff1e7078142b2049400854e38a7be934c064f8123",
+                "searchOriginReceiptId": "runtime-search-origin-receipt-1"
+              },
+              "collectionTaskId": "runtime-collection-task-offer-detail",
+              "logicalLineageId": "runtime-logical-offer-detail",
+              "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
+              "pageActionId": "runtime-page-action-offer-detail",
+              "schema": "collector.logical-page-action-lineage.v1",
+              "workUnitId": "runtime-work-unit-offer-detail"
+            },
+            "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+            "offer": {
+              "mediaManifestV2": {
+                "availability": "available",
+                "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                "items": [
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                    "offerId": "700000000101",
+                    "order": 0,
+                    "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 0,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                    "offerId": "700000000101",
+                    "order": 0,
+                    "originalUrl": "https://img.example.test/runtime-main.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "gallery",
+                    "sourceField": "gallery.images",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 0,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-gallery.jpg",
+                    "offerId": "700000000101",
+                    "order": 1,
+                    "originalUrl": "https://img.example.test/runtime-gallery.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "gallery",
+                    "sourceField": "gallery.images",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 1,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                    "offerId": "700000000101",
+                    "order": 0,
+                    "originalUrl": "https://img.example.test/runtime-main.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "main",
+                    "sourceField": "gallery.mainImage",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 0,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                    "offerId": "700000000101",
+                    "order": 0,
+                    "originalUrl": "https://img.example.test/runtime-main.jpg",
+                    "ownerKind": "target-sku",
+                    "platformSkuId": "runtime-sku-1",
+                    "role": "sku",
+                    "sourceField": "skuProps.imageUrl",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 0,
+                    "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
+                    "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                  }
+                ],
+                "offerId": "700000000101",
+                "schema": "offer-media-manifest-v2",
+                "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                "warnings": [
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "gallery.mainImage",
+                    "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "gallery.images",
+                    "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "gallery.images",
+                    "sourceOrdinal": 1
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "skuProps.imageUrl",
+                    "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 0
+                  }
+                ]
+              },
+              "skuManifest": {
+                "explicitSkuCount": 1,
+                "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                "nullFactsCarryAvailability": true,
+                "offerId": "700000000101",
+                "optionCount": 1,
+                "schema": "offer-sku-manifest-v1",
+                "singletonSourceKey": null,
+                "skuIds": [
+                  "runtime-sku-1"
+                ],
+                "state": "explicit-variants"
+              },
+              "sourceReceipts": {
+                "consignment": {
+                  "correlation": "matched",
+                  "memberId": "fixture-chain-member-1",
+                  "offerId": "700000000101",
+                  "pageActionId": "runtime-page-action-offer-detail",
+                  "parserRevision": "offer-consignment-parser-v1@1",
+                  "rawEvidenceRefs": [
+                    "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f"
+                  ],
+                  "receiptContentHash": "sha256:2f81919d05cc650853c0d9280ce973897245744bc525651472001dbd0f8c3ae9",
+                  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+                  "responseObserved": true,
+                  "responseSucceeded": true,
+                  "schema": "offer-consignment-observation-receipt-v1",
+                  "schemaRevision": "offer-consignment-source-v1@1",
+                  "source": "offer-consignment",
+                  "state": "available"
+                },
+                "shopCard": {
+                  "correlation": "matched",
+                  "fieldObservationRefs": [],
+                  "memberId": "fixture-chain-member-1",
+                  "offerId": "700000000101",
+                  "pageActionId": "runtime-page-action-offer-detail",
+                  "parserRevision": "shop-card-parser-v1@1",
+                  "rawEvidenceRefs": [
+                    "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
+                  ],
+                  "receiptContentHash": "sha256:4b1bece86dcde6b286b0ab97fbd1043d8e60ca120cdcd36c6cb93ed5b9cce92e",
+                  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+                  "responseObserved": true,
+                  "responseSucceeded": true,
+                  "schema": "offer-shop-card-observation-receipt-v1",
+                  "schemaRevision": "shop-card-source-v1@1",
+                  "source": "shop-card",
+                  "state": "available"
+                }
+              }
+            },
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+            "pageActionId": "runtime-page-action-offer-detail",
+            "schema": "collector.page-action-batch-evidence.v1"
+          },
+          "offer": {
+            "attributes": [
+              {
+                "name": "material",
+                "value": "fixture-alloy"
+              }
+            ],
+            "categoryId": "fixture-category-1",
+            "consignment": {
+              "delivery24hRate": null,
+              "delivery48hRate": 0.98,
+              "distributorCountText": null,
+              "downstreamListingCountText": null,
+              "metrics": [
+                {
+                  "key": "offerDelivery48hRate",
+                  "name": "48h delivery rate",
+                  "valueText": "98%"
+                }
+              ],
+              "minimumQuantity": null,
+              "name": "Runtime Fixture Consignment",
+              "offerFlags": {},
+              "offerPublishedAtText": null,
+              "onePieceEligible": null,
+              "onePiecePrice": null,
+              "operations": [],
+              "orderCount30dText": null,
+              "orderCount7dText": null,
+              "prices": [
+                {
+                  "minimumQuantity": null,
+                  "price": 8,
+                  "text": "1 piece price"
+                }
+              ],
+              "protections": [],
+              "supportedChannels": []
+            },
+            "detailText": "Runtime fixture detail",
+            "detailUrl": "https://itemcdn.tmall.com/1688offer/runtime-fixture-detail",
+            "freight": {
+              "city": null,
+              "province": null,
+              "receiveAddress": null,
+              "sendArea": "fixture-region",
+              "unitWeight": null
+            },
+            "images": [
+              "https://img.example.test/runtime-main.jpg",
+              "https://img.example.test/runtime-gallery.jpg"
+            ],
+            "mainImage": "https://img.example.test/runtime-main.jpg",
+            "media": {
+              "availability": "available",
+              "items": [
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-main.jpg",
+                  "role": "main",
+                  "sourceField": "gallery.mainImage"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-gallery.jpg",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-gallery.jpg",
+                  "role": "gallery",
+                  "sourceField": "gallery.images"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-main.jpg",
+                  "role": "sku",
+                  "skuId": "runtime-sku-1",
+                  "sourceField": "skuProps.imageUrl"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                }
+              ],
+              "source": {
+                "collectedAt": "2026-08-02T00:00:00.000Z",
+                "collectorVersion": "1688-cli",
+                "fieldPath": "offer.media",
+                "parserVersion": "1",
+                "sourceRef": "offer:700000000101:media",
+                "sourceType": "offer-payload"
+              },
+              "warnings": []
+            },
+            "minOrderQty": 1,
+            "mixOrderQty": null,
+            "offerId": "700000000101",
+            "options": [
+              {
+                "prop": "variant",
+                "values": [
+                  {
+                    "imageUrl": "https://img.example.test/runtime-offer-sku-a.jpg",
+                    "name": "fixture-a"
+                  }
+                ]
+              }
+            ],
+            "packageInfo": [],
+            "priceMax": 10,
+            "priceMin": 8,
+            "priceRange": "8.00-10.00",
+            "priceTiers": [
+              {
+                "minQty": 1,
+                "price": 8
+              }
+            ],
+            "saledCount": 4,
+            "shopCard": {
+              "attention": {
+                "followersText": null,
+                "isFollowing": null,
+                "operationType": null
+              },
+              "badge": null,
+              "companyIcons": [],
+              "companyId": null,
+              "companyLabel": null,
+              "factoryAuthText": null,
+              "factoryCardUrl": null,
+              "iconType": null,
+              "mainCategoryName": "Tools",
+              "metrics": [
+                {
+                  "key": "service score",
+                  "unit": null,
+                  "value": 4.8,
+                  "valueText": "4.8"
+                }
+              ],
+              "name": "Runtime Fixture Offer Store",
+              "onTimeDeliveryRate": null,
+              "positiveReviewRate": null,
+              "returnRate": null,
+              "serviceScore": null,
+              "serviceScores": [],
+              "shopTags": [],
+              "shopType": "factory",
+              "url": "https://fixture-offer-store.1688.com/",
+              "years": 3
+            },
+            "skus": [
+              {
+                "availability": {
+                  "price": "available",
+                  "saleCount": "available",
+                  "stock": "available"
+                },
+                "image": "https://img.example.test/runtime-main.jpg",
+                "multiPrice": null,
+                "price": 8,
+                "saleCount": 4,
+                "skuId": "runtime-sku-1",
+                "specs": "variant:fixture-a",
+                "stock": 25
+              }
+            ],
+            "sources": {
+              "consignmentCaptured": true,
+              "consignmentResponseObserved": true,
+              "detailMediaCaptured": true,
+              "detailMediaResponseObserved": true,
+              "shopCardCaptured": true,
+              "shopCardResponseObserved": true
+            },
+            "supplier": {
+              "loginId": "[redacted]",
+              "memberId": "fixture-chain-member-1",
+              "name": "Runtime Fixture Offer Store",
+              "userId": "[redacted]"
+            },
+            "title": "Runtime Fixture Offer",
+            "unitName": "piece",
+            "url": "https://detail.1688.com/offer/700000000101.html"
+          },
+          "offerId": "700000000101"
+        }
+      ],
+      "completeness": {
+        "requestedScope": "page",
+        "state": "complete",
+        "observedPages": [],
+        "failedPages": [],
+        "expectedItems": 1,
+        "uniqueItems": 1
+      },
+      "duplicateObservations": [],
+      "warnings": [],
+      "errors": [],
+      "rawEvidenceRefs": [
+        "artifact:collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a",
+        "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
+        "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
+        "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
+        "artifact:collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e",
+        "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
+        "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
+      ],
+      "metrics": {
+        "capturedOffers": 1
+      }
+    },
+    {
+      "schemaVersion": 1,
+      "batchId": "batch-offer-detail-fixture-002",
+      "unitId": "runtime-work-unit-offer-detail",
+      "sourceRequestId": "runtime-request-offer-detail",
+      "kind": "offer-media-manifest",
+      "status": "completed",
+      "startedAt": "2026-08-02T00:00:00.001Z",
+      "completedAt": "2026-08-02T00:00:00.001Z",
+      "subject": {
+        "offerId": "700000000101"
+      },
+      "scope": {
+        "collectorPageActionEvidence": {
+          "executionLineage": {
+            "executionAttemptOrdinal": 1,
+            "fences": {
+              "reservation": {
+                "fencingToken": "runtime-reservation-fence",
+                "generation": 1,
+                "leaseId": "runtime-reservation-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "supervisor": {
+                "fencingToken": "runtime-supervisor-fence",
+                "generation": 1,
+                "leaseId": "runtime-supervisor-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              },
+              "workUnit": {
+                "fencingToken": "runtime-work-unit-fence",
+                "generation": 1,
+                "leaseId": "runtime-work-unit-lease",
+                "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+              }
+            },
+            "idempotencyKey": "runtime-idempotency-offer-detail",
+            "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+            "logicalLineageId": "runtime-logical-offer-detail",
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+            "profile": {
+              "contextGeneration": 1,
+              "daemonInstanceId": "runtime-fixture-daemon",
+              "egressId": "runtime-fixture-egress",
+              "profileId": "runtime-fixture-profile",
+              "profileName": "runtime-fixture-profile"
+            },
+            "requestId": "runtime-request-offer-detail",
+            "schema": "collector.page-action-execution-lineage.v1",
+            "workUnitAttemptId": "runtime-work-attempt-offer-detail"
+          },
+          "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7",
+          "logicalLineage": {
+            "actionKind": "offer-detail",
+            "businessSubject": {
+              "kind": "offer-detail",
+              "memberId": "fixture-chain-member-1",
+              "offerId": "700000000101",
+              "searchOriginReceiptHash": "sha256:f32347932c30354e155241fff1e7078142b2049400854e38a7be934c064f8123",
+              "searchOriginReceiptId": "runtime-search-origin-receipt-1"
+            },
+            "collectionTaskId": "runtime-collection-task-offer-detail",
+            "logicalLineageId": "runtime-logical-offer-detail",
+            "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
+            "pageActionId": "runtime-page-action-offer-detail",
+            "schema": "collector.logical-page-action-lineage.v1",
+            "workUnitId": "runtime-work-unit-offer-detail"
+          },
+          "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+          "offer": {
+            "mediaManifestV2": {
+              "availability": "available",
+              "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+              "items": [
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                  "offerId": "700000000101",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                  "ownerKind": "target-offer",
+                  "role": "detail",
+                  "sourceField": "offer_details.content",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 0,
+                  "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                  "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                },
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                  "offerId": "700000000101",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-main.jpg",
+                  "ownerKind": "target-offer",
+                  "role": "gallery",
+                  "sourceField": "gallery.images",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 0,
+                  "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                  "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                },
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-gallery.jpg",
+                  "offerId": "700000000101",
+                  "order": 1,
+                  "originalUrl": "https://img.example.test/runtime-gallery.jpg",
+                  "ownerKind": "target-offer",
+                  "role": "gallery",
+                  "sourceField": "gallery.images",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 1,
+                  "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                  "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                },
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                  "offerId": "700000000101",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-main.jpg",
+                  "ownerKind": "target-offer",
+                  "role": "main",
+                  "sourceField": "gallery.mainImage",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 0,
+                  "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                  "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                },
+                {
+                  "availability": "available",
+                  "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                  "offerId": "700000000101",
+                  "order": 0,
+                  "originalUrl": "https://img.example.test/runtime-main.jpg",
+                  "ownerKind": "target-sku",
+                  "platformSkuId": "runtime-sku-1",
+                  "role": "sku",
+                  "sourceField": "skuProps.imageUrl",
+                  "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                  "sourceOrdinal": 0,
+                  "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
+                  "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                }
+              ],
+              "offerId": "700000000101",
+              "schema": "offer-media-manifest-v2",
+              "sourceObservationId": "runtime-execution-attempt-offer-detail",
+              "warnings": [
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "gallery.mainImage",
+                  "sourceOrdinal": 0
+                },
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "gallery.images",
+                  "sourceOrdinal": 0
+                },
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "gallery.images",
+                  "sourceOrdinal": 1
+                },
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "skuProps.imageUrl",
+                  "sourceOrdinal": 0
+                },
+                {
+                  "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                  "sourceField": "offer_details.content",
+                  "sourceOrdinal": 0
+                }
+              ]
+            },
+            "skuManifest": {
+              "explicitSkuCount": 1,
+              "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+              "nullFactsCarryAvailability": true,
+              "offerId": "700000000101",
+              "optionCount": 1,
+              "schema": "offer-sku-manifest-v1",
+              "singletonSourceKey": null,
+              "skuIds": [
+                "runtime-sku-1"
+              ],
+              "state": "explicit-variants"
+            },
+            "sourceReceipts": {
+              "consignment": {
+                "correlation": "matched",
+                "memberId": "fixture-chain-member-1",
+                "offerId": "700000000101",
+                "pageActionId": "runtime-page-action-offer-detail",
+                "parserRevision": "offer-consignment-parser-v1@1",
+                "rawEvidenceRefs": [
+                  "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f"
+                ],
+                "receiptContentHash": "sha256:2f81919d05cc650853c0d9280ce973897245744bc525651472001dbd0f8c3ae9",
+                "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+                "responseObserved": true,
+                "responseSucceeded": true,
+                "schema": "offer-consignment-observation-receipt-v1",
+                "schemaRevision": "offer-consignment-source-v1@1",
+                "source": "offer-consignment",
+                "state": "available"
+              },
+              "shopCard": {
+                "correlation": "matched",
+                "fieldObservationRefs": [],
+                "memberId": "fixture-chain-member-1",
+                "offerId": "700000000101",
+                "pageActionId": "runtime-page-action-offer-detail",
+                "parserRevision": "shop-card-parser-v1@1",
+                "rawEvidenceRefs": [
+                  "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
+                ],
+                "receiptContentHash": "sha256:4b1bece86dcde6b286b0ab97fbd1043d8e60ca120cdcd36c6cb93ed5b9cce92e",
+                "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+                "responseObserved": true,
+                "responseSucceeded": true,
+                "schema": "offer-shop-card-observation-receipt-v1",
+                "schemaRevision": "shop-card-source-v1@1",
+                "source": "shop-card",
+                "state": "available"
+              }
+            }
+          },
+          "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+          "pageActionId": "runtime-page-action-offer-detail",
+          "schema": "collector.page-action-batch-evidence.v1"
+        },
+        "requestedScope": "page"
+      },
+      "observations": [
+        {
+          "collectedAt": "2026-08-02T00:00:00.001Z",
+          "collectorPageActionEvidence": {
+            "executionLineage": {
+              "executionAttemptOrdinal": 1,
+              "fences": {
+                "reservation": {
+                  "fencingToken": "runtime-reservation-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-reservation-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "supervisor": {
+                  "fencingToken": "runtime-supervisor-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-supervisor-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                },
+                "workUnit": {
+                  "fencingToken": "runtime-work-unit-fence",
+                  "generation": 1,
+                  "leaseId": "runtime-work-unit-lease",
+                  "leaseNotAfter": "2026-08-02T00:10:00.000Z"
+                }
+              },
+              "idempotencyKey": "runtime-idempotency-offer-detail",
+              "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+              "logicalLineageId": "runtime-logical-offer-detail",
+              "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+              "profile": {
+                "contextGeneration": 1,
+                "daemonInstanceId": "runtime-fixture-daemon",
+                "egressId": "runtime-fixture-egress",
+                "profileId": "runtime-fixture-profile",
+                "profileName": "runtime-fixture-profile"
+              },
+              "requestId": "runtime-request-offer-detail",
+              "schema": "collector.page-action-execution-lineage.v1",
+              "workUnitAttemptId": "runtime-work-attempt-offer-detail"
+            },
+            "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7",
+            "logicalLineage": {
+              "actionKind": "offer-detail",
+              "businessSubject": {
+                "kind": "offer-detail",
+                "memberId": "fixture-chain-member-1",
+                "offerId": "700000000101",
+                "searchOriginReceiptHash": "sha256:f32347932c30354e155241fff1e7078142b2049400854e38a7be934c064f8123",
+                "searchOriginReceiptId": "runtime-search-origin-receipt-1"
+              },
+              "collectionTaskId": "runtime-collection-task-offer-detail",
+              "logicalLineageId": "runtime-logical-offer-detail",
+              "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
+              "pageActionId": "runtime-page-action-offer-detail",
+              "schema": "collector.logical-page-action-lineage.v1",
+              "workUnitId": "runtime-work-unit-offer-detail"
+            },
+            "logicalLineageHash": "sha256:cce31df918b344c559d0d2a09617bdf3d061ea58c6d6b507a266302c4eb20a93",
+            "offer": {
+              "mediaManifestV2": {
+                "availability": "available",
+                "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                "items": [
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                    "offerId": "700000000101",
+                    "order": 0,
+                    "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 0,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                    "offerId": "700000000101",
+                    "order": 0,
+                    "originalUrl": "https://img.example.test/runtime-main.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "gallery",
+                    "sourceField": "gallery.images",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 0,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-gallery.jpg",
+                    "offerId": "700000000101",
+                    "order": 1,
+                    "originalUrl": "https://img.example.test/runtime-gallery.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "gallery",
+                    "sourceField": "gallery.images",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 1,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                    "offerId": "700000000101",
+                    "order": 0,
+                    "originalUrl": "https://img.example.test/runtime-main.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "main",
+                    "sourceField": "gallery.mainImage",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 0,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                    "offerId": "700000000101",
+                    "order": 0,
+                    "originalUrl": "https://img.example.test/runtime-main.jpg",
+                    "ownerKind": "target-sku",
+                    "platformSkuId": "runtime-sku-1",
+                    "role": "sku",
+                    "sourceField": "skuProps.imageUrl",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 0,
+                    "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
+                    "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                  }
+                ],
+                "offerId": "700000000101",
+                "schema": "offer-media-manifest-v2",
+                "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                "warnings": [
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "gallery.mainImage",
+                    "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "gallery.images",
+                    "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "gallery.images",
+                    "sourceOrdinal": 1
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "skuProps.imageUrl",
+                    "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 0
+                  }
+                ]
+              },
+              "skuManifest": {
+                "explicitSkuCount": 1,
+                "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                "nullFactsCarryAvailability": true,
+                "offerId": "700000000101",
+                "optionCount": 1,
+                "schema": "offer-sku-manifest-v1",
+                "singletonSourceKey": null,
+                "skuIds": [
+                  "runtime-sku-1"
+                ],
+                "state": "explicit-variants"
+              },
+              "sourceReceipts": {
+                "consignment": {
+                  "correlation": "matched",
+                  "memberId": "fixture-chain-member-1",
+                  "offerId": "700000000101",
+                  "pageActionId": "runtime-page-action-offer-detail",
+                  "parserRevision": "offer-consignment-parser-v1@1",
+                  "rawEvidenceRefs": [
+                    "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f"
+                  ],
+                  "receiptContentHash": "sha256:2f81919d05cc650853c0d9280ce973897245744bc525651472001dbd0f8c3ae9",
+                  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+                  "responseObserved": true,
+                  "responseSucceeded": true,
+                  "schema": "offer-consignment-observation-receipt-v1",
+                  "schemaRevision": "offer-consignment-source-v1@1",
+                  "source": "offer-consignment",
+                  "state": "available"
+                },
+                "shopCard": {
+                  "correlation": "matched",
+                  "fieldObservationRefs": [],
+                  "memberId": "fixture-chain-member-1",
+                  "offerId": "700000000101",
+                  "pageActionId": "runtime-page-action-offer-detail",
+                  "parserRevision": "shop-card-parser-v1@1",
+                  "rawEvidenceRefs": [
+                    "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
+                  ],
+                  "receiptContentHash": "sha256:4b1bece86dcde6b286b0ab97fbd1043d8e60ca120cdcd36c6cb93ed5b9cce92e",
+                  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+                  "responseObserved": true,
+                  "responseSucceeded": true,
+                  "schema": "offer-shop-card-observation-receipt-v1",
+                  "schemaRevision": "shop-card-source-v1@1",
+                  "source": "shop-card",
+                  "state": "available"
+                }
+              }
+            },
+            "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
+            "pageActionId": "runtime-page-action-offer-detail",
+            "schema": "collector.page-action-batch-evidence.v1"
+          },
+          "media": {
+            "availability": "available",
+            "items": [
+              {
+                "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                "order": 0,
+                "originalUrl": "https://img.example.test/runtime-main.jpg",
+                "role": "main",
+                "sourceField": "gallery.mainImage"
+              },
+              {
+                "normalizedUrl": "https://img.example.test/runtime-gallery.jpg",
+                "order": 0,
+                "originalUrl": "https://img.example.test/runtime-gallery.jpg",
+                "role": "gallery",
+                "sourceField": "gallery.images"
+              },
+              {
+                "normalizedUrl": "https://img.example.test/runtime-main.jpg",
+                "order": 0,
+                "originalUrl": "https://img.example.test/runtime-main.jpg",
+                "role": "sku",
+                "skuId": "runtime-sku-1",
+                "sourceField": "skuProps.imageUrl"
+              },
+              {
+                "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                "order": 0,
+                "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                "role": "detail",
+                "sourceField": "offer_details.content"
+              }
+            ],
+            "source": {
+              "collectedAt": "2026-08-02T00:00:00.000Z",
+              "collectorVersion": "1688-cli",
+              "fieldPath": "offer.media",
+              "parserVersion": "1",
+              "sourceRef": "offer:700000000101:media",
+              "sourceType": "offer-payload"
+            },
+            "warnings": []
+          },
+          "offerId": "700000000101"
+        }
+      ],
+      "completeness": {
+        "requestedScope": "page",
+        "state": "complete",
+        "observedPages": [],
+        "failedPages": [],
+        "expectedItems": 1,
+        "uniqueItems": 1
+      },
+      "duplicateObservations": [],
+      "warnings": [],
+      "errors": [],
+      "rawEvidenceRefs": [
+        "artifact:collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a",
+        "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
+        "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
+        "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
+        "artifact:collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e",
+        "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
+        "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
+      ],
+      "metrics": {
+        "capturedOffers": 1,
+        "mediaItems": 4
+      }
+    }
+  ],
+  "completedAt": "2026-08-02T00:00:00.000Z"
+}

@@ -1,0 +1,25 @@
+{
+  "schema": "collector.store-sample-cursor-artifact.v1",
+  "generation": "runtime-execution-attempt-store-sample",
+  "cursor": {
+    "memberId": "fixture-chain-member-1",
+    "canonicalShopUrl": "https://fixture-store.1688.com/",
+    "sortType": "wangpu_score",
+    "count": 30,
+    "generation": "runtime-execution-attempt-store-sample",
+    "observedPages": [
+      1,
+      2,
+      3
+    ],
+    "nextPage": null,
+    "sourceOfferCount": 90,
+    "sourceTotalPages": 3,
+    "categoriesObservedAt": "2026-08-02T00:00:00.000Z",
+    "baselineObservedAt": "2026-08-02T00:00:00.000Z",
+    "baselineExpiresAt": "2026-08-03T00:00:00.000Z",
+    "checkpointState": "exhausted",
+    "exhausted": true
+  },
+  "contentHash": "sha256:d092a57cd9c198d688d167b30ac544b45e9387671acd8ceab2ae5132c0a5b9b5"
+}

@@ -310,4 +310,55 @@ describe('compiled Search pagination runtime', () => {
     expect(excludedReceipt.eligibleSearchHitObservationSetHash)
       .not.toBe(archivedReceipt.eligibleSearchHitObservationSetHash);
   });
+
+  it('clips the terminal observation and candidate universe exactly at maxOffers', async () => {
+    const fake = runtime([{
+      ids: ['9000', '1000', '1000', '2000', '3000'],
+      p4pIds: ['9000'],
+      hasMore: true,
+    }]);
+    const result = await runCompiledSearchActionV1({
+      parameterSet: parameterSet(1, 2, 'exclude-p4p'),
+      port: fake.port,
+      forwardPageBudget: 1,
+      replayPageBudget: 0,
+    });
+    expect(result).toMatchObject({
+      status: 'completed',
+      terminalReason: 'configured-offer-limit',
+    });
+    expect(result.offers.map((entry) => entry.offerId)).toEqual(['1000', '2000']);
+    const responseBusinessHash = result.pages[0]!.page.responseBusinessHash;
+    const allEligibleObservations = [
+      { logicalPage: 1, sourceOrdinal: 1, offerId: '1000', isP4P: false, responseBusinessHash },
+      { logicalPage: 1, sourceOrdinal: 2, offerId: '1000', isP4P: false, responseBusinessHash },
+      { logicalPage: 1, sourceOrdinal: 3, offerId: '2000', isP4P: false, responseBusinessHash },
+      { logicalPage: 1, sourceOrdinal: 4, offerId: '3000', isP4P: false, responseBusinessHash },
+    ];
+    const input = {
+      collectionTaskId: 'task', searchQueryKeyHash: `sha256:${'1'.repeat(64)}`,
+      querySnapshotHash: `sha256:${'2'.repeat(64)}`,
+      completedSearchSegmentIds: ['segment'], completedPageActionIds: ['action'],
+      result, eligibleCandidateIds: ['1000', '2000'],
+      advertisementPolicy: 'exclude-p4p' as const,
+      terminalAt: '2026-07-31T00:00:00.000Z',
+    };
+    const fromOverflow = createSearchTerminalReceiptV1({
+      ...input,
+      eligibleObservations: allEligibleObservations,
+    });
+    const fromExactCut = createSearchTerminalReceiptV1({
+      ...input,
+      eligibleObservations: allEligibleObservations.slice(0, 3),
+    });
+    expect(fromOverflow.eligibleSearchHitObservationSetHash)
+      .toBe(fromExactCut.eligibleSearchHitObservationSetHash);
+    expect(() => createSearchTerminalReceiptV1({
+      ...input,
+      eligibleCandidateIds: ['1000', '2000', '3000'],
+      eligibleObservations: allEligibleObservations,
+    })).toThrowError(expect.objectContaining({
+      code: 'SEARCH_TERMINAL_CANDIDATE_UNIVERSE_MISMATCH',
+    }));
+  });
 });

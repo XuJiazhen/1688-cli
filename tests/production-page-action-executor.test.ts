@@ -10,6 +10,7 @@ import {
   collectorRemoteFailureV1,
   createSearchRecoveryArchivePageV1,
   assertReplayCaptureMatchesArchiveV1,
+  assertOfferCoreMemberIdentityV1,
   assertSearchRecoveryArchiveBindingV1,
   persistOfferSourceSidecarV1,
   persistStoreSampleCursorArtifactV1,
@@ -44,6 +45,61 @@ import {
 import { CliError } from '../src/io/errors.js';
 
 describe('Production PageAction bridge', () => {
+  it('rejects an Offer core whose supplier differs from the signed member', () => {
+    expect(() => assertOfferCoreMemberIdentityV1({
+      supplier: { memberId: 'member-from-another-store' },
+    }, 'member-signed')).toThrowError(expect.objectContaining({
+      code: 'OFFER_CORE_MEMBER_MISMATCH',
+    }));
+  });
+
+  it('fails an Offer PageAction before terminal publication on core member drift', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-offer-member-'));
+    let remoteCalls = 0;
+    let rawComponentCallbacks = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory,
+      now: () => now,
+      idFactory: () => 'offer-member-drift',
+      collectOfferOnPage: async (_context, options) => {
+        if (options.onRawComponent !== undefined) {
+          rawComponentCallbacks++;
+          await options.onRawComponent('core', '<html>wrong member</html>');
+        }
+        return {
+          supplier: { memberId: 'member-from-another-store' },
+        } as never;
+      },
+    }).execute(executableOfferRequest(now), {
+      page: {} as never,
+      pageSessionId: 'offer-member-page',
+      signal: new AbortController().signal,
+      assertAuthorized: async () => {},
+      admitRemoteAttempt: async (input) => {
+        remoteCalls++;
+        return {
+          remoteActionStartId: `start-${input.ordinal}`,
+          admittedAt: now.toISOString(),
+        };
+      },
+      classifyUrl: async () => {},
+      closeOwnedPage: async () => {},
+    });
+    expect(remoteCalls).toBe(1);
+    expect(rawComponentCallbacks).toBe(0);
+    expect(response.completionReceipt).toBeUndefined();
+    expect(response.executionAttemptReceipt).toMatchObject({
+      outcome: 'failed',
+      batches: [],
+      remoteRequestAttempts: [{ rawEvidenceRefs: [] }],
+      error: { code: 'OFFER_CORE_MEMBER_MISMATCH', retryable: false },
+    });
+    expect((await fs.readdir(artifactDirectory)).filter(
+      (entry) => entry.startsWith('collector-raw-'),
+    )).toEqual([]);
+  });
+
   it('resolves a fresh Intent + filter snapshot through resolver/compiler without a seeded compiled artifact', () => {
     const filterSnapshot = parseSearchFilterConfigSnapshotV1({
       payload: {
@@ -611,6 +667,144 @@ describe('Production PageAction bridge', () => {
     });
   });
 
+  it('rejects an ordinary page-2 Search action before any daemon remote call', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-page2-'));
+    const parameterSet = compileSearchParameterSetV1({
+      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
+      serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
+      filterParams: {}, selectedOptions: [], maxPages: 3, maxOffers: 120,
+      advertisementPolicy: 'exclude-p4p',
+    });
+    await fs.writeFile(
+      path.join(artifactDirectory, 'parameter-set.json'),
+      JSON.stringify(parameterSet),
+      { mode: 0o600 },
+    );
+    const request = executableSearchRequest(now, parameterSet);
+    if (request.action.kind !== 'search-list') throw new TypeError('Search expected.');
+    request.action.request.page = 2;
+    let remoteCalls = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now, idFactory: () => 'page2-rejected',
+      pace: async () => {},
+    }).execute(request, {
+      page: new FakeSearchPage('unused') as never,
+      pageSessionId: 'page-session-1', signal: new AbortController().signal,
+      assertAuthorized: async () => {},
+      admitRemoteAttempt: async () => {
+        remoteCalls++;
+        return { remoteActionStartId: 'unexpected', admittedAt: now.toISOString() };
+      },
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+    expect(remoteCalls).toBe(0);
+    expect(response.executionAttemptReceipt).toMatchObject({
+      outcome: 'failed',
+      remoteRequestAttempts: [],
+      error: { code: 'SEARCH_DIRECT_BEGIN_PAGE_PARITY_NOT_VERIFIED' },
+    });
+  });
+
+  it('starts a page-1 Search at logical page 1 and covers its bounded reservation', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-page1-'));
+    const parameterSet = compileSearchParameterSetV1({
+      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
+      serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
+      filterParams: {}, selectedOptions: [], maxPages: 3, maxOffers: 120,
+      advertisementPolicy: 'exclude-p4p',
+    });
+    await fs.writeFile(
+      path.join(artifactDirectory, 'parameter-set.json'),
+      JSON.stringify(parameterSet),
+      { mode: 0o600 },
+    );
+    const outerRequests = [1, 2, 3].map((page) => compileSearchPageRequestV1({
+      parameterSet, page, pageSessionId: 'page-session-1',
+    }).outerDataJson);
+    const admissions: Array<Record<string, unknown>> = [];
+    let page1Id = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now, idFactory: () => `page1-bounded-${++page1Id}`,
+      pace: async () => {}, random: () => 0,
+    }).execute(executableSearchRequest(now, parameterSet), {
+      page: new FakeSearchPage(outerRequests, true) as never,
+      pageSessionId: 'page-session-1', signal: new AbortController().signal,
+      assertAuthorized: async () => {},
+      admitRemoteAttempt: async (input) => {
+        admissions.push(input);
+        return { remoteActionStartId: `start-${input.ordinal}`, admittedAt: now.toISOString() };
+      },
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+    expect(admissions.map((item) => item.logicalPage)).toEqual([1, 2, 3]);
+    expect(response.executionAttemptReceipt).toMatchObject({
+      outcome: 'completed',
+      batches: [
+        { kind: 'search-page' },
+        { kind: 'search-page' },
+        { kind: 'search-page' },
+      ],
+    });
+  });
+
+  it('marks the maxOffers overflow cut in the committed Search Batch', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-overflow-'));
+    const parameterSet = compileSearchParameterSetV1({
+      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
+      serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
+      filterParams: {}, selectedOptions: [], maxPages: 1, maxOffers: 2,
+      advertisementPolicy: 'exclude-p4p',
+    });
+    await fs.writeFile(
+      path.join(artifactDirectory, 'parameter-set.json'),
+      JSON.stringify(parameterSet),
+      { mode: 0o600 },
+    );
+    const compiled = compileSearchPageRequestV1({
+      parameterSet, page: 1, pageSessionId: 'page-session-1',
+    });
+    let id = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now,
+      idFactory: () => `overflow-${++id}`, pace: async () => {},
+    }).execute(executableSearchRequest(now, parameterSet), {
+      page: new FakeSearchPage(compiled.outerDataJson, true, false, null, false, [
+        { offerId: '9000', isP4P: true },
+        { offerId: '1000', isP4P: false },
+        { offerId: '1000', isP4P: false },
+        { offerId: '2000', isP4P: false },
+        { offerId: '3000', isP4P: false },
+      ]) as never,
+      pageSessionId: 'page-session-1', signal: new AbortController().signal,
+      assertAuthorized: async () => {},
+      admitRemoteAttempt: async (input) => ({
+        remoteActionStartId: `start-${input.ordinal}`, admittedAt: now.toISOString(),
+      }),
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+    const batch = response.executionAttemptReceipt.batches[0]!;
+    expect(batch.observations.map((observation) => ({
+      offerId: observation['offerId'],
+      selection: observation['candidateSelectionState'],
+      pageRank: observation['pageRank'],
+    }))).toEqual([
+      { offerId: '9000', selection: 'promoted-excluded', pageRank: 1 },
+      { offerId: '1000', selection: 'selected', pageRank: 2 },
+      { offerId: '2000', selection: 'selected', pageRank: 4 },
+      { offerId: '3000', selection: 'offer-limit-overflow', pageRank: 5 },
+    ]);
+    expect(response.executionAttemptReceipt).toMatchObject({
+      outcome: 'completed',
+      metrics: { uniqueOffers: 2 },
+    });
+  });
+
   it('records all no-progress Search responses as typed failed attempts before terminalizing', async () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-no-progress-'));
@@ -919,9 +1113,21 @@ describe('Production PageAction bridge', () => {
     expect(response.executionAttemptReceipt.remoteRequestAttempts).toHaveLength(4);
     expect(response.executionAttemptReceipt.batches).toHaveLength(3);
     expect(response.executionAttemptReceipt.batches.every((batch) =>
-      batch.rawEvidenceRefs.length === 3
+      batch.rawEvidenceRefs.length === 4
       && batch.rawEvidenceRefs.every((ref) => /^artifact:collector-raw-store-response-/u.test(ref))
     )).toBe(true);
+    expect(response.executionAttemptReceipt.batches.find(
+      (batch) => batch.kind === 'store-profile',
+    )?.observations).toEqual([
+      expect.objectContaining({
+        memberId: 'b2b-member-1',
+        profile: expect.objectContaining({
+          name: expect.objectContaining({
+            availability: 'available', value: 'Fixture Store Header',
+          }),
+        }),
+      }),
+    ]);
   });
 
   it('archives an invalid Store page-1 response without publishing invented observations', async () => {
@@ -960,9 +1166,121 @@ describe('Production PageAction bridge', () => {
       rawEvidenceRefs: [expect.stringMatching(/^artifact:collector-raw-store-response-/u)],
     });
     expect(receipt.batches).toHaveLength(3);
-    expect(receipt.batches.every((batch) => batch.rawEvidenceRefs.length === 1)).toBe(true);
+    expect(receipt.batches.every((batch) => batch.rawEvidenceRefs.length === 2)).toBe(true);
     expect(receipt.batches.find((batch) => batch.kind === 'store-profile')?.observations)
-      .toEqual([]);
+      .toEqual([expect.objectContaining({ memberId: 'b2b-member-1' })]);
+  });
+
+  it('fails closed when the Store header omits required profile fields', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-store-header-'));
+    const request = executableStoreRequest(now);
+    await fs.writeFile(path.join(artifactDirectory, 'identity-store.json'), JSON.stringify({
+      schema: 'collector.canonical-shop-identity-artifact.v1',
+      memberId: 'b2b-member-1', canonicalShopUrl: 'https://fixture.1688.com/',
+      receiptId: 'identity-store', receiptHash: canonicalCollectorSha256V1('identity-store'),
+    }), { mode: 0o600 });
+    const page = new FakeStorePage(false, true);
+    let headerId = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now, idFactory: () => `header-incomplete-${++headerId}`,
+      pace: async () => {}, random: () => 0,
+    }).execute(request, {
+      page: page as never, pageSessionId: 'store-page-session',
+      signal: new AbortController().signal, assertAuthorized: async () => {},
+      admitRemoteAttempt: async (input) => ({
+        remoteActionStartId: `start-${input.ordinal}`,
+        admittedAt: now.toISOString(),
+      }),
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+    expect(page.networkCalls).toBe(1);
+    expect(response.completionReceipt).toBeUndefined();
+    expect(response.executionAttemptReceipt).toMatchObject({
+      outcome: 'failed',
+      error: { code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' },
+    });
+    expect(response.executionAttemptReceipt.batches.find(
+      (batch) => batch.kind === 'store-profile',
+    )?.observations).toEqual([]);
+  });
+
+  it('fails closed when the parsed Store header URL belongs to another Store', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-store-url-'));
+    const request = executableStoreRequest(now);
+    await fs.writeFile(path.join(artifactDirectory, 'identity-store.json'), JSON.stringify({
+      schema: 'collector.canonical-shop-identity-artifact.v1',
+      memberId: 'b2b-member-1', canonicalShopUrl: 'https://fixture.1688.com/',
+      receiptId: 'identity-store', receiptHash: canonicalCollectorSha256V1('identity-store'),
+    }), { mode: 0o600 });
+    const page = new FakeStorePage(
+      false,
+      false,
+      'https://different-member.1688.com/',
+    );
+    let headerId = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now, idFactory: () => `header-url-drift-${++headerId}`,
+      pace: async () => {}, random: () => 0,
+    }).execute(request, {
+      page: page as never, pageSessionId: 'store-page-session',
+      signal: new AbortController().signal, assertAuthorized: async () => {},
+      admitRemoteAttempt: async (input) => ({
+        remoteActionStartId: `start-${input.ordinal}`,
+        admittedAt: now.toISOString(),
+      }),
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+    expect(page.networkCalls).toBe(1);
+    expect(response.completionReceipt).toBeUndefined();
+    expect(response.executionAttemptReceipt).toMatchObject({
+      outcome: 'failed',
+      error: { code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' },
+    });
+    expect(response.executionAttemptReceipt.batches.find(
+      (batch) => batch.kind === 'store-profile',
+    )?.observations).toEqual([]);
+  });
+
+  it('fails closed when the parsed Store header member belongs to another Store', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-store-member-'));
+    const request = executableStoreRequest(now);
+    await fs.writeFile(path.join(artifactDirectory, 'identity-store.json'), JSON.stringify({
+      schema: 'collector.canonical-shop-identity-artifact.v1',
+      memberId: 'b2b-member-1', canonicalShopUrl: 'https://fixture.1688.com/',
+      receiptId: 'identity-store', receiptHash: canonicalCollectorSha256V1('identity-store'),
+    }), { mode: 0o600 });
+    const page = new FakeStorePage(
+      false,
+      false,
+      'https://fixture.1688.com/',
+      'b2b-member-from-another-store',
+    );
+    let headerId = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now,
+      idFactory: () => `header-member-drift-${++headerId}`,
+      pace: async () => {}, random: () => 0,
+    }).execute(request, {
+      page: page as never, pageSessionId: 'store-page-session',
+      signal: new AbortController().signal, assertAuthorized: async () => {},
+      admitRemoteAttempt: async (input) => ({
+        remoteActionStartId: `start-${input.ordinal}`,
+        admittedAt: now.toISOString(),
+      }),
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+    expect(page.networkCalls).toBe(1);
+    expect(response.completionReceipt).toBeUndefined();
+    expect(response.executionAttemptReceipt).toMatchObject({
+      outcome: 'failed',
+      error: { code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' },
+    });
+    expect(response.executionAttemptReceipt.batches.find(
+      (batch) => batch.kind === 'store-profile',
+    )?.observations).toEqual([]);
   });
 
   it('bounds Offer navigation retries and admits every retry independently', async () => {
@@ -1160,11 +1478,15 @@ class FakeSearchPage extends EventEmitter {
   clickCalls = 0;
 
   constructor(
-    private readonly outerDataJson: string,
+    private readonly outerDataJson: string | readonly string[],
     private readonly hasMore = false,
     private readonly emptyWithMore = false,
     private readonly navigationError: CliError | null = null,
     private readonly malformedResponse = false,
+    private readonly responseOffers?: readonly Readonly<{
+      offerId: string;
+      isP4P: boolean;
+    }>[],
   ) {
     super();
   }
@@ -1172,8 +1494,12 @@ class FakeSearchPage extends EventEmitter {
   async goto(url: string, options: unknown): Promise<null> {
     this.navigationCalls.push({ url, options });
     if (this.navigationError) throw this.navigationError;
+    const callIndex = this.navigationCalls.length - 1;
+    const outerDataJson = Array.isArray(this.outerDataJson)
+      ? this.outerDataJson[callIndex]!
+      : this.outerDataJson;
     const responseUrl = `https://h5api.m.1688.com/h5/${SEARCH_MTOP_API}/1.0/?data=${
-      encodeURIComponent(this.outerDataJson)
+      encodeURIComponent(outerDataJson)
     }`;
     this.emit('response', {
       url: () => responseUrl,
@@ -1184,9 +1510,18 @@ class FakeSearchPage extends EventEmitter {
           success: true,
           data: {
             OFFER: {
-              items: this.hasMore && !this.emptyWithMore
-                ? [{ data: { offerId: '1001', title: 'Fixture offer' } }]
-                : [],
+              items: this.responseOffers?.map((offer) => ({ data: {
+                offerId: offer.offerId,
+                title: `Fixture offer ${offer.offerId}`,
+                isP4P: String(offer.isP4P),
+              } })) ?? (this.hasMore && !this.emptyWithMore
+                ? [{ data: {
+                    offerId: Array.isArray(this.outerDataJson)
+                      ? String(1001 + callIndex)
+                      : '1001',
+                    title: 'Fixture offer',
+                  } }]
+                : []),
               hasMore: this.hasMore,
               found: this.hasMore ? 1 : 0,
             },
@@ -1203,15 +1538,42 @@ class FakeSearchPage extends EventEmitter {
   }
 }
 
-class FakeStorePage {
+class FakeStorePage extends EventEmitter {
   networkCalls = 0;
   private currentUrl = 'about:blank';
 
-  constructor(private readonly incompletePage1 = false) {}
+  constructor(
+    private readonly incompletePage1 = false,
+    private readonly incompleteHeader = false,
+    private readonly headerShopUrl = 'https://fixture.1688.com/',
+    private readonly headerMemberId = 'b2b-member-1',
+  ) { super(); }
 
   async goto(url: string): Promise<null> {
     this.networkCalls++;
     this.currentUrl = url;
+    const data = encodeURIComponent(JSON.stringify({
+      componentKey: 'wp_pc_common_header',
+      params: JSON.stringify({ memberId: 'b2b-member-1' }),
+    }));
+    this.emit('response', {
+      url: () => `https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/?data=${data}`,
+      request: () => ({ postData: () => null }),
+      text: async () => JSON.stringify({
+        api: 'mtop.alibaba.alisite.cbu.server.ModuleAsyncService',
+        ret: ['SUCCESS::ok'],
+        data: {
+          success: true,
+          data: this.incompleteHeader
+            ? { mainCate: 'Tools' }
+            : {
+                memberId: this.headerMemberId,
+                companyName: 'Fixture Store Header',
+                commonUrl: { shopUrl: this.headerShopUrl },
+              },
+        },
+      }),
+    });
     return null;
   }
 
@@ -1309,6 +1671,8 @@ function executableSearchRequest(
         searchQueryKeyHash: subject.searchQueryKeyHash,
         searchSegmentId: 'segment-1',
         querySnapshotHash: subject.querySnapshotHash,
+        searchQueryIdentity: 'query-1',
+        page: 1,
         keyword: parameterSet.keyword,
         filterConfigSnapshotId: parameterSet.filterConfigSnapshotId,
         filterConfigSnapshotHash: parameterSet.filterConfigSnapshotHash,

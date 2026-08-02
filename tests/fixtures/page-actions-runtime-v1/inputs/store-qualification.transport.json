@@ -1,0 +1,41 @@
+{
+  "memberId": "fixture-chain-member-1",
+  "response": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "memberId": "fixture-chain-member-1",
+      "companyName": "Runtime Fixture Qualification Store",
+      "sellerType": "manufacturer",
+      "productionService": "fixture assembly",
+      "businessLine": "fixture tools",
+      "strengthSignals": [
+        {
+          "code": "fixture-factory",
+          "enabled": true
+        }
+      ],
+      "guaranteeItems": [
+        {
+          "code": "fixture-return",
+          "status": "enabled"
+        }
+      ],
+      "certList": [
+        {
+          "certName": "Runtime Fixture Certificate",
+          "certType": "fixture-certificate",
+          "imgUrl": "https://img.example.test/runtime-certificate.jpg"
+        }
+      ],
+      "businessInfo": {
+        "companyBusinessLine": "Fixture tool production and distribution.",
+        "companyYearStarted": "2020-01-01"
+      },
+      "propaganda": {
+        "companyImg": []
+      }
+    }
+  }
+}

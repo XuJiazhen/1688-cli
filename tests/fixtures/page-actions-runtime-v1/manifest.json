@@ -1,0 +1,262 @@
+{
+  "schema": "collector.runtime-derived-page-action-fixture-set.v1",
+  "fixtureSetVersion": 1,
+  "provenance": "runtime-derived-production-page-action-executor-v1",
+  "productionExecutorModule": "src/daemon/production-page-action-executor.ts",
+  "transportMode": "offline-fake-page-capture-and-transport",
+  "generatedAt": "2026-08-02T00:00:00.000Z",
+  "generator": {
+    "revision": "production-page-action-executor-offline-fake-v1@1",
+    "sourcePath": "scripts/generate_runtime_page_action_fixtures.ts",
+    "sourceSha256": "7812b81239b02316e31a305640088b4124b61f7238f6d538cf7b8b08272faf4f"
+  },
+  "security": {
+    "recursiveSanitizationGate": true,
+    "containsLiveCredentials": false,
+    "containsPersonalData": false
+  },
+  "legacySyntheticFixtureSet": {
+    "path": "tests/fixtures/page-actions",
+    "evidenceStatus": "synthetic-non-runtime",
+    "acceptedAsRuntimeParityEvidence": false
+  },
+  "actions": [
+    {
+      "actionKind": "search-list",
+      "expectedComponents": [
+        {
+          "component": "search_origin",
+          "completenessProfile": "eligible_observation_set_v1"
+        }
+      ],
+      "transportInputPath": "inputs/search-list.transport.json",
+      "transportInputSha256": "21ce536fdf2e8fcbf3e211a7b7af99533a135988e71dd91b283ba9f8ca49fc0e",
+      "responsePath": "responses/search-list.wire-response.json",
+      "responseSha256": "2b6760cfc93e5a2bf35510988a577c89a5fc9e2b27d4edc0beb1079919833760",
+      "executionEnvelopePath": "envelopes/search-list.execution-attempt-receipt.json",
+      "executionEnvelopeSha256": "f4cfff23add1da13f23ba1fcde4625878b96ebe20f1cdd67cc4b70ca6057f54e",
+      "completionEnvelopePath": "envelopes/search-list.completion-receipt.json",
+      "completionEnvelopeSha256": "65ffd399894118d6ecb26c52e0930eacdf90ba5d4078fed930ef54fca5802284",
+      "batchFiles": [
+        {
+          "path": "batches/search-list/00-search-page.json",
+          "bytes": 13088,
+          "sha256": "66ceacc92e416dfbe79d144c8f7f0645dff5d3da3e781397ffed24d4b61449ac"
+        }
+      ],
+      "archiveFiles": [
+        {
+          "path": "archives/search-list/collector-raw-search-response-245ec4a749715be664540a9595fbddc49a44815de58f3c819eb68d7b392fa49d.json",
+          "bytes": 1417,
+          "sha256": "03fd1ae98d55ed60b8cdb0ee22b8f893f0b80ef84dff4eac5d08bc04360e8e4a"
+        }
+      ]
+    },
+    {
+      "actionKind": "offer-detail",
+      "expectedComponents": [
+        {
+          "component": "offer_consignment",
+          "completenessProfile": "offer_scoped_source_terminal_v1"
+        },
+        {
+          "component": "offer_detail",
+          "completenessProfile": "required_fields_v1"
+        },
+        {
+          "component": "offer_media_manifest",
+          "completenessProfile": "ordered_remote_refs_v1"
+        },
+        {
+          "component": "offer_shop_card_observation",
+          "completenessProfile": "offer_scoped_source_terminal_v1"
+        },
+        {
+          "component": "sku_manifest",
+          "completenessProfile": "complete_variant_set_v1"
+        },
+        {
+          "component": "store_card_source_state",
+          "completenessProfile": "offer_detail_card_terminal_v1"
+        },
+        {
+          "component": "store_profile",
+          "completenessProfile": "offer_card_subset_v1"
+        }
+      ],
+      "transportInputPath": "inputs/offer-detail.transport.json",
+      "transportInputSha256": "1b64c47e8e06b7e1bfc2757ccebc51d1a6932373ff53611aa2c245b2b1df95e6",
+      "responsePath": "responses/offer-detail.wire-response.json",
+      "responseSha256": "ddac56a5c193ae277361f78fb998aca66767480143a219db630a5099e4b247f9",
+      "executionEnvelopePath": "envelopes/offer-detail.execution-attempt-receipt.json",
+      "executionEnvelopeSha256": "ce070a6cac880aa3435a3d9da80dece014b0a5d1627fef10d474092e3c1b3ef3",
+      "completionEnvelopePath": "envelopes/offer-detail.completion-receipt.json",
+      "completionEnvelopeSha256": "b0c3d47c47b142583af0376581742b905a44d7d5a7755ee0be580006c62d1de1",
+      "batchFiles": [
+        {
+          "path": "batches/offer-detail/00-offer-detail.json",
+          "bytes": 28680,
+          "sha256": "169a7b267562767b79bd35a4cdac37a9056e38693b09b2aaff2cefde6fb13820"
+        },
+        {
+          "path": "batches/offer-detail/01-offer-media-manifest.json",
+          "bytes": 24313,
+          "sha256": "8465e8a07b026a9ee74c8b4848479191999ba6d1dba910c9f02d88c210c00b74"
+        }
+      ],
+      "archiveFiles": [
+        {
+          "path": "archives/offer-detail/collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a.json",
+          "bytes": 1104,
+          "sha256": "7405a16c764e28d486d6806f0dc9ffbc4743220ddc3f11379ce45a8bf1c74994"
+        },
+        {
+          "path": "archives/offer-detail/collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30.json",
+          "bytes": 506,
+          "sha256": "752bf3e926c5f5683f46a9a183b0cf1d27512a4d66fa7647ac09609f6ac3cbb2"
+        },
+        {
+          "path": "archives/offer-detail/collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1.json",
+          "bytes": 596,
+          "sha256": "07bdb036b6cbe7f193d254502061b27cd80c120e39ea685fb62f5e63953eeef3"
+        },
+        {
+          "path": "archives/offer-detail/collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4.json",
+          "bytes": 969,
+          "sha256": "42102a7375c5d5958b3eb9978ce644e87500970eb6d5e4fbc1e47cc9f858b4b1"
+        },
+        {
+          "path": "archives/offer-detail/collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e.json",
+          "bytes": 1464,
+          "sha256": "f34cd65ce610adfa0fd9b8ab2c96fc91c30c896718735517c0a117ac13b9eaa3"
+        },
+        {
+          "path": "archives/offer-detail/offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f.json",
+          "bytes": 1070,
+          "sha256": "ad0b170234444ef2d593ce7bbca20e184c67fec591a372dbccda267dfa7f61b4"
+        },
+        {
+          "path": "archives/offer-detail/offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc.json",
+          "bytes": 931,
+          "sha256": "443e5616a48c02a5f01ca00ba6ac0b841e5963e3d4470d90566a76ba65c19bec"
+        }
+      ]
+    },
+    {
+      "actionKind": "store-qualification",
+      "expectedComponents": [
+        {
+          "component": "qualification_media_manifest",
+          "completenessProfile": "ordered_remote_refs_v1"
+        },
+        {
+          "component": "store_card_source_state",
+          "completenessProfile": "business_info_card_terminal_v1"
+        },
+        {
+          "component": "store_profile",
+          "completenessProfile": "business_card_subset_v1"
+        },
+        {
+          "component": "store_qualification",
+          "completenessProfile": "business_info_v1"
+        }
+      ],
+      "transportInputPath": "inputs/store-qualification.transport.json",
+      "transportInputSha256": "c6ff81ae51c220cb073090c0e85d4bca068fe161060e7c4a4da5413c8f8db81a",
+      "responsePath": "responses/store-qualification.wire-response.json",
+      "responseSha256": "686b4b1844ba8040bc4f56d2045bb102238519094a24dc5711f56a26e6d5f208",
+      "executionEnvelopePath": "envelopes/store-qualification.execution-attempt-receipt.json",
+      "executionEnvelopeSha256": "9cd40ca21f21b6282acdfa44fd6de6f0591171ce94d1595add03a375f37f149f",
+      "completionEnvelopePath": "envelopes/store-qualification.completion-receipt.json",
+      "completionEnvelopeSha256": "74e90993209a67062c708489ef3cdd7cf30497febbbd37f09b889d3d2e100a7e",
+      "batchFiles": [
+        {
+          "path": "batches/store-qualification/00-store-qualification.json",
+          "bytes": 17787,
+          "sha256": "7fec6af6378f604196f326be347ae79d683b5d1838fe6d13f24b45bad46aa1a4"
+        }
+      ],
+      "archiveFiles": [
+        {
+          "path": "archives/store-qualification/collector-raw-qualification-response-87069c7722755d30239b835da342cce32033a958d9f7008479b5477d59c251e0.json",
+          "bytes": 1459,
+          "sha256": "6594ecda231f9987bd82cb4d6949d4b59cafa8fdb293ea065878a117bb3c4d4a"
+        }
+      ]
+    },
+    {
+      "actionKind": "store-sample",
+      "expectedComponents": [
+        {
+          "component": "store_card_source_state",
+          "completenessProfile": "wangpu_header_card_terminal_v1"
+        },
+        {
+          "component": "store_catalog_sample",
+          "completenessProfile": "bounded_first_pages_v1"
+        },
+        {
+          "component": "store_categories",
+          "completenessProfile": "category_tree_same_response_v1"
+        },
+        {
+          "component": "store_profile",
+          "completenessProfile": "wangpu_header_subset_v1"
+        }
+      ],
+      "transportInputPath": "inputs/store-sample.transport.json",
+      "transportInputSha256": "9e55e19a42654122c2ea9405a54412651134932b03793ef8bf107733d4bc882d",
+      "responsePath": "responses/store-sample.wire-response.json",
+      "responseSha256": "60e8504c19492e7fa38f2146f9a22db1108647de1d76ca3d0f2536828f25b4f8",
+      "executionEnvelopePath": "envelopes/store-sample.execution-attempt-receipt.json",
+      "executionEnvelopeSha256": "851d46c57249660baba607cac564521e0a541ba7c9279125887ddb6042e11e54",
+      "completionEnvelopePath": "envelopes/store-sample.completion-receipt.json",
+      "completionEnvelopeSha256": "14da44372a851d8a981a6aad6731edee789c3a20292d5ef0a38b792b400c1094",
+      "batchFiles": [
+        {
+          "path": "batches/store-sample/00-store-catalog.json",
+          "bytes": 11704,
+          "sha256": "c9e50d8eac918e8212352a5e7e5a950a26d011c6e40e3ca9390a3db5120fb76b"
+        },
+        {
+          "path": "batches/store-sample/01-store-categories.json",
+          "bytes": 9386,
+          "sha256": "131e3941b7609c886284cca2f50a7108c73a5485ccb845c6e69a9ae2e2d05d39"
+        },
+        {
+          "path": "batches/store-sample/02-store-profile.json",
+          "bytes": 28566,
+          "sha256": "ec1b36f664df2ad5baaf3e4563c87c0bc638579abb46fe4ef76e2fc9869f7299"
+        }
+      ],
+      "archiveFiles": [
+        {
+          "path": "archives/store-sample/collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1.json",
+          "bytes": 1136,
+          "sha256": "75f994dde3f00b25147f77c40466d9b76a1015323f18c4e295c616b5a4d33537"
+        },
+        {
+          "path": "archives/store-sample/collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601.json",
+          "bytes": 894,
+          "sha256": "13e9ea4afd8c9ac70e8f7f7412366f3230870abf3f67e1c9702894cdeafe3645"
+        },
+        {
+          "path": "archives/store-sample/collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704.json",
+          "bytes": 1136,
+          "sha256": "19dd445cce1d2fb961183db4890fd156f71e18d5afbe17bd2e74367101998e26"
+        },
+        {
+          "path": "archives/store-sample/collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184.json",
+          "bytes": 1136,
+          "sha256": "44ca5bc1b119ac6f01db91dbb20736893d6fc686746bf8cfcd287174f37c32c5"
+        },
+        {
+          "path": "archives/store-sample/store-sample-cursor-b8dd1046db72a6424dad46f08475885aa82a60f4277952cc97e88a744e6e9ba8.json",
+          "bytes": 793,
+          "sha256": "960f9be938fefa93610a6fb50304afd8cb9c2588fac20a59b882b84b57a4e85f"
+        }
+      ]
+    }
+  ]
+}

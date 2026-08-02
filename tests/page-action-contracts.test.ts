@@ -75,6 +75,8 @@ function actionFixture(kind: string) {
           searchQueryKeyHash: subject.searchQueryKeyHash,
           searchSegmentId: 'search-segment-1',
           querySnapshotHash: subject.querySnapshotHash,
+          searchQueryIdentity: 'search-query-1',
+          page: 1,
           keyword: 'tent',
           filterConfigSnapshotId: 'filter-snapshot-1',
           filterConfigSnapshotHash: hash('filter-snapshot'),
@@ -595,6 +597,7 @@ describe('PageAction V1 wire contracts', () => {
       request: {
         ...firstAttempt.action.request,
         searchSegmentId: 'search-segment-2',
+        page: 2,
         requestedStartPage: 2,
       },
     });
@@ -632,6 +635,7 @@ describe('PageAction V1 wire contracts', () => {
       request: {
         ...retry.action.request,
         searchSegmentId: 'search-segment-2',
+        page: 2,
         requestedStartPage: 2,
       },
       recoveryHandle: searchRecoveryHandle(),
@@ -653,6 +657,7 @@ describe('PageAction V1 wire contracts', () => {
       request: {
         ...retry.action.request,
         searchSegmentId: 'search-segment-2',
+        page: 2,
         requestedStartPage: 2,
       },
       recoveryHandle: searchRecoveryHandle({
@@ -666,7 +671,7 @@ describe('PageAction V1 wire contracts', () => {
 
     const repeatedSegment = rebindSearchAction(retry, {
       ...retry.action,
-      request: { ...retry.action.request, requestedStartPage: 2 },
+      request: { ...retry.action.request, page: 2, requestedStartPage: 2 },
       recoveryHandle: searchRecoveryHandle(),
     });
     expect(() => normalizePageActionRequestV1(

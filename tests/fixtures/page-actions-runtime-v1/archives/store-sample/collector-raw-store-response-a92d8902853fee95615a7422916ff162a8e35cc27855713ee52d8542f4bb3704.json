@@ -1,0 +1,39 @@
+{
+  "schema": "collector.sanitized-raw-archive.v1",
+  "kind": "store-response",
+  "parserRevision": "alisite-store-catalog-v1",
+  "pageActionId": "runtime-page-action-store-sample",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-store-sample-3",
+  "requestBusinessHash": "sha256:c933605defce9ce254f51b9810c13056aa7105a26e3a69256ccec77a06d751a2",
+  "sanitizedPayload": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "content": {
+        "offerCount": 90,
+        "totalPages": 3,
+        "offerList": [
+          {
+            "id": "700000000202",
+            "memberId": "fixture-chain-member-1",
+            "subject": "Runtime Fixture Store Offer 2",
+            "offerImages": [
+              "https://img.example.test/runtime-store-2.jpg"
+            ]
+          }
+        ],
+        "offerCategoryDataModel": {
+          "offerCategoryList": [
+            {
+              "id": "fixture-cat-1",
+              "name": "Tools",
+              "count": 90
+            }
+          ]
+        }
+      }
+    }
+  },
+  "payloadHash": "sha256:364cd69a7465a231a784414c38b0af9b5fdf4f7ef10eda0cd5bf167995eed1d5"
+}

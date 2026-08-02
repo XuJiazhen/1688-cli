@@ -1,0 +1,53 @@
+{
+  "schema": "collector.sanitized-raw-archive.v1",
+  "kind": "offer-sku",
+  "parserRevision": "offer-sku-v1@1",
+  "pageActionId": "runtime-page-action-offer-detail",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+  "requestBusinessHash": "sha256:e00f503a51635f46143ed57fb278b775e9a0864593cc248aa5ba3a8f2fd3de04",
+  "sanitizedPayload": {
+    "ret": [
+      "SUCCESS::ok"
+    ],
+    "data": {
+      "skuSelectorBizModel": {
+        "skuPriceScale": "8.00-10.00",
+        "skuProps": [
+          {
+            "prop": "variant",
+            "value": [
+              {
+                "name": "fixture-a",
+                "imageUrl": "https://img.example.test/runtime-offer-sku-a.jpg"
+              }
+            ]
+          }
+        ],
+        "skuInfoMap": {
+          "fixture-a": {
+            "skuId": "runtime-sku-1",
+            "specAttrs": "variant:fixture-a",
+            "price": "8.00",
+            "canBookCount": "25",
+            "saleCount": 4
+          }
+        },
+        "skuSelectorModel": {
+          "tradeModel": {
+            "beginAmount": 1,
+            "unit": "piece",
+            "offerPriceModel": {
+              "currentPrices": [
+                {
+                  "beginAmount": 1,
+                  "price": "8.00"
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "payloadHash": "sha256:c72a53d6f4136fda510758fd6131a4fd794e9d10825b28b0ac9d26deb563ee35"
+}
