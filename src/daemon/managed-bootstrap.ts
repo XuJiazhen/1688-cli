@@ -16,14 +16,20 @@ import {
   type SupervisorRuntimeEvent,
 } from './supervisor-runtime.js';
 import type { ServerOpts } from './server.js';
+import {
+  parseTransportAuthorityV2,
+  SUPERVISOR_PROTOCOL_SHA256_V2,
+  type TransportAuthorityV2,
+} from './supervisor-rpc.js';
 
-export interface ManagedSupervisorDaemonConfigV1 {
-  schema: 'profile-supervisor.daemon-config.v1';
+export interface ManagedSupervisorDaemonConfigV2 {
+  schema: 'profile-supervisor.daemon-config.v2';
   profileId: string;
   profileName: string;
   daemonInstanceId: string;
   supervisorGeneration: number;
   contextGeneration: number;
+  transportAuthority: TransportAuthorityV2;
   databaseNow: string;
   databaseTimeSampledAt: string;
   credentialKeys: Readonly<Record<string, string>>;
@@ -36,15 +42,15 @@ export interface ManagedSupervisorDaemonConfigV1 {
 
 export interface ManagedBootstrapDependencies {
   hostFactory?: (
-    config: ManagedSupervisorDaemonConfigV1,
+    config: ManagedSupervisorDaemonConfigV2,
     now: () => Date,
   ) => PersistentContextHost;
   executorFactory?: (
-    config: ManagedSupervisorDaemonConfigV1,
+    config: ManagedSupervisorDaemonConfigV2,
     now: () => Date,
   ) => PageActionExecutor;
   acceptanceRepositoryFactory?: (
-    config: ManagedSupervisorDaemonConfigV1,
+    config: ManagedSupervisorDaemonConfigV2,
   ) => PageActionAcceptanceRepository;
 }
 
@@ -57,6 +63,14 @@ export async function loadManagedServerOptions(
   const config = await loadManagedSupervisorConfig(configPath);
   if (expectedProfile !== undefined && expectedProfile !== config.profileName) {
     throw new Error('Managed daemon config does not match --profile.');
+  }
+  if (
+    config.transportAuthority.mode === 'scripted_offline'
+    && dependencies.executorFactory === undefined
+  ) {
+    throw new Error(
+      'scripted_offline authority requires the exact offline harness executor.',
+    );
   }
   const sampledDatabase = Date.parse(config.databaseNow);
   const sampledWall = Date.parse(config.databaseTimeSampledAt);
@@ -95,6 +109,7 @@ export async function loadManagedServerOptions(
     daemonInstanceId: config.daemonInstanceId,
     supervisorGeneration: config.supervisorGeneration,
     contextGeneration: config.contextGeneration,
+    transportAuthority: config.transportAuthority,
     host,
     credentialVerifier: new HmacRenewalCredentialVerifier(config.credentialKeys),
     acceptanceRepository,
@@ -118,7 +133,7 @@ export async function loadManagedServerOptions(
 
 export async function loadManagedSupervisorConfig(
   configPath: string,
-): Promise<ManagedSupervisorDaemonConfigV1> {
+): Promise<ManagedSupervisorDaemonConfigV2> {
   if (!path.isAbsolute(configPath)) {
     throw new TypeError('Managed daemon config path must be absolute.');
   }
@@ -131,15 +146,15 @@ export async function loadManagedSupervisorConfig(
   return parseManagedConfig(value);
 }
 
-function parseManagedConfig(value: unknown): ManagedSupervisorDaemonConfigV1 {
+function parseManagedConfig(value: unknown): ManagedSupervisorDaemonConfigV2 {
   const record = strictRecord(value, [
     'schema', 'profileId', 'profileName', 'daemonInstanceId',
     'supervisorGeneration', 'contextGeneration', 'databaseNow',
     'databaseTimeSampledAt', 'credentialKeys', 'pageActionVerification',
     'artifactDirectory', 'acceptanceJournalPath', 'runtimeEventPath',
-    'storeSampleFreshnessMs',
+    'storeSampleFreshnessMs', 'transportAuthority',
   ]);
-  if (record['schema'] !== 'profile-supervisor.daemon-config.v1') {
+  if (record['schema'] !== 'profile-supervisor.daemon-config.v2') {
     throw new Error('Managed daemon config schema is unsupported.');
   }
   const credentialKeys = stringMap(record['credentialKeys'], 'credentialKeys');
@@ -149,13 +164,14 @@ function parseManagedConfig(value: unknown): ManagedSupervisorDaemonConfigV1 {
     }
   }
   const verification = parseVerification(record['pageActionVerification']);
-  const config: ManagedSupervisorDaemonConfigV1 = {
-    schema: 'profile-supervisor.daemon-config.v1',
-    profileId: identifier(record['profileId'], 'profileId'),
+  const config: ManagedSupervisorDaemonConfigV2 = {
+    schema: 'profile-supervisor.daemon-config.v2',
+    profileId: uuid(record['profileId'], 'profileId'),
     profileName: identifier(record['profileName'], 'profileName'),
-    daemonInstanceId: identifier(record['daemonInstanceId'], 'daemonInstanceId'),
-    supervisorGeneration: nonNegativeInteger(record['supervisorGeneration'], 'supervisorGeneration'),
+    daemonInstanceId: uuid(record['daemonInstanceId'], 'daemonInstanceId'),
+    supervisorGeneration: positiveInteger(record['supervisorGeneration'], 'supervisorGeneration'),
     contextGeneration: positiveInteger(record['contextGeneration'], 'contextGeneration'),
+    transportAuthority: parseTransportAuthorityV2(record['transportAuthority']),
     databaseNow: timestamp(record['databaseNow'], 'databaseNow'),
     databaseTimeSampledAt: timestamp(record['databaseTimeSampledAt'], 'databaseTimeSampledAt'),
     credentialKeys,
@@ -173,6 +189,9 @@ function parseManagedConfig(value: unknown): ManagedSupervisorDaemonConfigV1 {
   };
   if (Date.parse(config.databaseTimeSampledAt) > Date.now() + 5_000) {
     throw new Error('Managed daemon database time sample is from the future.');
+  }
+  if (config.transportAuthority.protocolSha256 !== SUPERVISOR_PROTOCOL_SHA256_V2) {
+    throw new Error('Managed daemon protocolSha256 does not match this nested CLI build.');
   }
   return config;
 }
@@ -259,6 +278,16 @@ function stringMap(value: unknown, name: string): Record<string, string> {
 function identifier(value: unknown, name: string): string {
   if (typeof value !== 'string' || !/^[A-Za-z0-9._:@/-]+$/u.test(value)) {
     throw new Error(`${name} is invalid.`);
+  }
+  return value;
+}
+
+function uuid(value: unknown, name: string): string {
+  if (
+    typeof value !== 'string'
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value)
+  ) {
+    throw new Error(`${name} must be a lowercase canonical UUID.`);
   }
   return value;
 }

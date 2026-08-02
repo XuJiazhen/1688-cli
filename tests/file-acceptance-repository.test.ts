@@ -5,6 +5,18 @@ import { describe, expect, it } from 'vitest';
 import { FilePageActionAcceptanceRepository } from '../src/daemon/file-acceptance-repository.js';
 import type { PageActionAcceptance } from '../src/daemon/supervisor-runtime.js';
 import type { PageActionRequestV1 } from '../src/collection/page-action-contracts.js';
+import { SUPERVISOR_PROTOCOL_SHA256_V2 } from '../src/daemon/supervisor-rpc.js';
+
+const transportAuthority = {
+  mode: 'scripted_offline' as const,
+  executionAuthorityDocumentId: '50000000-0000-4000-8000-000000000001',
+  executionAuthorityDocumentSha256: '1'.repeat(64),
+  executionSubjectDocumentId: '50000000-0000-4000-8000-000000000002',
+  executionSubjectDocumentSha256: '2'.repeat(64),
+  cohortId: '50000000-0000-4000-8000-000000000003',
+  runId: '50000000-0000-4000-8000-000000000004',
+  protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
+};
 
 describe('FilePageActionAcceptanceRepository', () => {
   it('persists acceptance before execution and returns in-flight after restart', async () => {
@@ -51,8 +63,10 @@ describe('FilePageActionAcceptanceRepository', () => {
           requestBusinessHash: `sha256:${'1'.repeat(64)}`,
         },
         receipt: {
-          remoteActionStartId: 'remote-action-start-1',
+          remoteActionStartId: '50000000-0000-4000-8000-000000000005',
           admittedAt: '2026-07-31T08:00:01.000Z',
+          transportAuthority,
+          parentCanonicalRequestHash: accepted.canonicalRequestHash,
         },
       },
     });
@@ -66,8 +80,10 @@ describe('FilePageActionAcceptanceRepository', () => {
             purpose: 'single-target', requestBusinessHash: `sha256:${'1'.repeat(64)}`,
           },
           receipt: {
-            remoteActionStartId: 'remote-action-start-1',
+            remoteActionStartId: '50000000-0000-4000-8000-000000000005',
             admittedAt: '2026-07-31T08:00:01.000Z',
+            transportAuthority,
+            parentCanonicalRequestHash: accepted.canonicalRequestHash,
           },
         }],
       },
@@ -118,6 +134,8 @@ function acceptance(): PageActionAcceptance {
     requestId: 'request-1',
     idempotencyKey: 'idem-1',
     canonicalRequestHash: 'a'.repeat(64),
+    pageActionPayloadHash: 'f'.repeat(64),
+    transportAuthority,
     pageActionId: 'page-action-1',
     pageActionExecutionAttemptId: 'attempt-1',
     acceptedAt: '2026-07-31T08:00:00.000Z',

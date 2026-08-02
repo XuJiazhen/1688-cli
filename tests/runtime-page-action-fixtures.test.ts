@@ -16,6 +16,7 @@ import {
 } from '../scripts/generate_runtime_page_action_fixtures.js';
 import type { PageActionRequestV1 } from '../src/collection/page-action-contracts.js';
 import type { PageActionExecutionScope } from '../src/daemon/supervisor-runtime.js';
+import { SUPERVISOR_PROTOCOL_SHA256_V2 } from '../src/daemon/supervisor-rpc.js';
 import { compileSearchParameterSetV1 } from '../src/session/search-compiler.js';
 
 const execFileAsync = promisify(execFile);
@@ -70,12 +71,22 @@ describe('runtime-derived PageAction fixtures', () => {
     const configPath = path.join(root, 'managed-config.json');
     const sampled = new Date();
     await fs.writeFile(configPath, JSON.stringify({
-      schema: 'profile-supervisor.daemon-config.v1',
-      profileId: 'offline-fixture-profile-id',
+      schema: 'profile-supervisor.daemon-config.v2',
+      profileId: '70000000-0000-4000-8000-000000000001',
       profileName,
-      daemonInstanceId: 'offline-fixture-daemon-id',
+      daemonInstanceId: '70000000-0000-4000-8000-000000000002',
       supervisorGeneration: 1,
       contextGeneration: 1,
+      transportAuthority: {
+        mode: 'scripted_offline',
+        executionAuthorityDocumentId: '70000000-0000-4000-8000-000000000003',
+        executionAuthorityDocumentSha256: 'a'.repeat(64),
+        executionSubjectDocumentId: '70000000-0000-4000-8000-000000000004',
+        executionSubjectDocumentSha256: 'b'.repeat(64),
+        cohortId: '70000000-0000-4000-8000-000000000005',
+        runId: '70000000-0000-4000-8000-000000000006',
+        protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
+      },
       databaseNow: sampled.toISOString(),
       databaseTimeSampledAt: sampled.toISOString(),
       credentialKeys: { key1: 'offline-fixture-key-with-at-least-32-bytes' },
@@ -87,11 +98,19 @@ describe('runtime-derived PageAction fixtures', () => {
       artifactDirectory: artifacts,
     }), { mode: 0o600 });
     const binary = path.resolve('scripts/offline_managed_daemon_harness.ts');
+    const scenario = 'chain-coherent-available-v1';
     const environment = {
       ...process.env,
       BB1688_HOME: home,
       BB1688_TEST_ONLY_OFFLINE_MANAGED_DAEMON: '1',
-      BB1688_OFFLINE_PAGE_ACTION_SCENARIO: 'chain-coherent-available-v1',
+      BB1688_OFFLINE_PAGE_ACTION_SCENARIO: scenario,
+      BB1688_SUPERVISOR_PROTOCOL_SHA256: SUPERVISOR_PROTOCOL_SHA256_V2,
+      BB1688_OFFLINE_PAGE_ACTION_SCENARIO_SHA256: createHash('sha256')
+        .update(JSON.stringify({ scenario, descriptor }))
+        .digest('hex'),
+      BB1688_OFFLINE_MANAGED_DAEMON_HARNESS_SHA256: createHash('sha256')
+        .update(await fs.readFile(binary))
+        .digest('hex'),
     };
     const previousHome = process.env['BB1688_HOME'];
     process.env['BB1688_HOME'] = home;

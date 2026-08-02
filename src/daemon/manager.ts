@@ -16,6 +16,10 @@ import { daemonCall, isDaemonReachable } from './client.js';
 import { CliError } from '../io/errors.js';
 import { waitUntil } from '../session/wait.js';
 import pkg from '../../package.json' with { type: 'json' };
+import {
+  parseTransportAuthorityV2,
+  type TransportAuthorityV2,
+} from './supervisor-rpc.js';
 
 export interface DaemonStatus {
   profile: string;
@@ -34,6 +38,7 @@ export interface ManagedDaemonIdentity {
   daemonInstanceId: string;
   supervisorGeneration: number;
   contextGeneration: number;
+  transportAuthority: TransportAuthorityV2;
   daemonPid: number;
   chromiumPid: number;
   headful: true;
@@ -198,9 +203,12 @@ export async function startManaged(
   const identity = await readManagedDaemonIdentity(profileName);
   if (
     identity === null
+    || identity.profileId !== config.profileId
     || identity.daemonInstanceId !== config.daemonInstanceId
     || identity.supervisorGeneration !== config.supervisorGeneration
     || identity.contextGeneration !== config.contextGeneration
+    || JSON.stringify(identity.transportAuthority)
+      !== JSON.stringify(config.transportAuthority)
   ) {
     await isolateManagedDaemon({
       profileName,
@@ -305,6 +313,7 @@ export async function readManagedDaemonIdentity(
     daemonInstanceId: managedString(record['daemonInstanceId'], 'daemonInstanceId'),
     supervisorGeneration: managedInteger(record['supervisorGeneration'], 'supervisorGeneration'),
     contextGeneration: managedInteger(record['contextGeneration'], 'contextGeneration'),
+    transportAuthority: parseTransportAuthorityV2(record['transportAuthority']),
     daemonPid: managedInteger(record['daemonPid'], 'daemonPid'),
     chromiumPid: managedInteger(record['chromiumPid'], 'chromiumPid'),
     headful: record['headful'],

@@ -29,23 +29,25 @@ import {
   SUPERVISOR_RPC_RESPONSE_SCHEMA,
   SupervisorRpcError,
   canonicalRpcPayloadHash,
+  parseTransportAuthorityV2,
   supervisorRpcOperation,
   validateRpcBinding,
   type BeginInterventionCommandV1,
   type DrainCommandV1,
   type EndInterventionCommandV1,
-  type ParsedSupervisorRpcRequestV1,
-  type RenewalCredentialTransportV1,
+  type ParsedSupervisorRpcRequestV2,
+  type RenewalCredentialTransportV2,
   type RestartCommandV1,
-  type SupervisorRpcBindingV1,
-  type SupervisorControlCredentialV1,
-  type SupervisorRpcFailureV1,
+  type SupervisorRpcBindingV2,
+  type SupervisorControlCredentialV2,
+  type SupervisorRpcFailureV2,
   type SupervisorRpcOperation,
-  type SupervisorRpcResponseV1,
-  type SupervisorRpcSuccessV1,
+  type SupervisorRpcResponseV2,
+  type SupervisorRpcSuccessV2,
   type VerifyInterventionCommandV1,
-  type RemoteAttemptAdmissionRequestV1,
-  type RemoteAttemptAdmissionReceiptV1,
+  type RemoteAttemptAdmissionRequestV2,
+  type RemoteAttemptAdmissionReceiptV2,
+  type TransportAuthorityV2,
 } from './supervisor-rpc.js';
 
 export type SupervisorDaemonRuntimeState =
@@ -99,9 +101,9 @@ export interface PersistentContextHost {
 }
 
 export interface CredentialAuthorizationInput {
-  credential: RenewalCredentialTransportV1 | SupervisorControlCredentialV1;
+  credential: RenewalCredentialTransportV2 | SupervisorControlCredentialV2;
   operation: SupervisorRpcOperation;
-  binding: SupervisorRpcBindingV1;
+  binding: SupervisorRpcBindingV2;
   canonicalPayloadHash: string;
   now: Date;
 }
@@ -114,20 +116,22 @@ export interface PageActionAcceptance {
   requestId: string;
   idempotencyKey: string;
   canonicalRequestHash: string;
+  pageActionPayloadHash: string;
+  transportAuthority: TransportAuthorityV2;
   pageActionId: string;
   pageActionExecutionAttemptId: string;
   acceptedAt: string;
   request: PageActionRequestV1;
   remoteAttemptStartedAt: string | null;
-  remoteAttemptAdmissions: DurableRemoteAttemptAdmissionV1[];
+  remoteAttemptAdmissions: DurableRemoteAttemptAdmissionV2[];
 }
 
-export interface DurableRemoteAttemptAdmissionV1 {
+export interface DurableRemoteAttemptAdmissionV2 {
   request: Omit<
-    RemoteAttemptAdmissionRequestV1,
+    RemoteAttemptAdmissionRequestV2,
     'pageActionId' | 'pageActionExecutionAttemptId'
   >;
-  receipt: RemoteAttemptAdmissionReceiptV1;
+  receipt: RemoteAttemptAdmissionReceiptV2;
 }
 
 export type AcceptanceResult =
@@ -144,7 +148,7 @@ export interface PageActionAcceptanceRepository {
   } | null>;
   recordRemoteAttemptAdmission(input: {
     acceptance: PageActionAcceptance;
-    admission: DurableRemoteAttemptAdmissionV1;
+    admission: DurableRemoteAttemptAdmissionV2;
   }): Promise<void>;
   lookup(input: PageActionReceiptLookupV1): Promise<PageActionExecuteResponseV1 | null>;
   complete(input: {
@@ -166,19 +170,19 @@ export interface PageActionExecutionScope {
   signal: AbortSignal;
   assertAuthorized(operation?: 'checkpoint' | 'terminal'): Promise<void>;
   admitRemoteAttempt(
-    input: Omit<RemoteAttemptAdmissionRequestV1, 'pageActionId' | 'pageActionExecutionAttemptId'>,
-  ): Promise<RemoteAttemptAdmissionReceiptV1>;
+    input: Omit<RemoteAttemptAdmissionRequestV2, 'pageActionId' | 'pageActionExecutionAttemptId'>,
+  ): Promise<RemoteAttemptAdmissionReceiptV2>;
   classifyUrl(urlClass: string): Promise<void>;
   /** Requests the reason; runtime closes and receipts the Page after executor return. */
   closeOwnedPage(reason: string): Promise<void>;
 }
 
-export interface RemoteAttemptAdmissionAuthorizerV1 {
-  authorize(input: RemoteAttemptAdmissionRequestV1): Promise<RemoteAttemptAdmissionReceiptV1>;
+export interface RemoteAttemptAdmissionAuthorizerV2 {
+  authorize(input: RemoteAttemptAdmissionRequestV2): Promise<RemoteAttemptAdmissionReceiptV2>;
 }
 
-export interface SupervisorRpcExecutionHooksV1 {
-  remoteAttemptAdmission?: RemoteAttemptAdmissionAuthorizerV1;
+export interface SupervisorRpcExecutionHooksV2 {
+  remoteAttemptAdmission?: RemoteAttemptAdmissionAuthorizerV2;
 }
 
 export interface PageActionExecutor {
@@ -213,6 +217,7 @@ export interface ProfileDaemonRuntimeOptions {
   daemonInstanceId: string;
   contextGeneration: number;
   supervisorGeneration: number;
+  transportAuthority: TransportAuthorityV2;
   host: PersistentContextHost;
   credentialVerifier: RenewalCredentialVerifier;
   acceptanceRepository: PageActionAcceptanceRepository;
@@ -265,7 +270,7 @@ export class DatabaseAnchoredMonotonicClock {
 interface ActiveExecution {
   request: PageActionRequestV1;
   rpcId: string;
-  authorizedRequest: ParsedSupervisorRpcRequestV1;
+  authorizedRequest: ParsedSupervisorRpcRequestV2;
   abort: AbortController;
   promise: Promise<PageActionExecuteResponseV1>;
   pageSessionId: string | null;
@@ -273,7 +278,7 @@ interface ActiveExecution {
   awaitingIntervention: boolean;
   pendingInterventionSessionId: string | null;
   interventionTimer: ReturnType<typeof setTimeout> | null;
-  remoteAttemptAdmission: RemoteAttemptAdmissionAuthorizerV1 | null;
+  remoteAttemptAdmission: RemoteAttemptAdmissionAuthorizerV2 | null;
   lastRemoteAttemptOrdinal: number;
 }
 
@@ -308,7 +313,8 @@ export class ProfileDaemonRuntime {
     required(options.profileName, 'profileName');
     required(options.daemonInstanceId, 'daemonInstanceId');
     positiveInteger(options.contextGeneration, 'contextGeneration');
-    nonNegativeInteger(options.supervisorGeneration, 'supervisorGeneration');
+    positiveInteger(options.supervisorGeneration, 'supervisorGeneration');
+    parseTransportAuthorityV2(options.transportAuthority);
     this.contextGeneration = options.contextGeneration;
     this.now = options.now ?? (() => new Date());
     this.idFactory = options.idFactory ?? randomUUID;
@@ -390,6 +396,7 @@ export class ProfileDaemonRuntime {
       daemonInstanceId: this.options.daemonInstanceId,
       contextGeneration: this.contextGeneration,
       supervisorGeneration: this.options.supervisorGeneration,
+      transportAuthority: structuredClone(this.options.transportAuthority),
       runtimeState: this.state,
       chromiumPid: this.descriptor?.chromiumPid ?? null,
       headful: this.descriptor?.headful ?? null,
@@ -408,9 +415,9 @@ export class ProfileDaemonRuntime {
   }
 
   async handle(
-    request: ParsedSupervisorRpcRequestV1,
-    hooks: SupervisorRpcExecutionHooksV1 = {},
-  ): Promise<SupervisorRpcResponseV1> {
+    request: ParsedSupervisorRpcRequestV2,
+    hooks: SupervisorRpcExecutionHooksV2 = {},
+  ): Promise<SupervisorRpcResponseV2> {
     try {
       this.validateBinding(request);
       await this.authorize(request);
@@ -453,16 +460,16 @@ export class ProfileDaemonRuntime {
           data = await this.endIntervention(request.payload);
           break;
       }
-      return success(request.rpcId, data);
+      return success(request, data);
     } catch (error) {
-      return failure(request.rpcId, error);
+      return failure(request, error);
     }
   }
 
   async execute(
     pageAction: PageActionRequestV1,
-    rpcRequest: ParsedSupervisorRpcRequestV1,
-    remoteAttemptAdmission?: RemoteAttemptAdmissionAuthorizerV1,
+    rpcRequest: ParsedSupervisorRpcRequestV2,
+    remoteAttemptAdmission?: RemoteAttemptAdmissionAuthorizerV2,
   ): Promise<PageActionExecuteResponseV1> {
     const acceptedExecution = await this.acceptanceSerial(async () => {
       if (this.state !== 'warm') {
@@ -496,6 +503,8 @@ export class ProfileDaemonRuntime {
       requestId: pageAction.requestId,
       idempotencyKey: pageAction.idempotencyKey,
       canonicalRequestHash: canonicalRpcPayloadHash(rpcRequest),
+      pageActionPayloadHash: canonicalCollectorSha256V1(pageAction).replace(/^sha256:/u, ''),
+      transportAuthority: structuredClone(rpcRequest.binding.transportAuthority),
       pageActionId: pageAction.pageActionId,
       pageActionExecutionAttemptId: pageAction.pageActionExecutionAttemptId,
       acceptedAt: this.now().toISOString(),
@@ -560,7 +569,7 @@ export class ProfileDaemonRuntime {
 
   async renewExecution(
     parentRpcId: string,
-    renewal: ParsedSupervisorRpcRequestV1 & { method: 'collector.pageAction.execute' },
+    renewal: ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' },
   ): Promise<void> {
     this.validateBinding(renewal);
     await this.authorize(renewal);
@@ -1027,6 +1036,18 @@ export class ProfileDaemonRuntime {
             pageActionId: request.pageActionId,
             pageActionExecutionAttemptId: request.pageActionExecutionAttemptId,
           });
+          if (
+            canonicalJson(receipt.transportAuthority)
+              !== canonicalJson(active.authorizedRequest.binding.transportAuthority)
+            || receipt.parentCanonicalRequestHash
+              !== canonicalRpcPayloadHash(active.authorizedRequest)
+          ) {
+            throw new SupervisorRuntimeError(
+              'REMOTE_ATTEMPT_ADMISSION_RESPONSE_MISMATCH',
+              'Admission receipt authority or parent request hash differs.',
+              false,
+            );
+          }
           try {
             await this.assertStillAuthorized(active.authorizedRequest, 'execute');
             await this.options.acceptanceRepository.recordRemoteAttemptAdmission({
@@ -1332,17 +1353,18 @@ export class ProfileDaemonRuntime {
     };
   }
 
-  private validateBinding(request: ParsedSupervisorRpcRequestV1): void {
+  private validateBinding(request: ParsedSupervisorRpcRequestV2): void {
     validateRpcBinding(request, {
       profileId: this.options.profileId,
       daemonInstanceId: this.options.daemonInstanceId,
       contextGeneration: this.contextGeneration,
       supervisorGeneration: this.options.supervisorGeneration,
+      transportAuthority: this.options.transportAuthority,
       now: this.now(),
     });
   }
 
-  private async authorize(request: ParsedSupervisorRpcRequestV1): Promise<void> {
+  private async authorize(request: ParsedSupervisorRpcRequestV2): Promise<void> {
     await this.options.credentialVerifier.authorize({
       credential: request.binding.renewalCredential
         ?? request.binding.controlCredential!,
@@ -1354,7 +1376,7 @@ export class ProfileDaemonRuntime {
   }
 
   private async assertStillAuthorized(
-    request: ParsedSupervisorRpcRequestV1,
+    request: ParsedSupervisorRpcRequestV2,
     operation: SupervisorRpcOperation,
   ): Promise<void> {
     this.validateBinding(request);
@@ -1524,6 +1546,7 @@ export interface ProfileDaemonStatus {
   daemonInstanceId: string;
   contextGeneration: number;
   supervisorGeneration: number;
+  transportAuthority: TransportAuthorityV2;
   runtimeState: SupervisorDaemonRuntimeState;
   chromiumPid: number | null;
   headful: boolean | null;
@@ -1667,6 +1690,9 @@ implements PageActionAcceptanceRepository {
     if (existing) {
       if (
         existing.acceptance.canonicalRequestHash !== input.canonicalRequestHash
+        || existing.acceptance.pageActionPayloadHash !== input.pageActionPayloadHash
+        || canonicalJson(existing.acceptance.transportAuthority)
+          !== canonicalJson(input.transportAuthority)
         || existing.acceptance.pageActionId !== input.pageActionId
         || existing.acceptance.pageActionExecutionAttemptId
           !== input.pageActionExecutionAttemptId
@@ -1717,7 +1743,7 @@ implements PageActionAcceptanceRepository {
 
   async recordRemoteAttemptAdmission(input: {
     acceptance: PageActionAcceptance;
-    admission: DurableRemoteAttemptAdmissionV1;
+    admission: DurableRemoteAttemptAdmissionV2;
   }): Promise<void> {
     const row = this.rows.get(acceptanceKey(
       input.acceptance.requestId,
@@ -1800,9 +1826,9 @@ implements PageActionAcceptanceRepository {
 }
 
 export function signRenewalCredentialTransport(
-  credential: Omit<RenewalCredentialTransportV1, 'signature'>,
+  credential: Omit<RenewalCredentialTransportV2, 'signature'>,
   key: string | Buffer,
-): RenewalCredentialTransportV1 {
+): RenewalCredentialTransportV2 {
   return {
     ...credential,
     signature: createHmac('sha256', key)
@@ -1812,9 +1838,9 @@ export function signRenewalCredentialTransport(
 }
 
 export function signSupervisorControlCredential(
-  credential: Omit<SupervisorControlCredentialV1, 'signature'>,
+  credential: Omit<SupervisorControlCredentialV2, 'signature'>,
   key: string | Buffer,
-): SupervisorControlCredentialV1 {
+): SupervisorControlCredentialV2 {
   return {
     ...credential,
     signature: createHmac('sha256', key)
@@ -1823,15 +1849,24 @@ export function signSupervisorControlCredential(
   };
 }
 
-export function fenceDigest(fence: SupervisorRpcBindingV1['supervisor']): string {
+export function fenceDigest(fence: SupervisorRpcBindingV2['supervisor']): string {
   return createHash('sha256').update(fence.fencingToken, 'utf8').digest('hex');
 }
 
-function success<T>(rpcId: string, data: T): SupervisorRpcSuccessV1<T> {
-  return { schema: SUPERVISOR_RPC_RESPONSE_SCHEMA, rpcId, ok: true, data };
+function success<T>(request: ParsedSupervisorRpcRequestV2, data: T): SupervisorRpcSuccessV2<T> {
+  return {
+    schema: SUPERVISOR_RPC_RESPONSE_SCHEMA,
+    rpcId: request.rpcId,
+    canonicalRequestHash: canonicalRpcPayloadHash(request),
+    ok: true,
+    data,
+  };
 }
 
-function failure(rpcId: string, error: unknown): SupervisorRpcFailureV1 {
+function failure(
+  request: ParsedSupervisorRpcRequestV2,
+  error: unknown,
+): SupervisorRpcFailureV2 {
   if (
     error instanceof SupervisorRuntimeError
     || error instanceof SupervisorRpcError
@@ -1839,7 +1874,8 @@ function failure(rpcId: string, error: unknown): SupervisorRpcFailureV1 {
   ) {
     return {
       schema: SUPERVISOR_RPC_RESPONSE_SCHEMA,
-      rpcId,
+      rpcId: request.rpcId,
+      canonicalRequestHash: canonicalRpcPayloadHash(request),
       ok: false,
       error: {
         code: error.code,
@@ -1853,7 +1889,8 @@ function failure(rpcId: string, error: unknown): SupervisorRpcFailureV1 {
   }
   return {
     schema: SUPERVISOR_RPC_RESPONSE_SCHEMA,
-    rpcId,
+    rpcId: request.rpcId,
+    canonicalRequestHash: canonicalRpcPayloadHash(request),
     ok: false,
     error: {
       code: 'SUPERVISOR_INTERNAL_ERROR',
@@ -1969,7 +2006,7 @@ function sameFenceIdentity(left: LeaseFenceV1 | null, right: LeaseFenceV1 | null
 
 function assertFenceDigest(
   digest: string,
-  fence: SupervisorRpcBindingV1['supervisor'],
+  fence: SupervisorRpcBindingV2['supervisor'],
   name: string,
 ): void {
   if (digest !== fenceDigest(fence)) {
@@ -1983,7 +2020,7 @@ function assertFenceDigest(
 
 function assertNullableFenceDigest(
   digest: string | null,
-  fence: SupervisorRpcBindingV1['reservation'],
+  fence: SupervisorRpcBindingV2['reservation'],
   name: string,
 ): void {
   if (fence === null) {
@@ -2017,16 +2054,16 @@ function canonicalJson(value: unknown): string {
 
 function canonicalCredentialPayload(
   credential:
-    | RenewalCredentialTransportV1
-    | SupervisorControlCredentialV1
-    | Omit<RenewalCredentialTransportV1, 'signature'>
-    | Omit<SupervisorControlCredentialV1, 'signature'>,
+    | RenewalCredentialTransportV2
+    | SupervisorControlCredentialV2
+    | Omit<RenewalCredentialTransportV2, 'signature'>
+    | Omit<SupervisorControlCredentialV2, 'signature'>,
 ): string {
   const payload = credential.payload;
   if ('workUnitLeaseId' in payload) {
     // This order is the frozen @vs1/domain canonicalRenewalCredentialPayload.
     return JSON.stringify({
-      schemaVersion: 1,
+      schemaVersion: payload.schemaVersion,
       profileId: payload.profileId,
       daemonInstanceId: payload.daemonInstanceId,
       contextGeneration: payload.contextGeneration,
@@ -2054,7 +2091,7 @@ function canonicalCredentialPayload(
 }
 
 function assertCredentialTimeline(
-  credential: RenewalCredentialTransportV1 | SupervisorControlCredentialV1,
+  credential: RenewalCredentialTransportV2 | SupervisorControlCredentialV2,
   readOnly = false,
 ): void {
   const payload = credential.payload;
@@ -2085,7 +2122,7 @@ function assertCredentialTimeline(
 
 function assertRemoteAttemptAdmissionInput(
   request: PageActionRequestV1,
-  input: Omit<RemoteAttemptAdmissionRequestV1, 'pageActionId' | 'pageActionExecutionAttemptId'>,
+  input: Omit<RemoteAttemptAdmissionRequestV2, 'pageActionId' | 'pageActionExecutionAttemptId'>,
   lastOrdinal: number,
 ): void {
   const expectedOrdinal = lastOrdinal + 1;
@@ -2119,8 +2156,8 @@ function acceptanceKey(requestId: string, idempotencyKey: string): string {
 }
 
 function sameDurableRemoteAdmission(
-  left: DurableRemoteAttemptAdmissionV1,
-  right: DurableRemoteAttemptAdmissionV1,
+  left: DurableRemoteAttemptAdmissionV2,
+  right: DurableRemoteAttemptAdmissionV2,
 ): boolean {
   return left.request.remoteRequestAttemptId === right.request.remoteRequestAttemptId
     && left.request.ordinal === right.request.ordinal
@@ -2128,7 +2165,11 @@ function sameDurableRemoteAdmission(
     && left.request.purpose === right.request.purpose
     && left.request.requestBusinessHash === right.request.requestBusinessHash
     && left.receipt.remoteActionStartId === right.receipt.remoteActionStartId
-    && left.receipt.admittedAt === right.receipt.admittedAt;
+    && left.receipt.admittedAt === right.receipt.admittedAt
+    && left.receipt.parentCanonicalRequestHash
+      === right.receipt.parentCanonicalRequestHash
+    && canonicalJson(left.receipt.transportAuthority)
+      === canonicalJson(right.receipt.transportAuthority);
 }
 
 function acceptedRequest(acceptance: PageActionAcceptance): PageActionRequestV1 {
@@ -2150,7 +2191,7 @@ function acceptedRequest(acceptance: PageActionAcceptance): PageActionRequestV1 
     || request.pageActionId !== acceptance.pageActionId
     || request.pageActionExecutionAttemptId
       !== acceptance.pageActionExecutionAttemptId
-    || canonicalHash !== acceptance.canonicalRequestHash
+    || canonicalHash !== acceptance.pageActionPayloadHash
   ) {
     throw new SupervisorRuntimeError(
       'ACCEPTANCE_JOURNAL_INVALID',
@@ -2264,7 +2305,7 @@ function interruptedExecutionAfterRestart(
 function durableAdmissionsForRestart(
   acceptance: PageActionAcceptance,
   request: PageActionRequestV1,
-): DurableRemoteAttemptAdmissionV1[] {
+): DurableRemoteAttemptAdmissionV2[] {
   const admissions = acceptance.remoteAttemptAdmissions ?? [];
   if (acceptance.remoteAttemptStartedAt !== null && admissions.length === 0) {
     throw new SupervisorRuntimeError(
@@ -2286,6 +2327,10 @@ function durableAdmissionsForRestart(
     if (
       admission.receipt.remoteActionStartId.trim().length === 0
       || !Number.isFinite(Date.parse(admission.receipt.admittedAt))
+      || canonicalJson(admission.receipt.transportAuthority)
+        !== canonicalJson(acceptance.transportAuthority)
+      || admission.receipt.parentCanonicalRequestHash
+        !== acceptance.canonicalRequestHash
       || remoteActionStartIds.has(admission.receipt.remoteActionStartId)
     ) {
       throw new SupervisorRuntimeError(

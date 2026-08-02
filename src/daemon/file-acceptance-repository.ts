@@ -6,10 +6,11 @@ import type {
 } from '../collection/page-action-contracts.js';
 import type {
   AcceptanceResult,
-  DurableRemoteAttemptAdmissionV1,
+  DurableRemoteAttemptAdmissionV2,
   PageActionAcceptance,
   PageActionAcceptanceRepository,
 } from './supervisor-runtime.js';
+import { parseTransportAuthorityV2 } from './supervisor-rpc.js';
 
 interface AcceptanceRow {
   acceptance: PageActionAcceptance;
@@ -18,8 +19,8 @@ interface AcceptanceRow {
   cancellationReason: string | null;
 }
 
-interface AcceptanceJournalV1 {
-  schema: 'profile-daemon.acceptance-journal.v1';
+interface AcceptanceJournalV2 {
+  schema: 'profile-daemon.acceptance-journal.v2';
   rows: AcceptanceRow[];
 }
 
@@ -41,6 +42,9 @@ implements PageActionAcceptanceRepository {
       if (existing) {
         if (
           existing.acceptance.canonicalRequestHash !== input.canonicalRequestHash
+          || existing.acceptance.pageActionPayloadHash !== input.pageActionPayloadHash
+          || JSON.stringify(existing.acceptance.transportAuthority)
+            !== JSON.stringify(input.transportAuthority)
           || existing.acceptance.pageActionId !== input.pageActionId
           || existing.acceptance.pageActionExecutionAttemptId
             !== input.pageActionExecutionAttemptId
@@ -98,7 +102,7 @@ implements PageActionAcceptanceRepository {
 
   async recordRemoteAttemptAdmission(input: {
     acceptance: PageActionAcceptance;
-    admission: DurableRemoteAttemptAdmissionV1;
+    admission: DurableRemoteAttemptAdmissionV2;
   }): Promise<void> {
     await this.serial(async () => {
       const journal = await this.read();
@@ -106,6 +110,14 @@ implements PageActionAcceptanceRepository {
         sameKey(candidate.acceptance, input.acceptance));
       if (!row || row.acceptance.canonicalRequestHash !== input.acceptance.canonicalRequestHash) {
         throw new Error('Remote attempt cannot start without its current durable acceptance.');
+      }
+      if (
+        input.admission.receipt.parentCanonicalRequestHash
+          !== row.acceptance.canonicalRequestHash
+        || JSON.stringify(input.admission.receipt.transportAuthority)
+          !== JSON.stringify(row.acceptance.transportAuthority)
+      ) {
+        throw new Error('Remote-attempt admission authority differs from its acceptance.');
       }
       if (row.response !== null) {
         throw new Error('Remote attempt cannot start after terminal receipt commit.');
@@ -169,13 +181,13 @@ implements PageActionAcceptanceRepository {
     });
   }
 
-  private async read(): Promise<AcceptanceJournalV1> {
+  private async read(): Promise<AcceptanceJournalV2> {
     let raw: string;
     try {
       raw = await fs.readFile(this.filePath, 'utf8');
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return { schema: 'profile-daemon.acceptance-journal.v1', rows: [] };
+        return { schema: 'profile-daemon.acceptance-journal.v2', rows: [] };
       }
       throw error;
     }
@@ -185,19 +197,19 @@ implements PageActionAcceptanceRepository {
       || typeof value !== 'object'
       || Array.isArray(value)
       || (value as Record<string, unknown>)['schema']
-        !== 'profile-daemon.acceptance-journal.v1'
+        !== 'profile-daemon.acceptance-journal.v2'
       || !Array.isArray((value as Record<string, unknown>)['rows'])
     ) {
       throw new Error('Acceptance journal is invalid.');
     }
-    const journal = value as AcceptanceJournalV1;
+    const journal = value as AcceptanceJournalV2;
     for (const row of journal.rows) {
-      row.acceptance.remoteAttemptAdmissions ??= [];
+      validateAcceptance(row.acceptance);
     }
     return journal;
   }
 
-  private async write(journal: AcceptanceJournalV1): Promise<void> {
+  private async write(journal: AcceptanceJournalV2): Promise<void> {
     const directory = path.dirname(this.filePath);
     await fs.mkdir(directory, { recursive: true, mode: 0o700 });
     if (process.platform !== 'win32') await fs.chmod(directory, 0o700);
@@ -241,4 +253,24 @@ implements PageActionAcceptanceRepository {
 function sameKey(left: PageActionAcceptance, right: PageActionAcceptance): boolean {
   return left.requestId === right.requestId
     && left.idempotencyKey === right.idempotencyKey;
+}
+
+function validateAcceptance(acceptance: PageActionAcceptance): void {
+  if (
+    !/^[0-9a-f]{64}$/u.test(acceptance.canonicalRequestHash)
+    || !/^[0-9a-f]{64}$/u.test(acceptance.pageActionPayloadHash)
+    || !Array.isArray(acceptance.remoteAttemptAdmissions)
+  ) {
+    throw new Error('Acceptance journal v2 binding is invalid.');
+  }
+  parseTransportAuthorityV2(acceptance.transportAuthority);
+  for (const admission of acceptance.remoteAttemptAdmissions) {
+    if (
+      admission.receipt.parentCanonicalRequestHash !== acceptance.canonicalRequestHash
+      || JSON.stringify(admission.receipt.transportAuthority)
+        !== JSON.stringify(acceptance.transportAuthority)
+    ) {
+      throw new Error('Acceptance journal v2 admission authority is invalid.');
+    }
+  }
 }

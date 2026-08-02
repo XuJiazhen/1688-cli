@@ -536,6 +536,13 @@ program
     const { start } = await import('./daemon/server.js');
     const supervisorConfig = opts.supervisorConfig
       ?? process.env.BB1688_SUPERVISOR_CONFIG;
+    if (supervisorConfig && opts.legacyRollback === true) {
+      throw new CliError(
+        20,
+        'DAEMON_MODE_CONFLICT',
+        'Managed Supervisor config and --legacy-rollback are mutually exclusive.',
+      );
+    }
     if (supervisorConfig) {
       const { loadManagedServerOptions } = await import('./daemon/managed-bootstrap.js');
       await start(await loadManagedServerOptions(supervisorConfig, opts.profile));
@@ -548,10 +555,18 @@ program
         'serve requires --supervisor-config; use --legacy-rollback only for an explicit legacy rollback cohort.',
       );
     }
+    if (process.env.BB1688_SUPERVISOR_MANAGED === '1') {
+      throw new CliError(
+        20,
+        'LEGACY_ROLLBACK_ISOLATION_REQUIRED',
+        'Legacy rollback cannot inherit Supervisor-managed runtime identity.',
+      );
+    }
     await start({
       profile: opts.profile,
       idleTimeoutMs: Math.max(1, parseInt(opts.idleTimeout, 10)) * 60_000,
       prewarm: opts.prewarm !== false,
+      legacyRollback: true,
     });
   });
 

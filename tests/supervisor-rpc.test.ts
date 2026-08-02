@@ -17,10 +17,11 @@ import {
 } from '../src/daemon/supervisor-runtime.js';
 import {
   canonicalRpcPayloadHash,
+  SUPERVISOR_PROTOCOL_SHA256_V2,
   parseSupervisorRpcFrame,
   parseSupervisorRpcRequest,
   validateRpcBinding,
-  type ParsedSupervisorRpcRequestV1,
+  type ParsedSupervisorRpcRequestV2,
 } from '../src/daemon/supervisor-rpc.js';
 
 const verification = {
@@ -29,34 +30,54 @@ const verification = {
   expansionPoliciesByDispatchRevisionId: {},
 };
 const schedulerKey = 'scheduler-parser-proof-key-with-32-bytes';
+const PROFILE_ID = '30000000-0000-4000-8000-000000000001';
+const DAEMON_ID = '30000000-0000-4000-8000-000000000002';
+const SUPERVISOR_LEASE_ID = '30000000-0000-4000-8000-000000000003';
+const RESERVATION_LEASE_ID = '30000000-0000-4000-8000-000000000004';
+const WORK_LEASE_ID = '30000000-0000-4000-8000-000000000005';
+const transportAuthority = {
+  mode: 'scripted_offline' as const,
+  executionAuthorityDocumentId: '30000000-0000-4000-8000-000000000006',
+  executionAuthorityDocumentSha256: 'a'.repeat(64),
+  executionSubjectDocumentId: '30000000-0000-4000-8000-000000000007',
+  executionSubjectDocumentSha256: 'b'.repeat(64),
+  cohortId: '30000000-0000-4000-8000-000000000008',
+  runId: '30000000-0000-4000-8000-000000000009',
+  protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
+};
+const parseOptions = {
+  verification,
+  now: new Date('2026-07-31T08:00:00.000Z'),
+};
 
 function controlRequest() {
   const fence = {
-    leaseId: 'supervisor-lease',
+    leaseId: SUPERVISOR_LEASE_ID,
     generation: 1,
     fencingToken: 'supervisor-fence',
     leaseNotAfter: '2026-07-31T08:10:00.000Z',
   };
   return {
-    schema: 'profile-supervisor.rpc.v1',
+    schema: 'profile-supervisor.rpc.v2',
     rpcId: 'rpc-1',
     method: 'supervisor.status',
     deadlineAt: '2026-07-31T08:05:00.000Z',
     binding: {
-      profileId: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      profileId: PROFILE_ID,
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
       supervisor: fence,
       reservation: null,
       workUnit: null,
+      transportAuthority,
       renewalCredential: null,
       controlCredential: {
         payload: {
-          schemaVersion: 1,
-          profileId: 'profile-1',
-          daemonInstanceId: 'daemon-1',
+          schemaVersion: 2,
+          profileId: PROFILE_ID,
+          daemonInstanceId: DAEMON_ID,
           contextGeneration: 1,
-          supervisorLeaseId: 'supervisor-lease',
+          supervisorLeaseId: SUPERVISOR_LEASE_ID,
           supervisorGeneration: 1,
           supervisorFenceDigest: 'a'.repeat(64),
           rpcId: 'rpc-1',
@@ -69,7 +90,7 @@ function controlRequest() {
           keyId: 'key-1',
         },
         algorithm: 'HMAC-SHA256',
-        signature: 'signed',
+        signature: 'x'.repeat(43),
       },
     },
     payload: {},
@@ -78,10 +99,10 @@ function controlRequest() {
 
 describe('Profile Supervisor RPC protocol', () => {
   it('accepts only a strict allowlisted control frame', () => {
-    const parsed = parseSupervisorRpcRequest(controlRequest(), { verification });
+    const parsed = parseSupervisorRpcRequest(controlRequest(), parseOptions);
     expect(parsed).toMatchObject({
       method: 'supervisor.status',
-      binding: { profileId: 'profile-1', renewalCredential: null },
+      binding: { profileId: PROFILE_ID, renewalCredential: null },
     });
   });
 
@@ -89,34 +110,36 @@ describe('Profile Supervisor RPC protocol', () => {
     expect(() => parseSupervisorRpcRequest({
       ...controlRequest(),
       method: 'checkout.confirm',
-    }, { verification })).toThrow(/must be one of/);
+    }, parseOptions)).toThrow(/must be one of/);
     expect(() => parseSupervisorRpcRequest({
       ...controlRequest(),
       arbitraryJavaScript: 'document.cookie',
-    }, { verification })).toThrow(/unknown fields/);
+    }, parseOptions)).toThrow(/unknown fields/);
   });
 
   it('enforces the framed transport size before JSON parsing', () => {
     expect(() => parseSupervisorRpcFrame('x'.repeat(101), {
       verification,
       maxFrameBytes: 100,
+      now: parseOptions.now,
     })).toThrow(/exceeds 100 bytes/);
   });
 
   it('binds control to exact daemon/context/Supervisor generation', () => {
-    const request = parseSupervisorRpcRequest(controlRequest(), { verification });
+    const request = parseSupervisorRpcRequest(controlRequest(), parseOptions);
     expect(() => validateRpcBinding(request, {
-      profileId: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      profileId: PROFILE_ID,
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 2,
       supervisorGeneration: 1,
+      transportAuthority,
       now: new Date('2026-07-31T08:00:00.000Z'),
     })).toThrow(/contextGeneration/);
   });
 
   it('allows read-only receipt lookup after all presented leases expire', () => {
     const expiredFence = {
-      leaseId: 'supervisor-lease', generation: 1, fencingToken: 'supervisor-fence',
+      leaseId: SUPERVISOR_LEASE_ID, generation: 1, fencingToken: 'supervisor-fence',
       leaseNotAfter: '2026-07-31T07:59:00.000Z',
     };
     const payload = {
@@ -130,35 +153,36 @@ describe('Profile Supervisor RPC protocol', () => {
       targetExecutionLineageHash: 'b'.repeat(64),
       readFences: {
         supervisor: expiredFence,
-        reservation: { ...expiredFence, leaseId: 'reservation-lease' },
-        workUnit: { ...expiredFence, leaseId: 'work-lease' },
+        reservation: { ...expiredFence, leaseId: RESERVATION_LEASE_ID },
+        workUnit: { ...expiredFence, leaseId: WORK_LEASE_ID },
       },
     };
     const request = {
-      schema: 'profile-supervisor.rpc.v1' as const,
+      schema: 'profile-supervisor.rpc.v2' as const,
       rpcId: 'lookup-rpc-1',
       method: 'collector.pageAction.lookupReceipt' as const,
       deadlineAt: '2026-07-31T08:05:00.000Z',
       binding: {
-        profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
+        profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
         supervisor: expiredFence,
-        reservation: { ...expiredFence, leaseId: 'reservation-lease' },
-        workUnit: { ...expiredFence, leaseId: 'work-lease' },
+        reservation: { ...expiredFence, leaseId: RESERVATION_LEASE_ID },
+        workUnit: { ...expiredFence, leaseId: WORK_LEASE_ID },
+        transportAuthority,
         renewalCredential: null,
         controlCredential: null,
       },
       payload,
-    } as unknown as ParsedSupervisorRpcRequestV1;
+    } as unknown as ParsedSupervisorRpcRequestV2;
     request.binding.renewalCredential = {
       payload: {
-        schemaVersion: 1,
-        profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
-        supervisorLeaseId: 'supervisor-lease', supervisorGeneration: 1,
-        supervisorFenceDigest: 'c'.repeat(64),
-        reservationLeaseId: 'reservation-lease', reservationGeneration: 1,
-        reservationFenceDigest: 'd'.repeat(64),
-        workUnitLeaseId: 'work-lease', workUnitGeneration: 1,
-        workUnitFenceDigest: 'e'.repeat(64),
+        schemaVersion: 2,
+        profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
+        supervisorLeaseId: SUPERVISOR_LEASE_ID, supervisorGeneration: 1,
+        supervisorFenceDigest: fenceDigest(expiredFence),
+        reservationLeaseId: RESERVATION_LEASE_ID, reservationGeneration: 1,
+        reservationFenceDigest: fenceDigest({ ...expiredFence, leaseId: RESERVATION_LEASE_ID }),
+        workUnitLeaseId: WORK_LEASE_ID, workUnitGeneration: 1,
+        workUnitFenceDigest: fenceDigest({ ...expiredFence, leaseId: WORK_LEASE_ID }),
         requestId: 'request-1',
         canonicalRequestHash: canonicalRpcPayloadHash(request),
         requestDeadlineAt: request.deadlineAt,
@@ -170,11 +194,12 @@ describe('Profile Supervisor RPC protocol', () => {
         keyId: 'key-1',
       },
       algorithm: 'HMAC-SHA256',
-      signature: 'signed',
+      signature: 'x'.repeat(43),
     };
     expect(() => validateRpcBinding(request, {
-      profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
-      supervisorGeneration: 1, now: new Date('2026-07-31T08:00:00.000Z'),
+      profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
+      supervisorGeneration: 1, transportAuthority,
+      now: new Date('2026-07-31T08:00:00.000Z'),
     })).not.toThrow();
 
     request.payload.readFences.workUnit = {
@@ -182,8 +207,9 @@ describe('Profile Supervisor RPC protocol', () => {
       fencingToken: 'different-work-fence',
     };
     expect(() => validateRpcBinding(request, {
-      profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
-      supervisorGeneration: 1, now: new Date('2026-07-31T08:00:00.000Z'),
+      profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
+      supervisorGeneration: 1, transportAuthority,
+      now: new Date('2026-07-31T08:00:00.000Z'),
     })).toThrow(/lookup workUnit fence does not match/u);
   });
 
@@ -197,6 +223,7 @@ describe('Profile Supervisor RPC protocol', () => {
     });
     const parsedExecute = parseSupervisorRpcRequest(execute, {
       verification: schedulerVerification(payload),
+      now: new Date('2026-07-31T08:01:00.000Z'),
     });
     expect(() => validateRpcBinding(parsedExecute, expectedAt('2026-07-31T08:01:00.000Z')))
       .not.toThrow();
@@ -210,6 +237,7 @@ describe('Profile Supervisor RPC protocol', () => {
     });
     const parsedRenewal = parseSupervisorRpcRequest(renewed, {
       verification: schedulerVerification(payload),
+      now: new Date('2026-07-31T08:02:00.000Z'),
     });
     expect(parsedRenewal.payload).toEqual(parsedExecute.payload);
     expect(() => validateRpcBinding(parsedRenewal, expectedAt('2026-07-31T08:02:00.000Z')))
@@ -234,7 +262,10 @@ describe('Profile Supervisor RPC protocol', () => {
         issuedAt: '2026-07-31T08:02:00.000Z',
         credentialExpiresAt: '2026-07-31T08:06:00.000Z',
       }),
-      { verification: schedulerVerification(payload) },
+      {
+        verification: schedulerVerification(payload),
+        now: new Date('2026-07-31T08:03:00.000Z'),
+      },
     );
     expect(() => validateRpcBinding(cancel, expectedAt('2026-07-31T08:03:00.000Z')))
       .not.toThrow();
@@ -263,7 +294,10 @@ describe('Profile Supervisor RPC protocol', () => {
         issuedAt: '2026-07-31T08:10:00.000Z',
         credentialExpiresAt: '2026-07-31T08:12:00.000Z',
       }),
-      { verification: schedulerVerification(payload) },
+      {
+        verification: schedulerVerification(payload),
+        now: new Date('2026-07-31T08:11:00.000Z'),
+      },
     );
     expect(() => validateRpcBinding(lookup, expectedAt('2026-07-31T08:11:00.000Z')))
       .not.toThrow();
@@ -308,9 +342,9 @@ function schedulerPageAction(): PageActionRequestV1 {
     requestId: 'request-1',
     idempotencyKey: 'idempotency-1',
     profile: {
-      profileId: 'profile-1',
+      profileId: PROFILE_ID,
       profileName: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
       egressId: 'egress-1',
     },
@@ -381,17 +415,18 @@ function workRequest(
   },
 ) {
   const request = {
-    schema: 'profile-supervisor.rpc.v1' as const,
+    schema: 'profile-supervisor.rpc.v2' as const,
     rpcId: `rpc-${method}-${input.issuedAt}`,
     method,
     deadlineAt: input.deadlineAt,
     binding: {
-      profileId: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      profileId: PROFILE_ID,
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
       supervisor: input.fences.supervisor,
       reservation: input.fences.reservation,
       workUnit: input.fences.workUnit,
+      transportAuthority,
       renewalCredential: null,
       controlCredential: null,
     },
@@ -402,12 +437,12 @@ function workRequest(
   const leaseNotAfter = new Date(Math.min(
     ...Object.values(input.fences).map((fence) => Date.parse(fence.leaseNotAfter)),
   )).toISOString();
-  const parsedForHash = request as unknown as ParsedSupervisorRpcRequestV1;
+  const parsedForHash = request as unknown as ParsedSupervisorRpcRequestV2;
   request.binding.renewalCredential = signRenewalCredentialTransport({
     payload: {
-      schemaVersion: 1,
-      profileId: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      schemaVersion: 2,
+      profileId: PROFILE_ID,
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
       supervisorLeaseId: input.fences.supervisor.leaseId,
       supervisorGeneration: input.fences.supervisor.generation,
@@ -434,7 +469,7 @@ function workRequest(
 }
 
 async function authorize(
-  request: ParsedSupervisorRpcRequestV1,
+  request: ParsedSupervisorRpcRequestV2,
   operation: 'execute' | 'cancel' | 'lookup_receipt',
   at: string,
 ): Promise<void> {
@@ -449,17 +484,22 @@ async function authorize(
 
 function expectedAt(at: string) {
   return {
-    profileId: 'profile-1',
-    daemonInstanceId: 'daemon-1',
+    profileId: PROFILE_ID,
+    daemonInstanceId: DAEMON_ID,
     contextGeneration: 1,
     supervisorGeneration: 1,
+    transportAuthority,
     now: new Date(at),
   };
 }
 
 function rpcFence(prefix: string, leaseNotAfter: string): LeaseFenceV1 {
   return {
-    leaseId: `${prefix}-lease`,
+    leaseId: prefix === 'supervisor'
+      ? SUPERVISOR_LEASE_ID
+      : prefix === 'reservation'
+        ? RESERVATION_LEASE_ID
+        : WORK_LEASE_ID,
     generation: 1,
     fencingToken: `${prefix}-fence`,
     leaseNotAfter,

@@ -14,7 +14,7 @@ import {
 import {
   loadManagedServerOptions,
   loadManagedSupervisorConfig,
-  type ManagedSupervisorDaemonConfigV1,
+  type ManagedSupervisorDaemonConfigV2,
 } from '../src/daemon/managed-bootstrap.js';
 import { isDaemonReachable } from '../src/daemon/client.js';
 import type { ManagedPage } from '../src/daemon/page-registry.js';
@@ -45,12 +45,17 @@ async function main(): Promise<void> {
     return;
   }
   if (command === 'daemon' && subcommand === 'managed-start') {
-    await managedStart(requiredOption('--supervisor-config'), scenario);
+    const configPath = requiredOption('--supervisor-config');
+    const config = await loadManagedSupervisorConfig(configPath);
+    await assertOfflineAuthority(config, scenario);
+    await managedStart(configPath, scenario);
     return;
   }
   if (command === 'serve') {
     const configPath = requiredOption('--supervisor-config');
     const profile = requiredOption('--profile', false);
+    const config = await loadManagedSupervisorConfig(configPath);
+    await assertOfflineAuthority(config, scenario);
     const options = await loadManagedServerOptions(configPath, profile, {
       hostFactory: (config, now) => new OfflinePersistentContextHost(config, now),
       executorFactory: (config, now) => createRuntimeOfflinePageActionExecutor({
@@ -63,6 +68,45 @@ async function main(): Promise<void> {
     return;
   }
   throw new Error('Offline managed daemon supports only managed-start and its private serve child.');
+}
+
+async function assertOfflineAuthority(
+  config: ManagedSupervisorDaemonConfigV2,
+  scenario: RuntimeOfflinePageActionScenario,
+): Promise<void> {
+  if (config.transportAuthority.mode !== 'scripted_offline') {
+    throw new Error('Offline managed daemon rejects live_remote authority.');
+  }
+  const expectedProtocol = requiredHashEnvironment('BB1688_SUPERVISOR_PROTOCOL_SHA256');
+  if (expectedProtocol !== config.transportAuthority.protocolSha256) {
+    throw new Error('Offline managed daemon protocol hash differs from its config authority.');
+  }
+  const expectedScenario = requiredHashEnvironment(
+    'BB1688_OFFLINE_PAGE_ACTION_SCENARIO_SHA256',
+  );
+  const actualScenario = createHash('sha256')
+    .update(JSON.stringify({ scenario, descriptor: createRuntimeOfflineScenarioDescriptor() }))
+    .digest('hex');
+  if (actualScenario !== expectedScenario) {
+    throw new Error('Offline PageAction scenario descriptor hash differs from authority.');
+  }
+  const expectedHarness = requiredHashEnvironment(
+    'BB1688_OFFLINE_MANAGED_DAEMON_HARNESS_SHA256',
+  );
+  const actualHarness = createHash('sha256')
+    .update(await fs.readFile(fileURLToPath(import.meta.url)))
+    .digest('hex');
+  if (actualHarness !== expectedHarness) {
+    throw new Error('Offline managed daemon harness content hash differs from authority.');
+  }
+}
+
+function requiredHashEnvironment(name: string): string {
+  const value = process.env[name];
+  if (value === undefined || !/^[0-9a-f]{64}$/u.test(value)) {
+    throw new Error(`${name} must be an exact lowercase SHA-256.`);
+  }
+  return value;
 }
 
 async function managedStart(
@@ -91,6 +135,8 @@ async function managedStart(
       BB1688_DAEMON_BG: '1',
       BB1688_SUPERVISOR_MANAGED: '1',
       BB1688_SUPERVISOR_CONFIG: configPath,
+      BB1688_SUPERVISOR_PROTOCOL_SHA256:
+        config.transportAuthority.protocolSha256,
     },
   });
   child.unref();
@@ -112,6 +158,8 @@ async function managedStart(
     || owner['daemonInstanceId'] !== config.daemonInstanceId
     || owner['supervisorGeneration'] !== config.supervisorGeneration
     || owner['contextGeneration'] !== config.contextGeneration
+    || JSON.stringify(owner['transportAuthority'])
+      !== JSON.stringify(config.transportAuthority)
   ) {
     throw new Error('Offline managed daemon owner artifact differs from Supervisor config.');
   }
@@ -121,6 +169,11 @@ async function managedStart(
     pid: owner['daemonPid'],
     managed: true,
     offlineScenario: scenario,
+    supervisorProtocolSha256: config.transportAuthority.protocolSha256,
+    offlineScenarioSha256:
+      process.env['BB1688_OFFLINE_PAGE_ACTION_SCENARIO_SHA256'],
+    offlineHarnessSha256:
+      process.env['BB1688_OFFLINE_MANAGED_DAEMON_HARNESS_SHA256'],
   })}\n`);
 }
 
@@ -130,7 +183,7 @@ class OfflinePersistentContextHost implements PersistentContextHost {
   private contextGeneration: number;
 
   constructor(
-    private readonly config: ManagedSupervisorDaemonConfigV1,
+    private readonly config: ManagedSupervisorDaemonConfigV2,
     private readonly now: () => Date,
   ) {
     this.contextGeneration = config.contextGeneration;

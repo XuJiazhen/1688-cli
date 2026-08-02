@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   canonicalCollectorSha256V1,
   normalizePageActionCancelV1,
@@ -10,16 +11,19 @@ import {
   type PageActionVerificationConfigV1,
 } from '../collection/page-action-contracts.js';
 
-export const SUPERVISOR_RPC_SCHEMA = 'profile-supervisor.rpc.v1' as const;
+export const LEGACY_SUPERVISOR_RPC_SCHEMA = 'profile-supervisor.rpc.v1' as const;
+export const LEGACY_SUPERVISOR_EXECUTION_RENEWAL_SCHEMA =
+  'profile-supervisor.execution-renewal.v1' as const;
+export const SUPERVISOR_RPC_SCHEMA = 'profile-supervisor.rpc.v2' as const;
 export const SUPERVISOR_RPC_RESPONSE_SCHEMA =
-  'profile-supervisor.rpc-response.v1' as const;
+  'profile-supervisor.rpc-response.v2' as const;
 export const SUPERVISOR_RPC_MAX_FRAME_BYTES = 8 * 1024 * 1024;
 export const SUPERVISOR_EXECUTION_RENEWAL_SCHEMA =
-  'profile-supervisor.execution-renewal.v1' as const;
+  'profile-supervisor.execution-renewal.v2' as const;
 export const SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_SCHEMA =
-  'profile-supervisor.remote-attempt-admission.v1' as const;
+  'profile-supervisor.remote-attempt-admission.v2' as const;
 export const SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA =
-  'profile-supervisor.remote-attempt-admission-response.v1' as const;
+  'profile-supervisor.remote-attempt-admission-response.v2' as const;
 
 export const SUPERVISOR_RPC_METHODS = Object.freeze([
   'collector.pageAction.execute',
@@ -33,6 +37,67 @@ export const SUPERVISOR_RPC_METHODS = Object.freeze([
   'supervisor.intervention.end',
 ] as const);
 
+export const SUPERVISOR_PROTOCOL_CANONICAL_CONTENT_V2 = Object.freeze({
+  schemaVersion: 2,
+  schemas: {
+    rpc: SUPERVISOR_RPC_SCHEMA,
+    rpcResponse: SUPERVISOR_RPC_RESPONSE_SCHEMA,
+    executionRenewal: SUPERVISOR_EXECUTION_RENEWAL_SCHEMA,
+    remoteAttemptAdmission: SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_SCHEMA,
+    remoteAttemptAdmissionResponse: SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA,
+    daemonConfig: 'profile-supervisor.daemon-config.v2',
+  },
+  methods: SUPERVISOR_RPC_METHODS,
+  wireRequestKeys: ['schema', 'rpcId', 'method', 'deadlineAt', 'binding', 'payload'],
+  bindingKeys: [
+    'profileId', 'daemonInstanceId', 'contextGeneration', 'supervisor',
+    'reservation', 'workUnit', 'transportAuthority', 'renewalCredential',
+    'controlCredential',
+  ],
+  transportAuthorityKeys: [
+    'mode', 'executionAuthorityDocumentId', 'executionAuthorityDocumentSha256',
+    'executionSubjectDocumentId', 'executionSubjectDocumentSha256', 'cohortId',
+    'runId', 'protocolSha256',
+  ],
+  leaseFenceKeys: ['leaseId', 'generation', 'fencingToken', 'leaseNotAfter'],
+  credentialEnvelopeKeys: ['payload', 'algorithm', 'signature'],
+  renewalCredentialPayloadKeys: [
+    'schemaVersion', 'profileId', 'daemonInstanceId', 'contextGeneration',
+    'supervisorLeaseId', 'supervisorGeneration', 'supervisorFenceDigest',
+    'reservationLeaseId', 'reservationGeneration', 'reservationFenceDigest',
+    'workUnitLeaseId', 'workUnitGeneration', 'workUnitFenceDigest', 'requestId',
+    'canonicalRequestHash', 'requestDeadlineAt', 'idempotencyKey', 'issuedAt',
+    'credentialNotBefore', 'credentialExpiresAt', 'leaseNotAfter', 'keyId',
+  ],
+  controlCredentialPayloadKeys: [
+    'schemaVersion', 'profileId', 'daemonInstanceId', 'contextGeneration',
+    'supervisorLeaseId', 'supervisorGeneration', 'supervisorFenceDigest', 'rpcId',
+    'canonicalRequestHash', 'requestDeadlineAt', 'issuedAt',
+    'credentialNotBefore', 'credentialExpiresAt', 'keyId',
+  ],
+  canonicalAuthorizedBindingOmits: ['renewalCredential', 'controlCredential'],
+  responseSuccessKeys: ['schema', 'rpcId', 'canonicalRequestHash', 'ok', 'data'],
+  responseFailureKeys: ['schema', 'rpcId', 'canonicalRequestHash', 'ok', 'error'],
+  responseErrorKeys: ['code', 'message', 'retryable', 'details?'],
+  renewalFrameKeys: ['schema', 'rpcId', 'request'],
+  admissionRequestKeys: [
+    'schema', 'rpcId', 'admissionId', 'deadlineAt', 'transportAuthority',
+    'parentCanonicalRequestHash', 'request',
+  ],
+  admissionPayloadKeys: [
+    'pageActionId', 'pageActionExecutionAttemptId', 'remoteRequestAttemptId',
+    'ordinal', 'logicalPage?', 'purpose', 'requestBusinessHash',
+  ],
+  admissionReceiptKeys: [
+    'remoteActionStartId', 'admittedAt', 'transportAuthority',
+    'parentCanonicalRequestHash',
+  ],
+} as const);
+
+export const SUPERVISOR_PROTOCOL_SHA256_V2 = createHash('sha256')
+  .update(canonicalJson(SUPERVISOR_PROTOCOL_CANONICAL_CONTENT_V2), 'utf8')
+  .digest('hex');
+
 export type SupervisorRpcMethod = (typeof SUPERVISOR_RPC_METHODS)[number];
 export type SupervisorRpcOperation =
   | 'execute'
@@ -45,9 +110,22 @@ export type SupervisorRpcOperation =
   | 'verify_intervention'
   | 'end_intervention';
 
-export interface RenewalCredentialTransportV1 {
+export type TransportAuthorityMode = 'scripted_offline' | 'live_remote';
+
+export interface TransportAuthorityV2 {
+  mode: TransportAuthorityMode;
+  executionAuthorityDocumentId: string;
+  executionAuthorityDocumentSha256: string;
+  executionSubjectDocumentId: string;
+  executionSubjectDocumentSha256: string;
+  cohortId: string;
+  runId: string;
+  protocolSha256: string;
+}
+
+export interface RenewalCredentialTransportV2 {
   payload: {
-    schemaVersion: 1;
+    schemaVersion: 2;
     profileId: string;
     daemonInstanceId: string;
     contextGeneration: number;
@@ -74,9 +152,9 @@ export interface RenewalCredentialTransportV1 {
   signature: string;
 }
 
-export interface SupervisorControlCredentialV1 {
+export interface SupervisorControlCredentialV2 {
   payload: {
-    schemaVersion: 1;
+    schemaVersion: 2;
     profileId: string;
     daemonInstanceId: string;
     contextGeneration: number;
@@ -95,36 +173,39 @@ export interface SupervisorControlCredentialV1 {
   signature: string;
 }
 
-export interface SupervisorRpcBindingV1 {
+export interface SupervisorRpcBindingV2 {
   profileId: string;
   daemonInstanceId: string;
   contextGeneration: number;
   supervisor: LeaseFenceV1;
   reservation: LeaseFenceV1 | null;
   workUnit: LeaseFenceV1 | null;
-  renewalCredential: RenewalCredentialTransportV1 | null;
-  controlCredential: SupervisorControlCredentialV1 | null;
+  transportAuthority: TransportAuthorityV2;
+  renewalCredential: RenewalCredentialTransportV2 | null;
+  controlCredential: SupervisorControlCredentialV2 | null;
 }
 
-export interface SupervisorRpcRequestV1<TPayload = unknown> {
+export interface SupervisorRpcRequestV2<TPayload = unknown> {
   schema: typeof SUPERVISOR_RPC_SCHEMA;
   rpcId: string;
   method: SupervisorRpcMethod;
   deadlineAt: string;
-  binding: SupervisorRpcBindingV1;
+  binding: SupervisorRpcBindingV2;
   payload: TPayload;
 }
 
-export interface SupervisorRpcSuccessV1<T = unknown> {
+export interface SupervisorRpcSuccessV2<T = unknown> {
   schema: typeof SUPERVISOR_RPC_RESPONSE_SCHEMA;
   rpcId: string;
+  canonicalRequestHash: string;
   ok: true;
   data: T;
 }
 
-export interface SupervisorRpcFailureV1 {
+export interface SupervisorRpcFailureV2 {
   schema: typeof SUPERVISOR_RPC_RESPONSE_SCHEMA;
   rpcId: string;
+  canonicalRequestHash: string;
   ok: false;
   error: {
     code: string;
@@ -134,9 +215,106 @@ export interface SupervisorRpcFailureV1 {
   };
 }
 
-export type SupervisorRpcResponseV1<T = unknown> =
-  | SupervisorRpcSuccessV1<T>
-  | SupervisorRpcFailureV1;
+export type SupervisorRpcResponseV2<T = unknown> =
+  | SupervisorRpcSuccessV2<T>
+  | SupervisorRpcFailureV2;
+
+export interface HistoricalSupervisorRpcRequestV1 {
+  schema: typeof LEGACY_SUPERVISOR_RPC_SCHEMA;
+  rpcId: string;
+  method: SupervisorRpcMethod;
+  deadlineAt: string;
+  binding: Readonly<Record<string, unknown>>;
+  payload: unknown;
+}
+
+/** Read-only decoder for archived v1 evidence. Never call this from daemon runtime dispatch. */
+export function parseHistoricalSupervisorRpcRequestV1(
+  value: unknown,
+): HistoricalSupervisorRpcRequestV1 {
+  const record = strictRecord(value, 'HistoricalSupervisorRpcRequestV1', [
+    'schema', 'rpcId', 'method', 'deadlineAt', 'binding', 'payload',
+  ]);
+  literal(record['schema'], LEGACY_SUPERVISOR_RPC_SCHEMA, 'historical.schema');
+  return {
+    schema: LEGACY_SUPERVISOR_RPC_SCHEMA,
+    rpcId: identifier(record['rpcId'], 'historical.rpcId'),
+    method: enumValue(record['method'], SUPERVISOR_RPC_METHODS, 'historical.method'),
+    deadlineAt: timestamp(record['deadlineAt'], 'historical.deadlineAt'),
+    binding: structuredClone(recordValue(record['binding'], 'historical.binding')),
+    payload: structuredClone(record['payload']),
+  };
+}
+
+export function parseSupervisorRpcResponseV2<T = unknown>(
+  value: unknown,
+  expected: { rpcId: string; canonicalRequestHash: string },
+): SupervisorRpcResponseV2<T> {
+  const candidate = recordValue(value, 'SupervisorRpcResponse');
+  const record = strictRecord(value, 'SupervisorRpcResponse', candidate['ok'] === true
+    ? ['schema', 'rpcId', 'canonicalRequestHash', 'ok', 'data']
+    : ['schema', 'rpcId', 'canonicalRequestHash', 'ok', 'error']);
+  literal(record['schema'], SUPERVISOR_RPC_RESPONSE_SCHEMA, 'response.schema');
+  const rpcId = identifier(record['rpcId'], 'response.rpcId');
+  const canonicalRequestHash = hash(
+    record['canonicalRequestHash'],
+    'response.canonicalRequestHash',
+  );
+  equal(rpcId, expected.rpcId, 'response rpcId');
+  equal(
+    canonicalRequestHash,
+    expected.canonicalRequestHash,
+    'response canonicalRequestHash',
+  );
+  if (record['ok'] === true) {
+    if (!Object.hasOwn(record, 'data')) {
+      throw new SupervisorRpcError(
+        'RPC_CONTRACT_INVALID',
+        'Successful response must contain data.',
+        false,
+      );
+    }
+    return {
+      schema: SUPERVISOR_RPC_RESPONSE_SCHEMA,
+      rpcId,
+      canonicalRequestHash,
+      ok: true,
+      data: record['data'] as T,
+    };
+  }
+  if (record['ok'] !== false) {
+    throw new SupervisorRpcError(
+      'RPC_CONTRACT_INVALID',
+      'Response ok must be boolean.',
+      false,
+    );
+  }
+  const error = strictRecord(record['error'], 'response.error', [
+    'code', 'message', 'retryable', 'details',
+  ]);
+  if (typeof error['retryable'] !== 'boolean') {
+    throw new SupervisorRpcError(
+      'RPC_CONTRACT_INVALID',
+      'Response error retryable must be boolean.',
+      false,
+    );
+  }
+  const details = error['details'] === undefined
+    ? undefined
+    : recordValue(error['details'], 'response.error.details');
+  return {
+    schema: SUPERVISOR_RPC_RESPONSE_SCHEMA,
+    rpcId,
+    canonicalRequestHash,
+    ok: false,
+    error: {
+      code: identifier(error['code'], 'response.error.code'),
+      message: boundedString(error['message'], 'response.error.message', 2_048),
+      retryable: error['retryable'],
+      ...(details === undefined ? {} : { details }),
+    },
+  };
+}
 
 export interface DrainCommandV1 {
   reason: string;
@@ -169,43 +347,44 @@ export interface EndInterventionCommandV1 {
   reason: 'verified' | 'cancelled' | 'timed_out';
 }
 
-export type ParsedSupervisorRpcRequestV1 =
-  | (SupervisorRpcRequestV1<PageActionRequestV1> & {
+export type ParsedSupervisorRpcRequestV2 =
+  | (SupervisorRpcRequestV2<PageActionRequestV1> & {
       method: 'collector.pageAction.execute';
     })
-  | (SupervisorRpcRequestV1<PageActionCancelV1> & {
+  | (SupervisorRpcRequestV2<PageActionCancelV1> & {
       method: 'collector.pageAction.cancel';
     })
-  | (SupervisorRpcRequestV1<PageActionReceiptLookupV1> & {
+  | (SupervisorRpcRequestV2<PageActionReceiptLookupV1> & {
       method: 'collector.pageAction.lookupReceipt';
     })
-  | (SupervisorRpcRequestV1<Record<string, never>> & {
+  | (SupervisorRpcRequestV2<Record<string, never>> & {
       method: 'supervisor.status';
     })
-  | (SupervisorRpcRequestV1<DrainCommandV1> & { method: 'supervisor.drain' })
-  | (SupervisorRpcRequestV1<RestartCommandV1> & { method: 'supervisor.restart' })
-  | (SupervisorRpcRequestV1<BeginInterventionCommandV1> & {
+  | (SupervisorRpcRequestV2<DrainCommandV1> & { method: 'supervisor.drain' })
+  | (SupervisorRpcRequestV2<RestartCommandV1> & { method: 'supervisor.restart' })
+  | (SupervisorRpcRequestV2<BeginInterventionCommandV1> & {
       method: 'supervisor.intervention.begin';
     })
-  | (SupervisorRpcRequestV1<VerifyInterventionCommandV1> & {
+  | (SupervisorRpcRequestV2<VerifyInterventionCommandV1> & {
       method: 'supervisor.intervention.verify';
     })
-  | (SupervisorRpcRequestV1<EndInterventionCommandV1> & {
+  | (SupervisorRpcRequestV2<EndInterventionCommandV1> & {
       method: 'supervisor.intervention.end';
     });
 
 export interface ParseSupervisorRpcOptions {
   verification: PageActionVerificationConfigV1;
   maxFrameBytes?: number;
+  now?: Date;
 }
 
-export interface ExecutionRenewalFrameV1 {
+export interface ExecutionRenewalFrameV2 {
   schema: typeof SUPERVISOR_EXECUTION_RENEWAL_SCHEMA;
   rpcId: string;
-  request: ParsedSupervisorRpcRequestV1 & { method: 'collector.pageAction.execute' };
+  request: ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' };
 }
 
-export interface RemoteAttemptAdmissionRequestV1 {
+export interface RemoteAttemptAdmissionRequestV2 {
   pageActionId: string;
   pageActionExecutionAttemptId: string;
   remoteRequestAttemptId: string;
@@ -215,25 +394,29 @@ export interface RemoteAttemptAdmissionRequestV1 {
   requestBusinessHash: string;
 }
 
-export interface RemoteAttemptAdmissionReceiptV1 {
+export interface RemoteAttemptAdmissionReceiptV2 {
   remoteActionStartId: string;
   admittedAt: string;
+  transportAuthority: TransportAuthorityV2;
+  parentCanonicalRequestHash: string;
 }
 
-export interface RemoteAttemptAdmissionFrameV1 {
+export interface RemoteAttemptAdmissionFrameV2 {
   schema: typeof SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_SCHEMA;
   rpcId: string;
   admissionId: string;
   deadlineAt: string;
-  request: RemoteAttemptAdmissionRequestV1;
+  transportAuthority: TransportAuthorityV2;
+  parentCanonicalRequestHash: string;
+  request: RemoteAttemptAdmissionRequestV2;
 }
 
-export type RemoteAttemptAdmissionResponseFrameV1 = {
+export type RemoteAttemptAdmissionResponseFrameV2 = {
   schema: typeof SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA;
   rpcId: string;
   admissionId: string;
   ok: true;
-  receipt: RemoteAttemptAdmissionReceiptV1;
+  receipt: RemoteAttemptAdmissionReceiptV2;
 } | {
   schema: typeof SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA;
   rpcId: string;
@@ -248,10 +431,11 @@ export type RemoteAttemptAdmissionResponseFrameV1 = {
 
 export function parseRemoteAttemptAdmissionResponseFrame(
   value: unknown,
-): RemoteAttemptAdmissionResponseFrameV1 {
-  const record = strictRecord(value, 'RemoteAttemptAdmissionResponseFrame', [
-    'schema', 'rpcId', 'admissionId', 'ok', 'receipt', 'error',
-  ]);
+): RemoteAttemptAdmissionResponseFrameV2 {
+  const candidate = recordValue(value, 'RemoteAttemptAdmissionResponseFrame');
+  const record = strictRecord(value, 'RemoteAttemptAdmissionResponseFrame', candidate['ok'] === true
+    ? ['schema', 'rpcId', 'admissionId', 'ok', 'receipt']
+    : ['schema', 'rpcId', 'admissionId', 'ok', 'error']);
   literal(
     record['schema'],
     SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA,
@@ -261,7 +445,8 @@ export function parseRemoteAttemptAdmissionResponseFrame(
   const admissionId = identifier(record['admissionId'], 'admissionId');
   if (record['ok'] === true) {
     const receipt = strictRecord(record['receipt'], 'receipt', [
-      'remoteActionStartId', 'admittedAt',
+      'remoteActionStartId', 'admittedAt', 'transportAuthority',
+      'parentCanonicalRequestHash',
     ]);
     return {
       schema: SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA,
@@ -269,8 +454,13 @@ export function parseRemoteAttemptAdmissionResponseFrame(
       admissionId,
       ok: true,
       receipt: {
-        remoteActionStartId: identifier(receipt['remoteActionStartId'], 'remoteActionStartId'),
+        remoteActionStartId: uuid(receipt['remoteActionStartId'], 'remoteActionStartId'),
         admittedAt: timestamp(receipt['admittedAt'], 'admittedAt'),
+        transportAuthority: parseTransportAuthorityV2(receipt['transportAuthority']),
+        parentCanonicalRequestHash: hash(
+          receipt['parentCanonicalRequestHash'],
+          'parentCanonicalRequestHash',
+        ),
       },
     };
   }
@@ -307,7 +497,7 @@ export function parseRemoteAttemptAdmissionResponseFrame(
 export function parseExecutionRenewalFrame(
   value: unknown,
   options: ParseSupervisorRpcOptions,
-): ExecutionRenewalFrameV1 {
+): ExecutionRenewalFrameV2 {
   const record = strictRecord(value, 'ExecutionRenewalFrame', [
     'schema', 'rpcId', 'request',
   ]);
@@ -320,9 +510,11 @@ export function parseExecutionRenewalFrame(
       false,
     );
   }
+  const rpcId = identifier(record['rpcId'], 'rpcId');
+  equal(rpcId, request.rpcId, 'renewal rpcId');
   return {
     schema: SUPERVISOR_EXECUTION_RENEWAL_SCHEMA,
-    rpcId: identifier(record['rpcId'], 'rpcId'),
+    rpcId,
     request,
   };
 }
@@ -330,7 +522,7 @@ export function parseExecutionRenewalFrame(
 export function parseSupervisorRpcFrame(
   frame: string | Buffer,
   options: ParseSupervisorRpcOptions,
-): ParsedSupervisorRpcRequestV1 {
+): ParsedSupervisorRpcRequestV2 {
   const maxFrameBytes = options.maxFrameBytes ?? SUPERVISOR_RPC_MAX_FRAME_BYTES;
   if (Buffer.byteLength(frame) > maxFrameBytes) {
     throw new SupervisorRpcError(
@@ -351,7 +543,7 @@ export function parseSupervisorRpcFrame(
 export function parseSupervisorRpcRequest(
   value: unknown,
   options: ParseSupervisorRpcOptions,
-): ParsedSupervisorRpcRequestV1 {
+): ParsedSupervisorRpcRequestV2 {
   const record = strictRecord(value, 'SupervisorRpcRequest', [
     'schema',
     'rpcId',
@@ -363,8 +555,13 @@ export function parseSupervisorRpcRequest(
   literal(record['schema'], SUPERVISOR_RPC_SCHEMA, 'schema');
   const rpcId = identifier(record['rpcId'], 'rpcId');
   const method = enumValue(record['method'], SUPERVISOR_RPC_METHODS, 'method');
-  const deadlineAt = timestamp(record['deadlineAt'], 'deadlineAt');
+  const deadlineAt = futureTimestamp(
+    record['deadlineAt'],
+    'deadlineAt',
+    options.now ?? new Date(),
+  );
   const binding = parseBinding(record['binding']);
+  validateMethodCredentialShape(method, binding);
   const base = {
     schema: SUPERVISOR_RPC_SCHEMA,
     rpcId,
@@ -421,17 +618,46 @@ export function supervisorRpcOperation(method: SupervisorRpcMethod): SupervisorR
   }
 }
 
-export function canonicalRpcPayloadHash(request: ParsedSupervisorRpcRequestV1): string {
-  return canonicalCollectorSha256V1(request.payload).replace(/^sha256:/u, '');
+export function canonicalAuthorizedRequestV2(
+  request: SupervisorRpcRequestV2,
+): Record<string, unknown> {
+  return {
+    schema: request.schema,
+    rpcId: request.rpcId,
+    method: request.method,
+    deadlineAt: request.deadlineAt,
+    binding: {
+      profileId: request.binding.profileId,
+      daemonInstanceId: request.binding.daemonInstanceId,
+      contextGeneration: request.binding.contextGeneration,
+      supervisor: request.binding.supervisor,
+      reservation: request.binding.reservation,
+      workUnit: request.binding.workUnit,
+      transportAuthority: request.binding.transportAuthority,
+    },
+    payload: request.payload,
+  };
+}
+
+export function canonicalAuthorizedRequestHashV2(request: SupervisorRpcRequestV2): string {
+  return createHash('sha256')
+    .update(canonicalJson(canonicalAuthorizedRequestV2(request)), 'utf8')
+    .digest('hex');
+}
+
+/** @deprecated The v2 hash covers the authorized request, not only its payload. */
+export function canonicalRpcPayloadHash(request: ParsedSupervisorRpcRequestV2): string {
+  return canonicalAuthorizedRequestHashV2(request);
 }
 
 export function validateRpcBinding(
-  request: ParsedSupervisorRpcRequestV1,
+  request: ParsedSupervisorRpcRequestV2,
   expected: {
     profileId: string;
     daemonInstanceId: string;
     contextGeneration: number;
     supervisorGeneration: number;
+    transportAuthority: TransportAuthorityV2;
     now: Date;
   },
 ): void {
@@ -439,6 +665,13 @@ export function validateRpcBinding(
   equal(binding.profileId, expected.profileId, 'profileId');
   equal(binding.daemonInstanceId, expected.daemonInstanceId, 'daemonInstanceId');
   equal(binding.contextGeneration, expected.contextGeneration, 'contextGeneration');
+  if (canonicalJson(binding.transportAuthority) !== canonicalJson(expected.transportAuthority)) {
+    throw new SupervisorRpcError(
+      'TRANSPORT_AUTHORITY_MISMATCH',
+      'Transport authority does not match the managed daemon config.',
+      false,
+    );
+  }
   equal(
     binding.supervisor.generation,
     expected.supervisorGeneration,
@@ -544,7 +777,7 @@ export function validateRpcBinding(
   validateCredentialBinding(request);
 }
 
-function validateCredentialBinding(request: ParsedSupervisorRpcRequestV1): void {
+function validateCredentialBinding(request: ParsedSupervisorRpcRequestV2): void {
   const { binding } = request;
   const isWorkMethod = request.method.startsWith('collector.pageAction.');
   if (!isWorkMethod) {
@@ -561,9 +794,21 @@ function validateCredentialBinding(request: ParsedSupervisorRpcRequestV1): void 
     equal(control.contextGeneration, binding.contextGeneration, 'control credential contextGeneration');
     equal(control.supervisorLeaseId, binding.supervisor.leaseId, 'control credential supervisorLeaseId');
     equal(control.supervisorGeneration, binding.supervisor.generation, 'control credential supervisorGeneration');
+    equal(
+      control.supervisorFenceDigest,
+      fenceDigest(binding.supervisor),
+      'control credential supervisorFenceDigest',
+    );
     equal(control.rpcId, request.rpcId, 'control credential rpcId');
     equal(control.canonicalRequestHash, canonicalRpcPayloadHash(request), 'control credential request hash');
     equal(control.requestDeadlineAt, request.deadlineAt, 'control credential request deadline');
+    if (Date.parse(control.credentialExpiresAt) > Date.parse(binding.supervisor.leaseNotAfter)) {
+      throw new SupervisorRpcError(
+        'RPC_BINDING_MISMATCH',
+        'control credential expiry exceeds the Supervisor lease.',
+        false,
+      );
+    }
     return;
   }
   if (binding.renewalCredential === null || binding.controlCredential !== null) {
@@ -580,6 +825,11 @@ function validateCredentialBinding(request: ParsedSupervisorRpcRequestV1): void 
   equal(credential.supervisorLeaseId, binding.supervisor.leaseId, 'credential supervisorLeaseId');
   equal(credential.supervisorGeneration, binding.supervisor.generation, 'credential supervisorGeneration');
   equal(
+    credential.supervisorFenceDigest,
+    fenceDigest(binding.supervisor),
+    'credential supervisorFenceDigest',
+  );
+  equal(
     credential.reservationLeaseId,
     binding.reservation?.leaseId,
     'credential reservationLeaseId',
@@ -589,11 +839,21 @@ function validateCredentialBinding(request: ParsedSupervisorRpcRequestV1): void 
     binding.reservation?.generation,
     'credential reservationGeneration',
   );
+  equal(
+    credential.reservationFenceDigest,
+    fenceDigest(binding.reservation!),
+    'credential reservationFenceDigest',
+  );
   equal(credential.workUnitLeaseId, binding.workUnit?.leaseId, 'credential workUnitLeaseId');
   equal(
     credential.workUnitGeneration,
     binding.workUnit?.generation,
     'credential workUnitGeneration',
+  );
+  equal(
+    credential.workUnitFenceDigest,
+    fenceDigest(binding.workUnit!),
+    'credential workUnitFenceDigest',
   );
   const payload = request.payload as Record<string, unknown>;
   const requestId = typeof payload['requestId'] === 'string' ? payload['requestId'] : request.rpcId;
@@ -604,9 +864,48 @@ function validateCredentialBinding(request: ParsedSupervisorRpcRequestV1): void 
   equal(credential.idempotencyKey, idempotencyKey, 'credential idempotencyKey');
   equal(credential.canonicalRequestHash, canonicalRpcPayloadHash(request), 'credential request hash');
   equal(credential.requestDeadlineAt, request.deadlineAt, 'credential request deadline');
+  equal(
+    credential.leaseNotAfter,
+    earliestLeaseNotAfter(binding),
+    'credential leaseNotAfter',
+  );
 }
 
-function parseBinding(value: unknown): SupervisorRpcBindingV1 {
+function validateMethodCredentialShape(
+  method: SupervisorRpcMethod,
+  binding: SupervisorRpcBindingV2,
+): void {
+  const workMethod = method.startsWith('collector.pageAction.');
+  if (workMethod) {
+    if (
+      binding.reservation === null
+      || binding.workUnit === null
+      || binding.renewalCredential === null
+      || binding.controlCredential !== null
+    ) {
+      throw new SupervisorRpcError(
+        'WORK_UNIT_RENEWAL_CREDENTIAL_REQUIRED',
+        'Collector RPC requires reservation, WorkUnit and renewal credential only.',
+        false,
+      );
+    }
+    return;
+  }
+  if (
+    binding.reservation !== null
+    || binding.workUnit !== null
+    || binding.renewalCredential !== null
+    || binding.controlCredential === null
+  ) {
+    throw new SupervisorRpcError(
+      'SUPERVISOR_CONTROL_CREDENTIAL_REQUIRED',
+      'Supervisor RPC requires null reservation and WorkUnit with one control credential.',
+      false,
+    );
+  }
+}
+
+function parseBinding(value: unknown): SupervisorRpcBindingV2 {
   const record = strictRecord(value, 'binding', [
     'profileId',
     'daemonInstanceId',
@@ -614,12 +913,13 @@ function parseBinding(value: unknown): SupervisorRpcBindingV1 {
     'supervisor',
     'reservation',
     'workUnit',
+    'transportAuthority',
     'renewalCredential',
     'controlCredential',
   ]);
   return {
-    profileId: identifier(record['profileId'], 'binding.profileId'),
-    daemonInstanceId: identifier(record['daemonInstanceId'], 'binding.daemonInstanceId'),
+    profileId: uuid(record['profileId'], 'binding.profileId'),
+    daemonInstanceId: uuid(record['daemonInstanceId'], 'binding.daemonInstanceId'),
     contextGeneration: positiveInteger(record['contextGeneration'], 'binding.contextGeneration'),
     supervisor: parseFence(record['supervisor'], 'binding.supervisor'),
     reservation: record['reservation'] === null
@@ -628,6 +928,7 @@ function parseBinding(value: unknown): SupervisorRpcBindingV1 {
     workUnit: record['workUnit'] === null
       ? null
       : parseFence(record['workUnit'], 'binding.workUnit'),
+    transportAuthority: parseTransportAuthorityV2(record['transportAuthority']),
     renewalCredential: record['renewalCredential'] === null
       ? null
       : parseCredential(record['renewalCredential']),
@@ -637,7 +938,7 @@ function parseBinding(value: unknown): SupervisorRpcBindingV1 {
   };
 }
 
-function parseCredential(value: unknown): RenewalCredentialTransportV1 {
+function parseCredential(value: unknown): RenewalCredentialTransportV2 {
   const record = strictRecord(value, 'renewalCredential', [
     'payload', 'algorithm', 'signature',
   ]);
@@ -649,21 +950,21 @@ function parseCredential(value: unknown): RenewalCredentialTransportV1 {
     'canonicalRequestHash', 'requestDeadlineAt', 'issuedAt', 'credentialNotBefore',
     'credentialExpiresAt', 'leaseNotAfter', 'keyId',
   ]);
-  equal(payload['schemaVersion'], 1, 'credential schemaVersion');
+  equal(payload['schemaVersion'], 2, 'credential schemaVersion');
   literal(record['algorithm'], 'HMAC-SHA256', 'renewalCredential.algorithm');
   return {
     payload: {
-      schemaVersion: 1,
-      profileId: identifier(payload['profileId'], 'credential.profileId'),
-      daemonInstanceId: identifier(payload['daemonInstanceId'], 'credential.daemonInstanceId'),
+      schemaVersion: 2,
+      profileId: uuid(payload['profileId'], 'credential.profileId'),
+      daemonInstanceId: uuid(payload['daemonInstanceId'], 'credential.daemonInstanceId'),
       contextGeneration: positiveInteger(payload['contextGeneration'], 'credential.contextGeneration'),
-      supervisorLeaseId: identifier(payload['supervisorLeaseId'], 'credential.supervisorLeaseId'),
-      supervisorGeneration: nonNegativeInteger(payload['supervisorGeneration'], 'credential.supervisorGeneration'),
+      supervisorLeaseId: uuid(payload['supervisorLeaseId'], 'credential.supervisorLeaseId'),
+      supervisorGeneration: positiveInteger(payload['supervisorGeneration'], 'credential.supervisorGeneration'),
       supervisorFenceDigest: hash(payload['supervisorFenceDigest'], 'credential.supervisorFenceDigest'),
-      reservationLeaseId: identifier(payload['reservationLeaseId'], 'credential.reservationLeaseId'),
+      reservationLeaseId: uuid(payload['reservationLeaseId'], 'credential.reservationLeaseId'),
       reservationGeneration: positiveInteger(payload['reservationGeneration'], 'credential.reservationGeneration'),
       reservationFenceDigest: hash(payload['reservationFenceDigest'], 'credential.reservationFenceDigest'),
-      workUnitLeaseId: identifier(payload['workUnitLeaseId'], 'credential.workUnitLeaseId'),
+      workUnitLeaseId: uuid(payload['workUnitLeaseId'], 'credential.workUnitLeaseId'),
       workUnitGeneration: positiveInteger(payload['workUnitGeneration'], 'credential.workUnitGeneration'),
       workUnitFenceDigest: hash(payload['workUnitFenceDigest'], 'credential.workUnitFenceDigest'),
       requestId: identifier(payload['requestId'], 'credential.requestId'),
@@ -677,11 +978,11 @@ function parseCredential(value: unknown): RenewalCredentialTransportV1 {
       keyId: identifier(payload['keyId'], 'credential.keyId'),
     },
     algorithm: 'HMAC-SHA256',
-    signature: boundedString(record['signature'], 'renewalCredential.signature', 4096),
+    signature: signature(record['signature'], 'renewalCredential.signature'),
   };
 }
 
-function parseControlCredential(value: unknown): SupervisorControlCredentialV1 {
+function parseControlCredential(value: unknown): SupervisorControlCredentialV2 {
   const record = strictRecord(value, 'controlCredential', ['payload', 'algorithm', 'signature']);
   literal(record['algorithm'], 'HMAC-SHA256', 'controlCredential.algorithm');
   const payload = strictRecord(record['payload'], 'controlCredential.payload', [
@@ -690,15 +991,15 @@ function parseControlCredential(value: unknown): SupervisorControlCredentialV1 {
     'rpcId', 'canonicalRequestHash', 'requestDeadlineAt', 'issuedAt',
     'credentialNotBefore', 'credentialExpiresAt', 'keyId',
   ]);
-  equal(payload['schemaVersion'], 1, 'control credential schemaVersion');
+  equal(payload['schemaVersion'], 2, 'control credential schemaVersion');
   return {
     payload: {
-      schemaVersion: 1,
-      profileId: identifier(payload['profileId'], 'control.profileId'),
-      daemonInstanceId: identifier(payload['daemonInstanceId'], 'control.daemonInstanceId'),
+      schemaVersion: 2,
+      profileId: uuid(payload['profileId'], 'control.profileId'),
+      daemonInstanceId: uuid(payload['daemonInstanceId'], 'control.daemonInstanceId'),
       contextGeneration: positiveInteger(payload['contextGeneration'], 'control.contextGeneration'),
-      supervisorLeaseId: identifier(payload['supervisorLeaseId'], 'control.supervisorLeaseId'),
-      supervisorGeneration: nonNegativeInteger(payload['supervisorGeneration'], 'control.supervisorGeneration'),
+      supervisorLeaseId: uuid(payload['supervisorLeaseId'], 'control.supervisorLeaseId'),
+      supervisorGeneration: positiveInteger(payload['supervisorGeneration'], 'control.supervisorGeneration'),
       supervisorFenceDigest: hash(payload['supervisorFenceDigest'], 'control.supervisorFenceDigest'),
       rpcId: identifier(payload['rpcId'], 'control.rpcId'),
       canonicalRequestHash: hash(payload['canonicalRequestHash'], 'control.canonicalRequestHash'),
@@ -709,7 +1010,7 @@ function parseControlCredential(value: unknown): SupervisorControlCredentialV1 {
       keyId: identifier(payload['keyId'], 'control.keyId'),
     },
     algorithm: 'HMAC-SHA256',
-    signature: boundedString(record['signature'], 'controlCredential.signature', 4096),
+    signature: signature(record['signature'], 'controlCredential.signature'),
   };
 }
 
@@ -718,9 +1019,9 @@ function parseFence(value: unknown, path: string): LeaseFenceV1 {
     'leaseId', 'generation', 'fencingToken', 'leaseNotAfter',
   ]);
   return {
-    leaseId: identifier(record['leaseId'], `${path}.leaseId`),
-    generation: nonNegativeInteger(record['generation'], `${path}.generation`),
-    fencingToken: identifier(record['fencingToken'], `${path}.fencingToken`),
+    leaseId: uuid(record['leaseId'], `${path}.leaseId`),
+    generation: positiveInteger(record['generation'], `${path}.generation`),
+    fencingToken: boundedString(record['fencingToken'], `${path}.fencingToken`, 512),
     leaseNotAfter: timestamp(record['leaseNotAfter'], `${path}.leaseNotAfter`),
   };
 }
@@ -821,6 +1122,52 @@ function strictRecord(
   return record;
 }
 
+function recordValue(value: unknown, path: string): Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new SupervisorRpcError('RPC_CONTRACT_INVALID', `${path} must be an object.`, false);
+  }
+  return value as Record<string, unknown>;
+}
+
+export function parseTransportAuthorityV2(value: unknown): TransportAuthorityV2 {
+  const record = strictRecord(value, 'transportAuthority', [
+    'mode',
+    'executionAuthorityDocumentId',
+    'executionAuthorityDocumentSha256',
+    'executionSubjectDocumentId',
+    'executionSubjectDocumentSha256',
+    'cohortId',
+    'runId',
+    'protocolSha256',
+  ]);
+  return {
+    mode: enumValue(
+      record['mode'],
+      ['scripted_offline', 'live_remote'] as const,
+      'transportAuthority.mode',
+    ),
+    executionAuthorityDocumentId: uuid(
+      record['executionAuthorityDocumentId'],
+      'transportAuthority.executionAuthorityDocumentId',
+    ),
+    executionAuthorityDocumentSha256: hash(
+      record['executionAuthorityDocumentSha256'],
+      'transportAuthority.executionAuthorityDocumentSha256',
+    ),
+    executionSubjectDocumentId: uuid(
+      record['executionSubjectDocumentId'],
+      'transportAuthority.executionSubjectDocumentId',
+    ),
+    executionSubjectDocumentSha256: hash(
+      record['executionSubjectDocumentSha256'],
+      'transportAuthority.executionSubjectDocumentSha256',
+    ),
+    cohortId: uuid(record['cohortId'], 'transportAuthority.cohortId'),
+    runId: uuid(record['runId'], 'transportAuthority.runId'),
+    protocolSha256: hash(record['protocolSha256'], 'transportAuthority.protocolSha256'),
+  };
+}
+
 function emptyObject(value: unknown, path: string): void {
   strictRecord(value, path, []);
 }
@@ -831,6 +1178,20 @@ function identifier(value: unknown, path: string): string {
     throw new SupervisorRpcError('RPC_CONTRACT_INVALID', `${path} is not a safe identifier.`, false);
   }
   return normalized;
+}
+
+function uuid(value: unknown, path: string): string {
+  if (
+    typeof value !== 'string'
+    || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u.test(value)
+  ) {
+    throw new SupervisorRpcError(
+      'RPC_CONTRACT_INVALID',
+      `${path} must be a lowercase canonical UUID.`,
+      false,
+    );
+  }
+  return value;
 }
 
 function nullableIdentifier(value: unknown, path: string): string | null {
@@ -856,10 +1217,30 @@ function nullableHash(value: unknown, path: string): string | null {
 }
 
 function timestamp(value: unknown, path: string): string {
-  if (typeof value !== 'string' || !Number.isFinite(Date.parse(value))) {
-    throw new SupervisorRpcError('RPC_CONTRACT_INVALID', `${path} must be an ISO timestamp.`, false);
+  if (
+    typeof value !== 'string'
+    || !Number.isFinite(Date.parse(value))
+    || new Date(value).toISOString() !== value
+  ) {
+    throw new SupervisorRpcError(
+      'RPC_CONTRACT_INVALID',
+      `${path} must be a canonical UTC timestamp.`,
+      false,
+    );
   }
-  return new Date(value).toISOString();
+  return value;
+}
+
+function futureTimestamp(value: unknown, path: string, now: Date): string {
+  const parsed = timestamp(value, path);
+  if (Date.parse(parsed) <= now.getTime()) {
+    throw new SupervisorRpcError(
+      'RPC_DEADLINE_EXCEEDED',
+      `${path} must be in the future.`,
+      true,
+    );
+  }
+  return parsed;
 }
 
 function positiveInteger(value: unknown, path: string): number {
@@ -883,6 +1264,17 @@ function nullableNonNegativeInteger(value: unknown, path: string): number | null
 function booleanValue(value: unknown, path: string): boolean {
   if (typeof value !== 'boolean') {
     throw new SupervisorRpcError('RPC_CONTRACT_INVALID', `${path} must be boolean.`, false);
+  }
+  return value;
+}
+
+function signature(value: unknown, path: string): string {
+  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{43}$/u.test(value)) {
+    throw new SupervisorRpcError(
+      'RPC_CONTRACT_INVALID',
+      `${path} must be a canonical 43-character base64url HMAC.`,
+      false,
+    );
   }
   return value;
 }
@@ -923,4 +1315,26 @@ function assertFenceEqual(left: LeaseFenceV1, right: LeaseFenceV1, name: string)
   ) {
     throw new SupervisorRpcError('STALE_FENCE', `${name} fence does not match.`, false);
   }
+}
+
+function fenceDigest(fence: LeaseFenceV1): string {
+  return createHash('sha256').update(fence.fencingToken, 'utf8').digest('hex');
+}
+
+function earliestLeaseNotAfter(binding: SupervisorRpcBindingV2): string {
+  const leases = [
+    binding.supervisor.leaseNotAfter,
+    binding.reservation?.leaseNotAfter,
+    binding.workUnit?.leaseNotAfter,
+  ].filter((value): value is string => value !== undefined);
+  return new Date(Math.min(...leases.map(Date.parse))).toISOString();
+}
+
+function canonicalJson(value: unknown): string {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record).sort().map(
+    (key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`,
+  ).join(',')}}`;
 }

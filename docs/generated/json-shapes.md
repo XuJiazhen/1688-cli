@@ -107,7 +107,7 @@ This is a heuristic index of exported TypeScript interfaces that are likely to m
 | `SellerHistoryOpts` | `src/commands/workflows.ts` | `seller: string;`<br>`maxPages?: string;` |
 | `ShippedOpts` | `src/commands/workflows.ts` | `orderId: string;` |
 | `StuckOpts` | `src/commands/workflows.ts` | `days?: string;`<br>`limit?: string;` |
-| `ServerOpts` | `src/daemon/server.ts` | `profile?: string;`<br>`idleTimeoutMs?: number;`<br>`prewarm?: boolean;`<br>`headful?: boolean;`<br>`supervisorRuntime?: ProfileDaemonRuntime;`<br>`pageActionVerification?: PageActionVerificationConfigV1;` |
+| `ServerOpts` | `src/daemon/server.ts` | `profile?: string;`<br>`idleTimeoutMs?: number;`<br>`prewarm?: boolean;`<br>`headful?: boolean;`<br>`supervisorRuntime?: ProfileDaemonRuntime;`<br>`pageActionVerification?: PageActionVerificationConfigV1;`<br>`legacyRollback?: true;` |
 | `AlisiteModuleCaptureActionResult` | `src/session/alisite-module.ts` | `actionResult: TResult;` |
 | `AlisiteModuleCaptureWaitResult` | `src/session/alisite-module.ts` | `status: AlisiteModuleCaptureWaitStatus;`<br>`captures: CapturedAlisiteModule[];`<br>`diagnostics: AlisiteModuleCaptureDiagnostics;` |
 | `StoreCatalogOffer` | `src/session/alisite-module.ts` | `offerId: string;`<br>`memberId: string \| null;`<br>`title: string \| null;`<br>`url: string;`<br>`imageUrl: string \| null;`<br>`categoryId: string \| null;`<br>`price: string \| null;`<br>`quantityBegin: string \| null;`<br>`unit: string \| null;`<br>`pagePosition: number;`<br>`absolutePosition: number \| null;`<br>`sales: {`<br>`vagueSaleQuantity: RawCatalogScalar \| null;`<br>`thirtySaleQuantity: RawCatalogScalar \| null;` |

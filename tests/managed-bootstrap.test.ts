@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import net from 'node:net';
+import { createHash } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -32,11 +33,24 @@ import {
 } from '../src/daemon/supervisor-runtime.js';
 import {
   canonicalRpcPayloadHash,
-  type ParsedSupervisorRpcRequestV1,
-  type SupervisorRpcBindingV1,
+  SUPERVISOR_PROTOCOL_SHA256_V2,
+  type ParsedSupervisorRpcRequestV2,
+  type SupervisorRpcBindingV2,
 } from '../src/daemon/supervisor-rpc.js';
 
 const key = 'managed-bootstrap-key-with-at-least-32-bytes';
+const PROFILE_ID = '40000000-0000-4000-8000-000000000001';
+const DAEMON_ID = '40000000-0000-4000-8000-000000000002';
+const transportAuthority = {
+  mode: 'scripted_offline' as const,
+  executionAuthorityDocumentId: '40000000-0000-4000-8000-000000000003',
+  executionAuthorityDocumentSha256: 'a'.repeat(64),
+  executionSubjectDocumentId: '40000000-0000-4000-8000-000000000004',
+  executionSubjectDocumentSha256: 'b'.repeat(64),
+  cohortId: '40000000-0000-4000-8000-000000000005',
+  runId: '40000000-0000-4000-8000-000000000006',
+  protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
+};
 
 class FakePage implements ManagedPage {
   closed = false;
@@ -61,7 +75,7 @@ class FakeHost implements PersistentContextHost {
   pageId(page: ManagedPage) { return this.ids.get(page as object)!; }
   async restart(input: { nextContextGeneration: number }) {
     return {
-      profileId: 'profile-1', profileName: 'profile-1', daemonInstanceId: 'daemon-1',
+      profileId: PROFILE_ID, profileName: 'profile-1', daemonInstanceId: DAEMON_ID,
       contextGeneration: input.nextContextGeneration, chromiumPid: 4243, headful: true,
     };
   }
@@ -82,12 +96,13 @@ describe('managed daemon bootstrap', () => {
     const configPath = path.join(directory, 'config.json');
     const sampled = new Date();
     await fs.writeFile(configPath, JSON.stringify({
-      schema: 'profile-supervisor.daemon-config.v1',
-      profileId: 'profile-1',
+      schema: 'profile-supervisor.daemon-config.v2',
+      profileId: PROFILE_ID,
       profileName: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      daemonInstanceId: DAEMON_ID,
       supervisorGeneration: 1,
       contextGeneration: 1,
+      transportAuthority,
       databaseNow: sampled.toISOString(),
       databaseTimeSampledAt: sampled.toISOString(),
       credentialKeys: { key1: key },
@@ -127,6 +142,17 @@ describe('managed daemon bootstrap', () => {
       'search-list', 'offer-detail', 'store-qualification', 'store-sample',
     ]);
     expect(host.pagesOwned.every((page) => page.closed)).toBe(true);
+    const pagesBeforeMismatch = host.pagesOwned.length;
+    const mismatched = signedRequest('offer-detail', 99, sampled);
+    mismatched.binding.transportAuthority = {
+      ...mismatched.binding.transportAuthority,
+      runId: '40000000-0000-4000-8000-000000000099',
+    };
+    await expect(options.supervisorRuntime!.handle(mismatched)).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'TRANSPORT_AUTHORITY_MISMATCH', retryable: false },
+    });
+    expect(host.pagesOwned).toHaveLength(pagesBeforeMismatch);
   });
 
   it('rejects a credential-bearing config that is group readable', async () => {
@@ -146,9 +172,10 @@ describe('managed daemon bootstrap', () => {
     const pageActions = (['search-list', 'offer-detail', 'store-qualification', 'store-sample'] as const)
       .map((kind, index) => pageActionFixture(kind, index + 1, sampled));
     await fs.writeFile(configPath, JSON.stringify({
-      schema: 'profile-supervisor.daemon-config.v1',
-      profileId: 'profile-1', profileName: 'profile-1', daemonInstanceId: 'daemon-1',
+      schema: 'profile-supervisor.daemon-config.v2',
+      profileId: PROFILE_ID, profileName: 'profile-1', daemonInstanceId: DAEMON_ID,
       supervisorGeneration: 1, contextGeneration: 1,
+      transportAuthority,
       databaseNow: sampled.toISOString(), databaseTimeSampledAt: sampled.toISOString(),
       credentialKeys: { key1: key },
       pageActionVerification: {
@@ -204,13 +231,22 @@ describe('managed daemon bootstrap', () => {
     try {
       await start(options);
       await expect(daemonCall('status', {}, 'legacy-status', 'profile-1'))
-        .rejects.toMatchObject({ code: 'SUPERVISOR_RPC_REQUIRED' });
+        .rejects.toBeDefined();
+      await expect(rawSocketFrame('profile-1', {
+        ...signedStatusRequest(sampled),
+        schema: 'profile-supervisor.rpc.v1',
+        payload: { mustNotNormalize: true },
+      })).resolves.toMatchObject({
+        schema: 'profile-supervisor.rpc-response.v2',
+        ok: false,
+        error: { code: 'RPC_VERSION_UNSUPPORTED' },
+      });
       const status = await supervisorDaemonCall<Record<string, unknown>>(
         signedStatusRequest(sampled),
         'profile-1',
       );
       expect(status).toMatchObject({
-        profileId: 'profile-1', daemonInstanceId: 'daemon-1',
+        profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID,
         runtimeState: 'warm', contextGeneration: 1, headful: true,
       });
       for (const pageAction of pageActions) {
@@ -257,7 +293,7 @@ describe('managed daemon bootstrap', () => {
         'utf8',
       )) as Record<string, unknown>;
       expect(owner).toMatchObject({
-        daemonInstanceId: 'daemon-1',
+        daemonInstanceId: DAEMON_ID,
         contextGeneration: 2,
         chromiumPid: 4243,
       });
@@ -267,10 +303,59 @@ describe('managed daemon bootstrap', () => {
       else process.env.BB1688_HOME = previousHome;
     }
   });
+
+  it('keeps legacy rollback on the pre-Supervisor Request protocol only', async () => {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'legacy-daemon-rpc-'));
+    const previousHome = process.env.BB1688_HOME;
+    process.env.BB1688_HOME = directory;
+    const profile = 'legacy-only';
+    try {
+      await start({ profile, prewarm: false, legacyRollback: true });
+      await expect(daemonCall('status', {}, 'legacy-status', profile))
+        .resolves.toMatchObject({ profile });
+      await expect(rawSocketFrame(profile, signedStatusRequest(new Date())))
+        .resolves.toMatchObject({
+          schema: 'profile-supervisor.rpc-response.v2',
+          ok: false,
+          error: { code: 'SUPERVISOR_RUNTIME_DISABLED' },
+        });
+      await expect(rawSocketFrame(profile, {
+        ...signedStatusRequest(new Date()),
+        schema: 'profile-supervisor.rpc.v1',
+      })).resolves.toMatchObject({
+        schema: 'profile-supervisor.rpc-response.v2',
+        ok: false,
+        error: { code: 'RPC_VERSION_UNSUPPORTED' },
+      });
+    } finally {
+      await stopServerForTesting(profile);
+      if (previousHome === undefined) delete process.env.BB1688_HOME;
+      else process.env.BB1688_HOME = previousHome;
+    }
+  });
 });
 
+async function rawSocketFrame(
+  profile: string,
+  frame: unknown,
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const socket = net.createConnection(socketPath(profile));
+    let buffer = '';
+    socket.once('connect', () => socket.write(`${JSON.stringify(frame)}\n`));
+    socket.on('data', (chunk: Buffer) => {
+      buffer += chunk.toString('utf8');
+      const newline = buffer.indexOf('\n');
+      if (newline < 0) return;
+      socket.destroy();
+      resolve(JSON.parse(buffer.slice(0, newline)) as Record<string, unknown>);
+    });
+    socket.once('error', reject);
+  });
+}
+
 async function supervisorDaemonCallWithAdmissions(
-  request: ParsedSupervisorRpcRequestV1,
+  request: ParsedSupervisorRpcRequestV2,
   profile: string,
   admitted: Array<Record<string, unknown>>,
 ): Promise<Record<string, unknown>> {
@@ -285,17 +370,19 @@ async function supervisorDaemonCallWithAdmissions(
         const line = buffer.slice(0, newline);
         buffer = buffer.slice(newline + 1);
         const frame = JSON.parse(line) as Record<string, unknown>;
-        if (frame['schema'] === 'profile-supervisor.remote-attempt-admission.v1') {
+        if (frame['schema'] === 'profile-supervisor.remote-attempt-admission.v2') {
           const admissionRequest = frame['request'] as Record<string, unknown>;
           admitted.push(admissionRequest);
           socket.write(`${JSON.stringify({
-            schema: 'profile-supervisor.remote-attempt-admission-response.v1',
+            schema: 'profile-supervisor.remote-attempt-admission-response.v2',
             rpcId: frame['rpcId'],
             admissionId: frame['admissionId'],
             ok: true,
             receipt: {
-              remoteActionStartId: `remote-start-${admitted.length}`,
+              remoteActionStartId: canonicalUuid(`remote-start-${admitted.length}`),
               admittedAt: new Date().toISOString(),
+              transportAuthority: frame['transportAuthority'],
+              parentCanonicalRequestHash: frame['parentCanonicalRequestHash'],
             },
           })}\n`);
           continue;
@@ -313,7 +400,7 @@ function signedRequest(
   actionKind: PageActionRequestV1['actionKind'],
   ordinal: number,
   now: Date,
-): ParsedSupervisorRpcRequestV1 {
+): ParsedSupervisorRpcRequestV2 {
   return signedStrictPageActionRequest(pageActionFixture(actionKind, ordinal, now), now);
 }
 
@@ -410,8 +497,8 @@ function pageActionFixture(
     requestId,
     idempotencyKey,
     profile: {
-      profileId: 'profile-1', profileName: 'profile-1',
-      daemonInstanceId: 'daemon-1', contextGeneration: 1, egressId: 'egress-1',
+      profileId: PROFILE_ID, profileName: 'profile-1',
+      daemonInstanceId: DAEMON_ID, contextGeneration: 1, egressId: 'egress-1',
     },
     fences: {
       supervisor: fence('supervisor', leaseNotAfter),
@@ -465,26 +552,27 @@ function pageActionFixture(
 function signedStrictPageActionRequest(
   payload: PageActionRequestV1,
   now: Date,
-): ParsedSupervisorRpcRequestV1 {
+): ParsedSupervisorRpcRequestV2 {
   const request = {
-    schema: 'profile-supervisor.rpc.v1' as const,
+    schema: 'profile-supervisor.rpc.v2' as const,
     rpcId: `rpc-${payload.requestId}`,
     method: 'collector.pageAction.execute' as const,
     deadlineAt: payload.deadlineAt,
     binding: {
-      profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
+      profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
       supervisor: payload.executionLineage.fences.supervisor,
       reservation: payload.executionLineage.fences.reservation,
       workUnit: payload.executionLineage.fences.workUnit,
+      transportAuthority,
       renewalCredential: null, controlCredential: null,
-    } satisfies SupervisorRpcBindingV1,
+    } satisfies SupervisorRpcBindingV2,
     payload,
   };
   const fences = payload.executionLineage.fences;
   request.binding.renewalCredential = signRenewalCredentialTransport({
     payload: {
-      schemaVersion: 1,
-      profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
+      schemaVersion: 2,
+      profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
       supervisorLeaseId: fences.supervisor.leaseId, supervisorGeneration: 1,
       supervisorFenceDigest: fenceDigest(fences.supervisor),
       reservationLeaseId: fences.reservation.leaseId,
@@ -505,35 +593,36 @@ function signedStrictPageActionRequest(
     },
     algorithm: 'HMAC-SHA256',
   }, key);
-  return request as ParsedSupervisorRpcRequestV1;
+  return request as ParsedSupervisorRpcRequestV2;
 }
 
 function fence(prefix: string, leaseNotAfter: string) {
   return {
-    leaseId: `${prefix}-lease`, generation: 1,
+    leaseId: canonicalUuid(`${prefix}-lease`), generation: 1,
     fencingToken: `${prefix}-fence`, leaseNotAfter,
   };
 }
 
-function signedStatusRequest(now: Date): ParsedSupervisorRpcRequestV1 {
+function signedStatusRequest(now: Date): ParsedSupervisorRpcRequestV2 {
   const deadlineAt = new Date(now.getTime() + 60_000).toISOString();
   const supervisor = fence('supervisor', new Date(now.getTime() + 120_000).toISOString());
   const request = {
-    schema: 'profile-supervisor.rpc.v1' as const,
+    schema: 'profile-supervisor.rpc.v2' as const,
     rpcId: 'rpc-status-1',
     method: 'supervisor.status' as const,
     deadlineAt,
     binding: {
-      profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
+      profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
       supervisor, reservation: null, workUnit: null,
+      transportAuthority,
       renewalCredential: null, controlCredential: null,
-    } satisfies SupervisorRpcBindingV1,
+    } satisfies SupervisorRpcBindingV2,
     payload: {},
   };
   request.binding.controlCredential = signSupervisorControlCredential({
     payload: {
-      schemaVersion: 1,
-      profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
+      schemaVersion: 2,
+      profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
       supervisorLeaseId: supervisor.leaseId, supervisorGeneration: 1,
       supervisorFenceDigest: fenceDigest(supervisor), rpcId: request.rpcId,
       canonicalRequestHash: canonicalRpcPayloadHash(request as never),
@@ -544,28 +633,29 @@ function signedStatusRequest(now: Date): ParsedSupervisorRpcRequestV1 {
     },
     algorithm: 'HMAC-SHA256',
   }, key);
-  return request as ParsedSupervisorRpcRequestV1;
+  return request as ParsedSupervisorRpcRequestV2;
 }
 
-function signedRestartRequest(now: Date): ParsedSupervisorRpcRequestV1 {
+function signedRestartRequest(now: Date): ParsedSupervisorRpcRequestV2 {
   const deadlineAt = new Date(now.getTime() + 60_000).toISOString();
   const supervisor = fence('supervisor', new Date(now.getTime() + 120_000).toISOString());
   const request = {
-    schema: 'profile-supervisor.rpc.v1' as const,
+    schema: 'profile-supervisor.rpc.v2' as const,
     rpcId: 'rpc-restart-1',
     method: 'supervisor.restart' as const,
     deadlineAt,
     binding: {
-      profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
+      profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
       supervisor, reservation: null, workUnit: null,
+      transportAuthority,
       renewalCredential: null, controlCredential: null,
-    } satisfies SupervisorRpcBindingV1,
+    } satisfies SupervisorRpcBindingV2,
     payload: { reason: 'managed-test', expectedContextGeneration: 1 },
   };
   request.binding.controlCredential = signSupervisorControlCredential({
     payload: {
-      schemaVersion: 1,
-      profileId: 'profile-1', daemonInstanceId: 'daemon-1', contextGeneration: 1,
+      schemaVersion: 2,
+      profileId: PROFILE_ID, daemonInstanceId: DAEMON_ID, contextGeneration: 1,
       supervisorLeaseId: supervisor.leaseId, supervisorGeneration: 1,
       supervisorFenceDigest: fenceDigest(supervisor), rpcId: request.rpcId,
       canonicalRequestHash: canonicalRpcPayloadHash(request as never),
@@ -576,7 +666,7 @@ function signedRestartRequest(now: Date): ParsedSupervisorRpcRequestV1 {
     },
     algorithm: 'HMAC-SHA256',
   }, key);
-  return request as ParsedSupervisorRpcRequestV1;
+  return request as ParsedSupervisorRpcRequestV2;
 }
 
 function strictTerminalResponse(request: PageActionRequestV1) {
@@ -619,4 +709,12 @@ function strictTerminalResponse(request: PageActionRequestV1) {
       receiptHash: computeExecutionAttemptReceiptHashV1(content),
     },
   });
+}
+
+function canonicalUuid(seed: string): string {
+  const hex = createHash('sha256').update(seed).digest('hex').slice(0, 32).split('');
+  hex[12] = '4';
+  hex[16] = '8';
+  const value = hex.join('');
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
 }

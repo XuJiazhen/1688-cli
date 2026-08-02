@@ -109,8 +109,8 @@ import type {
   PageActionExecutor,
 } from './supervisor-runtime.js';
 import type {
-  RemoteAttemptAdmissionReceiptV1,
-  RemoteAttemptAdmissionRequestV1,
+  RemoteAttemptAdmissionReceiptV2,
+  RemoteAttemptAdmissionRequestV2,
 } from './supervisor-rpc.js';
 import { CliError } from '../io/errors.js';
 
@@ -2236,13 +2236,13 @@ function typedSearchCaptureFailureV1(error: unknown): CliError {
 }
 
 type ScopedRemoteAdmissionInputV1 = Omit<
-  RemoteAttemptAdmissionRequestV1,
+  RemoteAttemptAdmissionRequestV2,
   'pageActionId' | 'pageActionExecutionAttemptId'
 >;
 
 interface RemoteAttemptLedgerEntryV1 {
   input: ScopedRemoteAdmissionInputV1;
-  receipt: RemoteAttemptAdmissionReceiptV1;
+  receipt: RemoteAttemptAdmissionReceiptV2;
   terminal: RemoteRequestAttemptReceiptV1 | null;
   snapshot: SanitizedRemoteRequestSnapshotV1;
 }
@@ -2280,7 +2280,7 @@ class RemoteAttemptLedgerV1 {
     return this.entries.size + 1;
   }
 
-  confirmAdmission(ordinal: number, receipt: RemoteAttemptAdmissionReceiptV1): void {
+  confirmAdmission(ordinal: number, receipt: RemoteAttemptAdmissionReceiptV2): void {
     const entry = this.requiredEntry(ordinal);
     if (
       entry.receipt.remoteActionStartId !== receipt.remoteActionStartId
@@ -2422,7 +2422,7 @@ class RemoteAttemptLedgerV1 {
 
   private rememberAdmission(
     input: ScopedRemoteAdmissionInputV1,
-    receipt: RemoteAttemptAdmissionReceiptV1,
+    receipt: RemoteAttemptAdmissionReceiptV2,
   ): void {
     const existing = this.entries.get(input.ordinal);
     if (existing !== undefined) {
@@ -2469,7 +2469,7 @@ class RemoteAttemptLedgerV1 {
 
 function admittedFailureEvidence(error: unknown): {
   input: ScopedRemoteAdmissionInputV1;
-  receipt: RemoteAttemptAdmissionReceiptV1;
+  receipt: RemoteAttemptAdmissionReceiptV2;
 } | null {
   if (error === null || typeof error !== 'object') return null;
   const details = (error as { details?: unknown }).details;
@@ -2482,7 +2482,7 @@ function admittedFailureEvidence(error: unknown): {
   ) return null;
   return {
     input: input as ScopedRemoteAdmissionInputV1,
-    receipt: receipt as unknown as RemoteAttemptAdmissionReceiptV1,
+    receipt: receipt as unknown as RemoteAttemptAdmissionReceiptV2,
   };
 }
 

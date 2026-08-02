@@ -5,10 +5,11 @@ import { CliError } from '../io/errors.js';
 import { makeRequestId, type Response } from './protocol.js';
 import {
   SUPERVISOR_RPC_MAX_FRAME_BYTES,
-  SUPERVISOR_RPC_RESPONSE_SCHEMA,
   SupervisorRpcError,
-  type ParsedSupervisorRpcRequestV1,
-  type SupervisorRpcResponseV1,
+  canonicalAuthorizedRequestHashV2,
+  parseSupervisorRpcResponseV2,
+  type ParsedSupervisorRpcRequestV2,
+  type SupervisorRpcResponseV2,
 } from './supervisor-rpc.js';
 
 const PING_TIMEOUT_MS = 800;
@@ -108,7 +109,7 @@ export async function daemonCall<T>(
 }
 
 export async function supervisorDaemonCall<T>(
-  request: ParsedSupervisorRpcRequestV1,
+  request: ParsedSupervisorRpcRequestV2,
   profile?: string,
   signal?: AbortSignal,
 ): Promise<T> {
@@ -152,22 +153,23 @@ export async function supervisorDaemonCall<T>(
       }
       const newline = buffer.indexOf(0x0a);
       if (newline < 0) return;
-      let response: SupervisorRpcResponseV1<T>;
+      let response: SupervisorRpcResponseV2<T>;
       try {
-        response = JSON.parse(buffer.subarray(0, newline).toString('utf8')) as SupervisorRpcResponseV1<T>;
-      } catch {
-        finish(new SupervisorRpcError('RPC_MALFORMED_RESPONSE', 'RPC response is not JSON.', false));
-        return;
-      }
-      if (
-        response.schema !== SUPERVISOR_RPC_RESPONSE_SCHEMA
-        || response.rpcId !== request.rpcId
-      ) {
-        finish(new SupervisorRpcError(
-          'RPC_RESPONSE_BINDING_MISMATCH',
-          'RPC response schema or id differs from the request.',
-          false,
-        ));
+        response = parseSupervisorRpcResponseV2<T>(
+          JSON.parse(buffer.subarray(0, newline).toString('utf8')),
+          {
+            rpcId: request.rpcId,
+            canonicalRequestHash: canonicalAuthorizedRequestHashV2(request),
+          },
+        );
+      } catch (error) {
+        finish(error instanceof SupervisorRpcError
+          ? error
+          : new SupervisorRpcError(
+              'RPC_MALFORMED_RESPONSE',
+              'RPC response is not valid Supervisor v2 JSON.',
+              false,
+            ));
         return;
       }
       if (response.ok) finish(undefined, response.data);

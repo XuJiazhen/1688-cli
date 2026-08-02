@@ -34,12 +34,28 @@ import {
 } from '../src/daemon/supervisor-runtime.js';
 import {
   canonicalRpcPayloadHash,
-  type ParsedSupervisorRpcRequestV1,
-  type SupervisorRpcBindingV1,
+  SUPERVISOR_PROTOCOL_SHA256_V2,
+  type ParsedSupervisorRpcRequestV2,
+  type SupervisorRpcBindingV2,
 } from '../src/daemon/supervisor-rpc.js';
 
 const key = 'a-supervisor-test-key-with-at-least-32-bytes';
 const now = new Date('2026-07-31T08:00:00.000Z');
+const PROFILE_ID = '60000000-0000-4000-8000-000000000001';
+const DAEMON_ID = '60000000-0000-4000-8000-000000000002';
+const SUPERVISOR_LEASE_ID = '60000000-0000-4000-8000-000000000003';
+const RESERVATION_LEASE_ID = '60000000-0000-4000-8000-000000000004';
+const WORK_LEASE_ID = '60000000-0000-4000-8000-000000000005';
+const transportAuthority = {
+  mode: 'scripted_offline' as const,
+  executionAuthorityDocumentId: '60000000-0000-4000-8000-000000000006',
+  executionAuthorityDocumentSha256: 'a'.repeat(64),
+  executionSubjectDocumentId: '60000000-0000-4000-8000-000000000007',
+  executionSubjectDocumentSha256: 'b'.repeat(64),
+  cohortId: '60000000-0000-4000-8000-000000000008',
+  runId: '60000000-0000-4000-8000-000000000009',
+  protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
+};
 
 class FakePage implements ManagedPage {
   closed = false;
@@ -84,7 +100,7 @@ class FakeHost implements PersistentContextHost {
     this.restartCount += 1;
     this.contextGeneration = input.nextContextGeneration;
     return {
-      profileId: 'profile-1', profileName: 'profile-1', daemonInstanceId: 'daemon-1',
+      profileId: PROFILE_ID, profileName: 'profile-1', daemonInstanceId: DAEMON_ID,
       contextGeneration: input.nextContextGeneration, chromiumPid: 4243, headful: true,
     };
   }
@@ -650,7 +666,6 @@ describe('ProfileDaemonRuntime', () => {
     const renewal = signedExecuteRequest(1, {
       credentialExpiresAt: '2026-07-31T08:05:00.000Z',
     });
-    renewal.rpcId = 'rpc-renewal-1';
     await runtime.renewExecution(initial.rpcId, renewal);
     current += 2 * 60_000;
     resume();
@@ -686,6 +701,8 @@ describe('ProfileDaemonRuntime', () => {
       requestId: request.payload.requestId,
       idempotencyKey: request.payload.idempotencyKey,
       canonicalRequestHash: canonicalRpcPayloadHash(request),
+      pageActionPayloadHash: canonicalCollectorSha256V1(request.payload).replace(/^sha256:/u, ''),
+      transportAuthority,
       pageActionId: request.payload.pageActionId,
       pageActionExecutionAttemptId: request.payload.pageActionExecutionAttemptId,
       acceptedAt: now.toISOString(),
@@ -727,6 +744,8 @@ describe('ProfileDaemonRuntime', () => {
       requestId: request.payload.requestId,
       idempotencyKey: request.payload.idempotencyKey,
       canonicalRequestHash: canonicalRpcPayloadHash(request),
+      pageActionPayloadHash: canonicalCollectorSha256V1(request.payload).replace(/^sha256:/u, ''),
+      transportAuthority,
       pageActionId: request.payload.pageActionId,
       pageActionExecutionAttemptId: request.payload.pageActionExecutionAttemptId,
       acceptedAt: now.toISOString(),
@@ -746,6 +765,8 @@ describe('ProfileDaemonRuntime', () => {
         receipt: {
           remoteActionStartId: 'remote-action-start-1',
           admittedAt: '2026-07-31T08:00:01.000Z',
+          transportAuthority,
+          parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
         },
       },
     });
@@ -788,6 +809,8 @@ describe('ProfileDaemonRuntime', () => {
       requestId: request.payload.requestId,
       idempotencyKey: request.payload.idempotencyKey,
       canonicalRequestHash: canonicalRpcPayloadHash(request),
+      pageActionPayloadHash: canonicalCollectorSha256V1(request.payload).replace(/^sha256:/u, ''),
+      transportAuthority,
       pageActionId: request.payload.pageActionId,
       pageActionExecutionAttemptId: request.payload.pageActionExecutionAttemptId,
       acceptedAt: now.toISOString(),
@@ -808,6 +831,8 @@ describe('ProfileDaemonRuntime', () => {
         receipt: {
           remoteActionStartId: 'pg-remote-action-start-1',
           admittedAt: '2026-07-31T08:00:01.000Z',
+          transportAuthority,
+          parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
         },
       },
     });
@@ -852,6 +877,8 @@ describe('ProfileDaemonRuntime', () => {
       requestId: request.payload.requestId,
       idempotencyKey: request.payload.idempotencyKey,
       canonicalRequestHash: canonicalRpcPayloadHash(request),
+      pageActionPayloadHash: canonicalCollectorSha256V1(request.payload).replace(/^sha256:/u, ''),
+      transportAuthority,
       pageActionId: request.payload.pageActionId,
       pageActionExecutionAttemptId: request.payload.pageActionExecutionAttemptId,
       acceptedAt: now.toISOString(),
@@ -898,6 +925,8 @@ describe('ProfileDaemonRuntime', () => {
         authorize: async () => ({
           remoteActionStartId: 'remote-action-start-1',
           admittedAt: now.toISOString(),
+          transportAuthority,
+          parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
         }),
       },
     })).resolves.toMatchObject({ ok: false });
@@ -973,6 +1002,8 @@ describe('ProfileDaemonRuntime', () => {
         authorize: async () => ({
           remoteActionStartId: 'remote-action-start-1',
           admittedAt: current.toISOString(),
+          transportAuthority,
+          parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
         }),
       },
     })).resolves.toMatchObject({
@@ -992,6 +1023,46 @@ describe('ProfileDaemonRuntime', () => {
           }],
         },
         response: null,
+      });
+  });
+
+  it('rejects an admission receipt authority mismatch before the executor network boundary', async () => {
+    let networkStarts = 0;
+    const repository = new InMemoryPageActionAcceptanceRepository();
+    const request = signedExecuteRequest(1);
+    const runtime = makeRuntime(new FakeHost(), {
+      async execute(pageAction, scope) {
+        await scope.admitRemoteAttempt({
+          remoteRequestAttemptId: 'remote-attempt-1-1',
+          ordinal: 1,
+          purpose: 'single-target',
+          requestBusinessHash: canonicalCollectorSha256V1('remote-request-1'),
+        });
+        networkStarts += 1;
+        return fakeResponse(pageAction);
+      },
+    }, { acceptanceRepository: repository });
+    await runtime.ensureWarm();
+    await expect(runtime.handle(request, {
+      remoteAttemptAdmission: {
+        authorize: async () => ({
+          remoteActionStartId: 'remote-action-start-mismatch',
+          admittedAt: now.toISOString(),
+          transportAuthority: {
+            ...transportAuthority,
+            runId: '60000000-0000-4000-8000-000000000099',
+          },
+          parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+        }),
+      },
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'REMOTE_ATTEMPT_ADMISSION_RESPONSE_MISMATCH' },
+    });
+    expect(networkStarts).toBe(0);
+    await expect(repository.inspect(signedLookupRequest(request).payload))
+      .resolves.toMatchObject({
+        acceptance: { remoteAttemptAdmissions: [], remoteAttemptStartedAt: null },
       });
   });
 
@@ -1085,11 +1156,12 @@ function makeRuntime(
   } = {},
 ) {
   return new ProfileDaemonRuntime({
-    profileId: 'profile-1',
+    profileId: PROFILE_ID,
     profileName: 'profile-1',
-    daemonInstanceId: 'daemon-1',
+    daemonInstanceId: DAEMON_ID,
     contextGeneration: 1,
     supervisorGeneration: 1,
+    transportAuthority,
     host,
     credentialVerifier: new HmacRenewalCredentialVerifier({ key1: key }),
     acceptanceRepository:
@@ -1112,7 +1184,7 @@ function makeRuntime(
 function signedExecuteRequest(
   ordinal: number,
   credentialOverrides: { credentialExpiresAt?: string } = {},
-): ParsedSupervisorRpcRequestV1 & { method: 'collector.pageAction.execute' } {
+): ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' } {
   const requestId = `request-${ordinal}`;
   const workUnitId = `work-${ordinal}`;
   const pageActionBusinessHash = canonicalCollectorSha256V1(`offer-${ordinal}`);
@@ -1143,9 +1215,9 @@ function signedExecuteRequest(
     requestId,
     idempotencyKey: `idempotency-${ordinal}`,
     profile: {
-      profileId: 'profile-1',
+      profileId: PROFILE_ID,
       profileName: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
       egressId: 'egress-1',
     },
@@ -1173,36 +1245,37 @@ function signedExecuteRequest(
     executionLineageHash: computeExecutionLineageHashV1(executionLineage),
   } as unknown as PageActionRequestV1;
   const base = {
-    schema: 'profile-supervisor.rpc.v1' as const,
+    schema: 'profile-supervisor.rpc.v2' as const,
     rpcId: `rpc-${ordinal}`,
     method: 'collector.pageAction.execute' as const,
     deadlineAt: '2026-07-31T08:07:00.000Z',
     binding: {
-      profileId: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      profileId: PROFILE_ID,
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
       supervisor: supervisorFence(),
       reservation: reservationFence(),
       workUnit: workUnitFence(),
+      transportAuthority,
       renewalCredential: null,
       controlCredential: null,
-    } satisfies SupervisorRpcBindingV1,
+    } satisfies SupervisorRpcBindingV2,
     payload: pageAction,
   };
-  const requestHash = canonicalRpcPayloadHash(base as ParsedSupervisorRpcRequestV1);
+  const requestHash = canonicalRpcPayloadHash(base as ParsedSupervisorRpcRequestV2);
   base.binding.renewalCredential = signRenewalCredentialTransport({
     payload: {
-      schemaVersion: 1,
-      profileId: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      schemaVersion: 2,
+      profileId: PROFILE_ID,
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
-      supervisorLeaseId: 'supervisor-lease',
+      supervisorLeaseId: SUPERVISOR_LEASE_ID,
       supervisorGeneration: 1,
       supervisorFenceDigest: fenceDigest(supervisorFence()),
-      reservationLeaseId: 'reservation-lease',
+      reservationLeaseId: RESERVATION_LEASE_ID,
       reservationGeneration: 1,
       reservationFenceDigest: fenceDigest(reservationFence()),
-      workUnitLeaseId: 'work-lease',
+      workUnitLeaseId: WORK_LEASE_ID,
       workUnitGeneration: 1,
       workUnitFenceDigest: fenceDigest(workUnitFence()),
       requestId,
@@ -1218,14 +1291,14 @@ function signedExecuteRequest(
     },
     algorithm: 'HMAC-SHA256',
   }, key);
-  return base as ParsedSupervisorRpcRequestV1 & {
+  return base as ParsedSupervisorRpcRequestV2 & {
     method: 'collector.pageAction.execute';
   };
 }
 
 function signedLookupRequest(
-  execute: ParsedSupervisorRpcRequestV1 & { method: 'collector.pageAction.execute' },
-): ParsedSupervisorRpcRequestV1 & { method: 'collector.pageAction.lookupReceipt' } {
+  execute: ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' },
+): ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.lookupReceipt' } {
   const payload = {
     schema: 'collector.page-action.lookup-receipt.v1' as const,
     requestId: execute.payload.requestId,
@@ -1238,7 +1311,7 @@ function signedLookupRequest(
     readFences: execute.payload.executionLineage.fences,
   };
   const request = {
-    schema: 'profile-supervisor.rpc.v1' as const,
+    schema: 'profile-supervisor.rpc.v2' as const,
     rpcId: `lookup-${execute.rpcId}`,
     method: 'collector.pageAction.lookupReceipt' as const,
     deadlineAt: execute.deadlineAt,
@@ -1251,17 +1324,17 @@ function signedLookupRequest(
   };
   request.binding.renewalCredential = signRenewalCredentialTransport({
     payload: {
-      schemaVersion: 1,
-      profileId: 'profile-1',
-      daemonInstanceId: 'daemon-1',
+      schemaVersion: 2,
+      profileId: PROFILE_ID,
+      daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
-      supervisorLeaseId: 'supervisor-lease',
+      supervisorLeaseId: SUPERVISOR_LEASE_ID,
       supervisorGeneration: 1,
       supervisorFenceDigest: fenceDigest(supervisorFence()),
-      reservationLeaseId: 'reservation-lease',
+      reservationLeaseId: RESERVATION_LEASE_ID,
       reservationGeneration: 1,
       reservationFenceDigest: fenceDigest(reservationFence()),
-      workUnitLeaseId: 'work-lease',
+      workUnitLeaseId: WORK_LEASE_ID,
       workUnitGeneration: 1,
       workUnitFenceDigest: fenceDigest(workUnitFence()),
       requestId: payload.requestId,
@@ -1276,7 +1349,7 @@ function signedLookupRequest(
     },
     algorithm: 'HMAC-SHA256',
   }, key);
-  return request as ParsedSupervisorRpcRequestV1 & {
+  return request as ParsedSupervisorRpcRequestV2 & {
     method: 'collector.pageAction.lookupReceipt';
   };
 }
@@ -1424,19 +1497,19 @@ function fullCompletedResponse(request: PageActionRequestV1): PageActionExecuteR
 
 function supervisorFence() {
   return {
-    leaseId: 'supervisor-lease', generation: 1, fencingToken: 'supervisor-fence',
+    leaseId: SUPERVISOR_LEASE_ID, generation: 1, fencingToken: 'supervisor-fence',
     leaseNotAfter: '2026-07-31T08:10:00.000Z',
   };
 }
 function reservationFence() {
   return {
-    leaseId: 'reservation-lease', generation: 1, fencingToken: 'reservation-fence',
+    leaseId: RESERVATION_LEASE_ID, generation: 1, fencingToken: 'reservation-fence',
     leaseNotAfter: '2026-07-31T08:09:00.000Z',
   };
 }
 function workUnitFence() {
   return {
-    leaseId: 'work-lease', generation: 1, fencingToken: 'work-fence',
+    leaseId: WORK_LEASE_ID, generation: 1, fencingToken: 'work-fence',
     leaseNotAfter: '2026-07-31T08:08:00.000Z',
   };
 }

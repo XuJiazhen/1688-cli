@@ -24,18 +24,23 @@ import { throttle } from './throttle.js';
 import type { Request, Response } from './protocol.js';
 import {
   SUPERVISOR_RPC_MAX_FRAME_BYTES,
+  SUPERVISOR_RPC_SCHEMA,
   SUPERVISOR_RPC_RESPONSE_SCHEMA,
   SUPERVISOR_EXECUTION_RENEWAL_SCHEMA,
   SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_SCHEMA,
   SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA,
+  LEGACY_SUPERVISOR_RPC_SCHEMA,
+  LEGACY_SUPERVISOR_EXECUTION_RENEWAL_SCHEMA,
   SupervisorRpcError,
+  canonicalAuthorizedRequestHashV2,
   parseExecutionRenewalFrame,
   parseRemoteAttemptAdmissionResponseFrame,
   parseSupervisorRpcRequest,
-  type ParsedSupervisorRpcRequestV1,
-  type RemoteAttemptAdmissionReceiptV1,
-  type RemoteAttemptAdmissionRequestV1,
-  type SupervisorRpcResponseV1,
+  type ParsedSupervisorRpcRequestV2,
+  type RemoteAttemptAdmissionReceiptV2,
+  type RemoteAttemptAdmissionRequestV2,
+  type SupervisorRpcResponseV2,
+  type TransportAuthorityV2,
 } from './supervisor-rpc.js';
 import type { PageActionVerificationConfigV1 } from '../collection/page-action-contracts.js';
 import type { ProfileDaemonRuntime } from './supervisor-runtime.js';
@@ -48,6 +53,7 @@ export interface ServerOpts {
   headful?: boolean;
   supervisorRuntime?: ProfileDaemonRuntime;
   pageActionVerification?: PageActionVerificationConfigV1;
+  legacyRollback?: true;
 }
 
 interface DaemonHealth {
@@ -102,6 +108,11 @@ let activeManagedRuntime: ProfileDaemonRuntime | null = null;
 const signalHandlers = new Map<NodeJS.Signals, () => void>();
 
 export async function start(opts: ServerOpts = {}): Promise<void> {
+  if ((opts.supervisorRuntime === undefined) === (opts.legacyRollback !== true)) {
+    throw new Error(
+      'Daemon startup requires exactly one managed Supervisor runtime or legacyRollback=true.',
+    );
+  }
   const profile = defaultProfileName(opts.profile);
   const idleMs = opts.idleTimeoutMs ?? 30 * 60 * 1000;
   await ensureRoot();
@@ -142,6 +153,7 @@ export async function start(opts: ServerOpts = {}): Promise<void> {
         daemonInstanceId: managedStatus.daemonInstanceId,
         supervisorGeneration: managedStatus.supervisorGeneration,
         contextGeneration: managedStatus.contextGeneration,
+        transportAuthority: managedStatus.transportAuthority,
         daemonPid: process.pid,
         chromiumPid: managedStatus.chromiumPid,
         daemonProcessIdentity: await processStartIdentity(process.pid),
@@ -206,7 +218,9 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
   let buf = '';
   const pendingAdmissions = new Map<string, {
     rpcId: string;
-    resolve(receipt: RemoteAttemptAdmissionReceiptV1): void;
+    transportAuthority: TransportAuthorityV2;
+    parentCanonicalRequestHash: string;
+    resolve(receipt: RemoteAttemptAdmissionReceiptV2): void;
     reject(error: Error): void;
     timer: ReturnType<typeof setTimeout>;
   }>();
@@ -228,11 +242,18 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
       if (!line) continue;
-      let req: Request | ParsedSupervisorRpcRequestV1;
+      let req: Request | ParsedSupervisorRpcRequestV2;
       let supervisorRequest = false;
       let candidateRpcId = '?';
+      let candidateCanonicalRequestHash = '0'.repeat(64);
       try {
         const parsed: unknown = JSON.parse(line);
+        if (parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const parsedRecord = parsed as Record<string, unknown>;
+          if (typeof parsedRecord['rpcId'] === 'string') {
+            candidateRpcId = parsedRecord['rpcId'];
+          }
+        }
         if (
           parsed !== null
           && typeof parsed === 'object'
@@ -240,6 +261,13 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
           && (parsed as Record<string, unknown>)['schema']
             === SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA
         ) {
+          if (opts.supervisorRuntime === undefined) {
+            throw new SupervisorRpcError(
+              'SUPERVISOR_RUNTIME_DISABLED',
+              'Legacy rollback daemons accept no Supervisor protocol frames.',
+              false,
+            );
+          }
           const response = parseRemoteAttemptAdmissionResponseFrame(parsed);
           const pending = pendingAdmissions.get(response.admissionId);
           if (pending === undefined || pending.rpcId !== response.rpcId) {
@@ -252,6 +280,20 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
           clearTimeout(pending.timer);
           pendingAdmissions.delete(response.admissionId);
           if (response.ok) {
+            if (
+              canonicalAuthority(response.receipt.transportAuthority)
+                !== canonicalAuthority(pending.transportAuthority)
+              || response.receipt.parentCanonicalRequestHash
+                !== pending.parentCanonicalRequestHash
+            ) {
+              const mismatch = new SupervisorRpcError(
+                'REMOTE_ATTEMPT_ADMISSION_RESPONSE_MISMATCH',
+                'Admission receipt authority or parent request hash differs.',
+                false,
+              );
+              pending.reject(mismatch);
+              throw mismatch;
+            }
             pending.resolve(response.receipt);
           } else {
             pending.reject(new SupervisorRpcError(
@@ -287,10 +329,36 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
             renewal.request,
           ).catch((error) => {
             if (sock.writable) {
-              sock.write(JSON.stringify(supervisorFailure(renewal.rpcId, error)) + '\n');
+              sock.write(JSON.stringify(supervisorFailure(
+                renewal.rpcId,
+                canonicalAuthorizedRequestHashV2(renewal.request),
+                error instanceof SupervisorRpcError
+                  ? error
+                  : new SupervisorRpcError(
+                      'EXECUTION_RENEWAL_FAILED',
+                      error instanceof Error ? error.message : 'Execution renewal failed.',
+                      true,
+                    ),
+              )) + '\n');
             }
           });
           continue;
+        }
+        if (
+          parsed !== null
+          && typeof parsed === 'object'
+          && !Array.isArray(parsed)
+          && ((parsed as Record<string, unknown>)['schema'] === LEGACY_SUPERVISOR_RPC_SCHEMA
+            || (parsed as Record<string, unknown>)['schema']
+              === LEGACY_SUPERVISOR_EXECUTION_RENEWAL_SCHEMA)
+        ) {
+          throw new SupervisorRpcError(
+            'RPC_VERSION_UNSUPPORTED',
+            opts.supervisorRuntime === undefined
+              ? 'Legacy rollback daemons accept no Supervisor protocol frames.'
+              : 'Supervisor-managed daemons accept only Supervisor protocol v2.',
+            false,
+          );
         }
         if (
           parsed !== null
@@ -305,7 +373,7 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
           && typeof parsed === 'object'
           && !Array.isArray(parsed)
           && (parsed as Record<string, unknown>)['schema']
-            === 'profile-supervisor.rpc.v1'
+            === SUPERVISOR_RPC_SCHEMA
         ) {
           if (
             opts.supervisorRuntime === undefined
@@ -320,13 +388,35 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
           req = parseSupervisorRpcRequest(parsed, {
             verification: opts.pageActionVerification,
           });
+          candidateCanonicalRequestHash = canonicalAuthorizedRequestHashV2(req);
           supervisorRequest = true;
         } else {
+          if (opts.supervisorRuntime !== undefined) {
+            throw new SupervisorRpcError(
+              'SUPERVISOR_RPC_REQUIRED',
+              'Supervisor-managed daemons accept only Supervisor protocol v2.',
+              false,
+            );
+          }
+          const schema = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
+            ? (parsed as Record<string, unknown>)['schema']
+            : undefined;
+          if (typeof schema === 'string' && schema.startsWith('profile-supervisor.')) {
+            throw new SupervisorRpcError(
+              'SUPERVISOR_RUNTIME_DISABLED',
+              'Legacy rollback daemons accept no Supervisor protocol frames.',
+              false,
+            );
+          }
           req = parseLegacyRequest(parsed);
         }
       } catch (error) {
         if (error instanceof SupervisorRpcError) {
-          sock.write(JSON.stringify(supervisorFailure(candidateRpcId, error)) + '\n');
+          sock.write(JSON.stringify(supervisorFailure(
+            candidateRpcId,
+            candidateCanonicalRequestHash,
+            error,
+          )) + '\n');
           continue;
         }
         sock.write(
@@ -343,15 +433,20 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
       const response = supervisorRequest
         ? handleSupervisorRequest(
             opts.supervisorRuntime!,
-            req as ParsedSupervisorRpcRequestV1,
+            req as ParsedSupervisorRpcRequestV2,
             opts.profile,
-            (req as ParsedSupervisorRpcRequestV1).method === 'collector.pageAction.execute'
+            (req as ParsedSupervisorRpcRequestV2).method === 'collector.pageAction.execute'
               ? {
                   authorize: (input) => requestRemoteAttemptAdmission({
                     sock,
                     pendingAdmissions,
-                    rpcId: (req as ParsedSupervisorRpcRequestV1).rpcId,
-                    deadlineAt: (req as ParsedSupervisorRpcRequestV1).deadlineAt,
+                    rpcId: (req as ParsedSupervisorRpcRequestV2).rpcId,
+                    deadlineAt: (req as ParsedSupervisorRpcRequestV2).deadlineAt,
+                    transportAuthority:
+                      (req as ParsedSupervisorRpcRequestV2).binding.transportAuthority,
+                    parentCanonicalRequestHash: canonicalAuthorizedRequestHashV2(
+                      req as ParsedSupervisorRpcRequestV2,
+                    ),
                     input,
                   }),
                 }
@@ -384,12 +479,12 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
 
 async function handleSupervisorRequest(
   runtime: ProfileDaemonRuntime,
-  request: ParsedSupervisorRpcRequestV1,
+  request: ParsedSupervisorRpcRequestV2,
   profile?: string,
   remoteAttemptAdmission?: {
-    authorize(input: RemoteAttemptAdmissionRequestV1): Promise<RemoteAttemptAdmissionReceiptV1>;
+    authorize(input: RemoteAttemptAdmissionRequestV2): Promise<RemoteAttemptAdmissionReceiptV2>;
   },
-): Promise<SupervisorRpcResponseV1> {
+): Promise<SupervisorRpcResponseV2> {
   const response = await runtime.handle(request, { remoteAttemptAdmission });
   if (request.method === 'supervisor.restart' && response.ok) {
     await persistManagedOwner(defaultProfileName(profile), runtime.status());
@@ -401,14 +496,18 @@ function requestRemoteAttemptAdmission(input: {
   sock: net.Socket;
   pendingAdmissions: Map<string, {
     rpcId: string;
-    resolve(receipt: RemoteAttemptAdmissionReceiptV1): void;
+    transportAuthority: TransportAuthorityV2;
+    parentCanonicalRequestHash: string;
+    resolve(receipt: RemoteAttemptAdmissionReceiptV2): void;
     reject(error: Error): void;
     timer: ReturnType<typeof setTimeout>;
   }>;
   rpcId: string;
   deadlineAt: string;
-  input: RemoteAttemptAdmissionRequestV1;
-}): Promise<RemoteAttemptAdmissionReceiptV1> {
+  transportAuthority: TransportAuthorityV2;
+  parentCanonicalRequestHash: string;
+  input: RemoteAttemptAdmissionRequestV2;
+}): Promise<RemoteAttemptAdmissionReceiptV2> {
   if (!input.sock.writable) {
     return Promise.reject(new SupervisorRpcError(
       'REMOTE_ATTEMPT_ADMISSION_CHANNEL_CLOSED',
@@ -437,6 +536,8 @@ function requestRemoteAttemptAdmission(input: {
     timer.unref();
     input.pendingAdmissions.set(admissionId, {
       rpcId: input.rpcId,
+      transportAuthority: input.transportAuthority,
+      parentCanonicalRequestHash: input.parentCanonicalRequestHash,
       resolve,
       reject,
       timer,
@@ -447,6 +548,8 @@ function requestRemoteAttemptAdmission(input: {
         rpcId: input.rpcId,
         admissionId,
         deadlineAt: input.deadlineAt,
+        transportAuthority: input.transportAuthority,
+        parentCanonicalRequestHash: input.parentCanonicalRequestHash,
         request: input.input,
       })}\n`);
     } catch (error) {
@@ -473,6 +576,7 @@ async function persistManagedOwner(
       daemonInstanceId: status.daemonInstanceId,
       supervisorGeneration: status.supervisorGeneration,
       contextGeneration: status.contextGeneration,
+      transportAuthority: status.transportAuthority,
       daemonPid: process.pid,
       chromiumPid: status.chromiumPid,
       daemonProcessIdentity: await processStartIdentity(process.pid),
@@ -574,11 +678,13 @@ async function handleRequest(req: Request, supervisorManaged: boolean): Promise<
 
 function supervisorFailure(
   rpcId: string,
+  canonicalRequestHash: string,
   error: SupervisorRpcError,
-): SupervisorRpcResponseV1 {
+): SupervisorRpcResponseV2 {
   return {
     schema: SUPERVISOR_RPC_RESPONSE_SCHEMA,
     rpcId,
+    canonicalRequestHash,
     ok: false,
     error: {
       code: error.code,
@@ -587,6 +693,10 @@ function supervisorFailure(
       ...(error.details === undefined ? {} : { details: error.details }),
     },
   };
+}
+
+function canonicalAuthority(authority: TransportAuthorityV2): string {
+  return JSON.stringify(authority);
 }
 
 async function enforceHealthPause(): Promise<void> {
