@@ -309,6 +309,8 @@ function schedulerPageAction(): PageActionRequestV1 {
   const subject = {
     kind: 'store-qualification' as const,
     memberId: 'member-1',
+    canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    canonicalShopUrl: 'https://member-1.1688.com/',
     canonicalStoreIdentityReceiptId: 'store-identity-receipt-1',
     canonicalStoreIdentityReceiptHash: canonicalCollectorSha256V1('identity'),
   };

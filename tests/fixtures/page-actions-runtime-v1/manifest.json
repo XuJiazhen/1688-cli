@@ -8,7 +8,7 @@
   "generator": {
     "revision": "production-page-action-executor-offline-fake-v1@1",
     "sourcePath": "scripts/generate_runtime_page_action_fixtures.ts",
-    "sourceSha256": "c5f7f60d93b55ce6b40427bb661e30aca73b86ef0aed2b4feaad60b010e49fc3"
+    "sourceSha256": "f6e7da372e372bd6ff231651f4eb6d50abad60c43970a5b2fdd53c272b93e34a"
   },
   "security": {
     "recursiveSanitizationGate": true,
@@ -165,16 +165,16 @@
       "transportInputPath": "inputs/store-qualification.transport.json",
       "transportInputSha256": "c6ff81ae51c220cb073090c0e85d4bca068fe161060e7c4a4da5413c8f8db81a",
       "responsePath": "responses/store-qualification.wire-response.json",
-      "responseSha256": "686b4b1844ba8040bc4f56d2045bb102238519094a24dc5711f56a26e6d5f208",
+      "responseSha256": "e306e4cb9ae6581e76c7852dd759cf6bfa04bebc577b0198fe3ef39d21d2f8d0",
       "executionEnvelopePath": "envelopes/store-qualification.execution-attempt-receipt.json",
-      "executionEnvelopeSha256": "9cd40ca21f21b6282acdfa44fd6de6f0591171ce94d1595add03a375f37f149f",
+      "executionEnvelopeSha256": "532ea4e7518bdbe7b7541c39f1cb62c85ac913d97f24724a38663c61777a9fa2",
       "completionEnvelopePath": "envelopes/store-qualification.completion-receipt.json",
-      "completionEnvelopeSha256": "74e90993209a67062c708489ef3cdd7cf30497febbbd37f09b889d3d2e100a7e",
+      "completionEnvelopeSha256": "b3027e57b554adc4e9981e55eac60a64d6c2fc7c56b7c35cda615ff7bc25e49b",
       "batchFiles": [
         {
           "path": "batches/store-qualification/00-store-qualification.json",
-          "bytes": 17787,
-          "sha256": "7fec6af6378f604196f326be347ae79d683b5d1838fe6d13f24b45bad46aa1a4"
+          "bytes": 18089,
+          "sha256": "884bdacc94ce89bc3f3bcdc47408f721ddae81fb2729bae9d33b540b7edfc719"
         }
       ],
       "archiveFiles": [
@@ -208,26 +208,26 @@
       "transportInputPath": "inputs/store-sample.transport.json",
       "transportInputSha256": "9e55e19a42654122c2ea9405a54412651134932b03793ef8bf107733d4bc882d",
       "responsePath": "responses/store-sample.wire-response.json",
-      "responseSha256": "60e8504c19492e7fa38f2146f9a22db1108647de1d76ca3d0f2536828f25b4f8",
+      "responseSha256": "41ff64e2457e952fbbf1d31d50610ad1ae64307d452f0f27394ba7434f56d0ba",
       "executionEnvelopePath": "envelopes/store-sample.execution-attempt-receipt.json",
-      "executionEnvelopeSha256": "851d46c57249660baba607cac564521e0a541ba7c9279125887ddb6042e11e54",
+      "executionEnvelopeSha256": "f2266d227e005c83575a76afcb04be20737b133ffe870b8d944080148f445860",
       "completionEnvelopePath": "envelopes/store-sample.completion-receipt.json",
-      "completionEnvelopeSha256": "14da44372a851d8a981a6aad6731edee789c3a20292d5ef0a38b792b400c1094",
+      "completionEnvelopeSha256": "7ee9a1ee8eb90fa05851a8af497160531359241ed8edeb7363a5ba46c4fcca4e",
       "batchFiles": [
         {
           "path": "batches/store-sample/00-store-catalog.json",
-          "bytes": 11704,
-          "sha256": "c9e50d8eac918e8212352a5e7e5a950a26d011c6e40e3ca9390a3db5120fb76b"
+          "bytes": 11978,
+          "sha256": "5436a2bb75648a11389b12f10777485faaa750985018024949a24b85704bbb92"
         },
         {
           "path": "batches/store-sample/01-store-categories.json",
-          "bytes": 9386,
-          "sha256": "131e3941b7609c886284cca2f50a7108c73a5485ccb845c6e69a9ae2e2d05d39"
+          "bytes": 9660,
+          "sha256": "8dc4667c78bbc53bbeaf99bb028fd2d85c74755e7f8e8854824a567de91e02b5"
         },
         {
           "path": "batches/store-sample/02-store-profile.json",
-          "bytes": 28566,
-          "sha256": "ec1b36f664df2ad5baaf3e4563c87c0bc638579abb46fe4ef76e2fc9869f7299"
+          "bytes": 28840,
+          "sha256": "ceeb87f9556c71c1c59881f5b9c10c525b8cbffdd2ed83d41b7d225bf9b3b9a9"
         }
       ],
       "archiveFiles": [

@@ -49,8 +49,8 @@ function request(kind: PageActionRequestV1['actionKind']): PageActionRequestV1 {
     : kind === 'offer-detail'
       ? { kind, offerId: '100', memberId: 'b2b-member', searchOriginReceiptId: 'search-receipt', searchOriginReceiptHash: HASH('search') }
       : kind === 'store-qualification'
-        ? { kind, memberId: 'b2b-member', canonicalStoreIdentityReceiptId: 'identity-receipt', canonicalStoreIdentityReceiptHash: HASH('identity') }
-        : { kind, memberId: 'b2b-member', canonicalShopIdentityReceiptId: 'identity-receipt', canonicalShopIdentityReceiptHash: HASH('identity'), pageScopeBusinessHash: HASH('scope') };
+        ? { kind, memberId: 'b2b-member', canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', canonicalShopUrl: 'https://fixture.1688.com/', canonicalStoreIdentityReceiptId: 'identity-receipt', canonicalStoreIdentityReceiptHash: HASH('identity') }
+        : { kind, memberId: 'b2b-member', canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', canonicalShopUrl: 'https://fixture.1688.com/', canonicalShopIdentityReceiptId: 'identity-receipt', canonicalShopIdentityReceiptHash: HASH('identity'), pageScopeBusinessHash: HASH('scope') };
   const action = kind === 'search-list'
     ? {
         kind,
@@ -75,6 +75,8 @@ function request(kind: PageActionRequestV1['actionKind']): PageActionRequestV1 {
         ? { ...subject, executionHandle: {} as never }
         : {
             kind, memberId: subject.memberId!,
+            canonicalStoreId: subject.canonicalStoreId!,
+            canonicalShopUrl: subject.canonicalShopUrl!,
             canonicalShopIdentityReceiptId: subject.canonicalShopIdentityReceiptId!,
             canonicalShopIdentityReceiptHash: subject.canonicalShopIdentityReceiptHash!,
             mode: 'phase-1-bounded' as const,
@@ -234,10 +236,6 @@ function ports(requestValue: PageActionRequestV1): CollectorPageActionExecutorPo
     now: () => new Date(NOW),
     createId: (kind) => `${kind}-1`,
     resolveCanonicalSearchParameterSet: async () => parameterSet,
-    resolveCanonicalShopIdentity: async () => ({
-      memberId: 'b2b-member', canonicalShopUrl: 'https://fixture.1688.com/',
-      receiptId: 'identity-receipt', receiptHash: HASH('identity'),
-    }),
     runSearch: vi.fn(async () => runFor(requestValue)),
     runOffer: vi.fn(async () => runFor(requestValue)),
     runQualification: vi.fn(async () => runFor(requestValue)),

@@ -111,6 +111,8 @@ function actionFixture(kind: string) {
     const subject = {
       kind,
       memberId: 'member_1',
+      canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      canonicalShopUrl: 'https://member-1.1688.com/',
       canonicalStoreIdentityReceiptId: 'store-identity-receipt-1',
       canonicalStoreIdentityReceiptHash: hash('store-identity-receipt'),
     };
@@ -120,6 +122,8 @@ function actionFixture(kind: string) {
   const subject = {
     kind: 'store-sample',
     memberId: 'member_1',
+    canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+    canonicalShopUrl: 'https://member-1.1688.com/',
     canonicalShopIdentityReceiptId: 'shop-identity-receipt-1',
     canonicalShopIdentityReceiptHash: hash('shop-identity-receipt'),
     pageScopeBusinessHash: canonicalCollectorSha256V1(pageScope),
@@ -129,6 +133,8 @@ function actionFixture(kind: string) {
     action: {
       kind: 'store-sample',
       memberId: subject.memberId,
+      canonicalStoreId: subject.canonicalStoreId,
+      canonicalShopUrl: subject.canonicalShopUrl,
       canonicalShopIdentityReceiptId: subject.canonicalShopIdentityReceiptId,
       canonicalShopIdentityReceiptHash: subject.canonicalShopIdentityReceiptHash,
       mode: 'phase-1-bounded',

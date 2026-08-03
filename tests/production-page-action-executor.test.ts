@@ -1005,6 +1005,8 @@ describe('Production PageAction bridge', () => {
       actionKind: 'store-sample',
       action: {
         kind: 'store-sample', memberId: 'member-1',
+        canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        canonicalShopUrl: 'https://fixture.1688.com/',
         canonicalShopIdentityReceiptId: 'identity-1',
         canonicalShopIdentityReceiptHash: canonicalCollectorSha256V1('identity'),
         mode: 'approved-expansion', pageScope: { firstPage: 4, lastPageInclusive: 6 },
@@ -1768,6 +1770,8 @@ function executableStoreRequest(now: Date): PageActionRequestV1 {
     businessSubject: {
       kind: 'store-sample' as const,
       memberId: 'b2b-member-1',
+      canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      canonicalShopUrl: 'https://fixture.1688.com/',
       canonicalShopIdentityReceiptId: 'identity-store',
       canonicalShopIdentityReceiptHash: canonicalCollectorSha256V1('identity-store'),
       pageScopeBusinessHash: canonicalCollectorSha256V1({ firstPage: 1, lastPageInclusive: 3 }),
@@ -1790,6 +1794,8 @@ function executableStoreRequest(now: Date): PageActionRequestV1 {
     actionKind: 'store-sample',
     action: {
       kind: 'store-sample', memberId: 'b2b-member-1',
+      canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      canonicalShopUrl: 'https://fixture.1688.com/',
       canonicalShopIdentityReceiptId: 'identity-store',
       canonicalShopIdentityReceiptHash: canonicalCollectorSha256V1('identity-store'),
       mode: 'phase-1-bounded', pageScope: { firstPage: 1, lastPageInclusive: 3 },
@@ -1852,6 +1858,8 @@ function executableQualificationRequest(now: Date): PageActionRequestV1 {
     businessSubject: {
       kind: 'store-qualification' as const,
       memberId: 'member-1',
+      canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      canonicalShopUrl: 'https://fixture-qualification.1688.com/',
       canonicalStoreIdentityReceiptId: 'identity-qualification',
       canonicalStoreIdentityReceiptHash: identityHash,
     },
@@ -1873,6 +1881,8 @@ function executableQualificationRequest(now: Date): PageActionRequestV1 {
     actionKind: 'store-qualification',
     action: {
       kind: 'store-qualification', memberId: 'member-1',
+      canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      canonicalShopUrl: 'https://fixture-qualification.1688.com/',
       canonicalStoreIdentityReceiptId: 'identity-qualification',
       canonicalStoreIdentityReceiptHash: identityHash,
       executionHandle: {} as never,

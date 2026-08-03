@@ -2,34 +2,36 @@
   "executionAttemptReceipt": {
     "schema": "collector.page-action.execution-attempt-receipt.v1",
     "receiptId": "execution-receipt-store-sample-fixture-004",
-    "receiptHash": "sha256:05fcf842552cc87468f967c50c97b1d661c27ab82f2e59c40f0b2850c101f890",
+    "receiptHash": "sha256:1178ce9566ea9d19160d9269651434242c7d95ef61b337930e115d81179600ee",
     "requestId": "runtime-request-store-sample",
     "idempotencyKey": "runtime-idempotency-store-sample",
     "pageActionId": "runtime-page-action-store-sample",
     "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
     "executionAttemptOrdinal": 1,
-    "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+    "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
     "logicalLineage": {
       "schema": "collector.logical-page-action-lineage.v1",
       "logicalLineageId": "runtime-logical-store-sample",
       "collectionTaskId": "runtime-collection-task-store-sample",
       "workUnitId": "runtime-work-unit-store-sample",
       "pageActionId": "runtime-page-action-store-sample",
-      "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+      "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
       "actionKind": "store-sample",
       "businessSubject": {
         "kind": "store-sample",
         "memberId": "fixture-chain-member-1",
+        "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "canonicalShopUrl": "https://fixture-store.1688.com/",
         "canonicalShopIdentityReceiptId": "runtime-store-identity",
         "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
         "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
       }
     },
-    "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+    "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
     "executionLineage": {
       "schema": "collector.page-action-execution-lineage.v1",
       "logicalLineageId": "runtime-logical-store-sample",
-      "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+      "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
       "workUnitAttemptId": "runtime-work-attempt-store-sample",
       "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
       "executionAttemptOrdinal": 1,
@@ -63,7 +65,7 @@
         }
       }
     },
-    "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+    "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
     "outcome": "completed",
     "terminal": true,
     "actionKind": "store-sample",
@@ -163,7 +165,7 @@
                 }
               },
               "idempotencyKey": "runtime-idempotency-store-sample",
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "logicalLineageId": "runtime-logical-store-sample",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "profile": {
@@ -177,24 +179,26 @@
               "schema": "collector.page-action-execution-lineage.v1",
               "workUnitAttemptId": "runtime-work-attempt-store-sample"
             },
-            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
             "logicalLineage": {
               "actionKind": "store-sample",
               "businessSubject": {
                 "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                 "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "kind": "store-sample",
                 "memberId": "fixture-chain-member-1",
                 "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
               },
               "collectionTaskId": "runtime-collection-task-store-sample",
               "logicalLineageId": "runtime-logical-store-sample",
-              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.logical-page-action-lineage.v1",
               "workUnitId": "runtime-work-unit-store-sample"
             },
-            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
             "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
             "pageActionId": "runtime-page-action-store-sample",
             "schema": "collector.page-action-batch-evidence.v1",
@@ -261,7 +265,7 @@
                   }
                 },
                 "idempotencyKey": "runtime-idempotency-store-sample",
-                "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+                "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
                 "logicalLineageId": "runtime-logical-store-sample",
                 "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
                 "profile": {
@@ -275,24 +279,26 @@
                 "schema": "collector.page-action-execution-lineage.v1",
                 "workUnitAttemptId": "runtime-work-attempt-store-sample"
               },
-              "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+              "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
               "logicalLineage": {
                 "actionKind": "store-sample",
                 "businessSubject": {
                   "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                   "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                  "canonicalShopUrl": "https://fixture-store.1688.com/",
+                  "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                   "kind": "store-sample",
                   "memberId": "fixture-chain-member-1",
                   "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
                 },
                 "collectionTaskId": "runtime-collection-task-store-sample",
                 "logicalLineageId": "runtime-logical-store-sample",
-                "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+                "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
                 "pageActionId": "runtime-page-action-store-sample",
                 "schema": "collector.logical-page-action-lineage.v1",
                 "workUnitId": "runtime-work-unit-store-sample"
               },
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.page-action-batch-evidence.v1",
@@ -470,7 +476,7 @@
                 }
               },
               "idempotencyKey": "runtime-idempotency-store-sample",
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "logicalLineageId": "runtime-logical-store-sample",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "profile": {
@@ -484,24 +490,26 @@
               "schema": "collector.page-action-execution-lineage.v1",
               "workUnitAttemptId": "runtime-work-attempt-store-sample"
             },
-            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
             "logicalLineage": {
               "actionKind": "store-sample",
               "businessSubject": {
                 "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                 "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "kind": "store-sample",
                 "memberId": "fixture-chain-member-1",
                 "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
               },
               "collectionTaskId": "runtime-collection-task-store-sample",
               "logicalLineageId": "runtime-logical-store-sample",
-              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.logical-page-action-lineage.v1",
               "workUnitId": "runtime-work-unit-store-sample"
             },
-            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
             "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
             "pageActionId": "runtime-page-action-store-sample",
             "schema": "collector.page-action-batch-evidence.v1",
@@ -573,7 +581,7 @@
                   }
                 },
                 "idempotencyKey": "runtime-idempotency-store-sample",
-                "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+                "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
                 "logicalLineageId": "runtime-logical-store-sample",
                 "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
                 "profile": {
@@ -587,24 +595,26 @@
                 "schema": "collector.page-action-execution-lineage.v1",
                 "workUnitAttemptId": "runtime-work-attempt-store-sample"
               },
-              "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+              "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
               "logicalLineage": {
                 "actionKind": "store-sample",
                 "businessSubject": {
                   "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                   "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                  "canonicalShopUrl": "https://fixture-store.1688.com/",
+                  "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                   "kind": "store-sample",
                   "memberId": "fixture-chain-member-1",
                   "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
                 },
                 "collectionTaskId": "runtime-collection-task-store-sample",
                 "logicalLineageId": "runtime-logical-store-sample",
-                "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+                "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
                 "pageActionId": "runtime-page-action-store-sample",
                 "schema": "collector.logical-page-action-lineage.v1",
                 "workUnitId": "runtime-work-unit-store-sample"
               },
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.page-action-batch-evidence.v1",
@@ -702,7 +712,7 @@
                 }
               },
               "idempotencyKey": "runtime-idempotency-store-sample",
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "logicalLineageId": "runtime-logical-store-sample",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "profile": {
@@ -716,24 +726,26 @@
               "schema": "collector.page-action-execution-lineage.v1",
               "workUnitAttemptId": "runtime-work-attempt-store-sample"
             },
-            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
             "logicalLineage": {
               "actionKind": "store-sample",
               "businessSubject": {
                 "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                 "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "kind": "store-sample",
                 "memberId": "fixture-chain-member-1",
                 "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
               },
               "collectionTaskId": "runtime-collection-task-store-sample",
               "logicalLineageId": "runtime-logical-store-sample",
-              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.logical-page-action-lineage.v1",
               "workUnitId": "runtime-work-unit-store-sample"
             },
-            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
             "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
             "pageActionId": "runtime-page-action-store-sample",
             "schema": "collector.page-action-batch-evidence.v1",
@@ -800,7 +812,7 @@
                   }
                 },
                 "idempotencyKey": "runtime-idempotency-store-sample",
-                "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+                "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
                 "logicalLineageId": "runtime-logical-store-sample",
                 "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
                 "profile": {
@@ -814,24 +826,26 @@
                 "schema": "collector.page-action-execution-lineage.v1",
                 "workUnitAttemptId": "runtime-work-attempt-store-sample"
               },
-              "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+              "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
               "logicalLineage": {
                 "actionKind": "store-sample",
                 "businessSubject": {
                   "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                   "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                  "canonicalShopUrl": "https://fixture-store.1688.com/",
+                  "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                   "kind": "store-sample",
                   "memberId": "fixture-chain-member-1",
                   "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
                 },
                 "collectionTaskId": "runtime-collection-task-store-sample",
                 "logicalLineageId": "runtime-logical-store-sample",
-                "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+                "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
                 "pageActionId": "runtime-page-action-store-sample",
                 "schema": "collector.logical-page-action-lineage.v1",
                 "workUnitId": "runtime-work-unit-store-sample"
               },
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.page-action-batch-evidence.v1",
@@ -1283,7 +1297,7 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
         "remoteRequestAttemptId": "remote-runtime-execution-attempt-store-sample-1",
         "purpose": "discovery",
-        "subjectHash": "sha256:11b817223d9cfd519067ac14ee2785159d879cdc4be926dd7959c231f2a9e290",
+        "subjectHash": "sha256:1e0985c65b85c8af6ef032b84ee57339a6e62d2c8cbc0769b9240c94efd43000",
         "page": 1,
         "requestBusinessHash": "sha256:6fa283b271564abc7a4db69b2a1f3baffcf09f061715ae4e28d1ddfbdf739ea1",
         "observedAt": "2026-08-02T00:00:00.001Z"
@@ -1295,7 +1309,7 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
         "remoteRequestAttemptId": "remote-runtime-execution-attempt-store-sample-2",
         "purpose": "forward",
-        "subjectHash": "sha256:11b817223d9cfd519067ac14ee2785159d879cdc4be926dd7959c231f2a9e290",
+        "subjectHash": "sha256:1e0985c65b85c8af6ef032b84ee57339a6e62d2c8cbc0769b9240c94efd43000",
         "page": 1,
         "requestBusinessHash": "sha256:550a6a200f4e3f8bb9cc3595dc72be32c786b13ff38554f0d9330ddda64a8eff",
         "observedAt": "2026-08-02T00:00:00.002Z"
@@ -1307,7 +1321,7 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
         "remoteRequestAttemptId": "remote-runtime-execution-attempt-store-sample-3",
         "purpose": "forward",
-        "subjectHash": "sha256:11b817223d9cfd519067ac14ee2785159d879cdc4be926dd7959c231f2a9e290",
+        "subjectHash": "sha256:1e0985c65b85c8af6ef032b84ee57339a6e62d2c8cbc0769b9240c94efd43000",
         "page": 2,
         "requestBusinessHash": "sha256:c933605defce9ce254f51b9810c13056aa7105a26e3a69256ccec77a06d751a2",
         "observedAt": "2026-08-02T00:00:00.003Z"
@@ -1319,7 +1333,7 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
         "remoteRequestAttemptId": "remote-runtime-execution-attempt-store-sample-4",
         "purpose": "forward",
-        "subjectHash": "sha256:11b817223d9cfd519067ac14ee2785159d879cdc4be926dd7959c231f2a9e290",
+        "subjectHash": "sha256:1e0985c65b85c8af6ef032b84ee57339a6e62d2c8cbc0769b9240c94efd43000",
         "page": 3,
         "requestBusinessHash": "sha256:08187a6a044f5184934e25367eda51d86005d25762202436e843a9de4c92aad2",
         "observedAt": "2026-08-02T00:00:00.004Z"
@@ -1340,26 +1354,28 @@
   "completionReceipt": {
     "schema": "collector.page-action.completion-receipt.v1",
     "completionReceiptId": "completion-receipt-store-sample-fixture-005",
-    "completionReceiptHash": "sha256:c60e44c9b856f94e28339fd5f20c6ad854322af4e9a2198f43195cdf52d2f6ed",
+    "completionReceiptHash": "sha256:4f1ce92fcc4e9dab11442f90055656c90c0d559d6ff2dd69f06fd0fc4143f0ef",
     "pageActionId": "runtime-page-action-store-sample",
-    "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+    "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
     "logicalLineage": {
       "schema": "collector.logical-page-action-lineage.v1",
       "logicalLineageId": "runtime-logical-store-sample",
       "collectionTaskId": "runtime-collection-task-store-sample",
       "workUnitId": "runtime-work-unit-store-sample",
       "pageActionId": "runtime-page-action-store-sample",
-      "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+      "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
       "actionKind": "store-sample",
       "businessSubject": {
         "kind": "store-sample",
         "memberId": "fixture-chain-member-1",
+        "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        "canonicalShopUrl": "https://fixture-store.1688.com/",
         "canonicalShopIdentityReceiptId": "runtime-store-identity",
         "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
         "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
       }
     },
-    "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+    "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
     "actionKind": "store-sample",
     "status": "completed",
     "terminal": true,
@@ -1368,16 +1384,16 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
         "executionAttemptOrdinal": 1,
         "receiptId": "execution-receipt-store-sample-fixture-004",
-        "receiptHash": "sha256:05fcf842552cc87468f967c50c97b1d661c27ab82f2e59c40f0b2850c101f890",
-        "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121"
+        "receiptHash": "sha256:1178ce9566ea9d19160d9269651434242c7d95ef61b337930e115d81179600ee",
+        "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2"
       }
     ],
     "finalizedByExecutionRef": {
       "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
       "executionAttemptOrdinal": 1,
       "receiptId": "execution-receipt-store-sample-fixture-004",
-      "receiptHash": "sha256:05fcf842552cc87468f967c50c97b1d661c27ab82f2e59c40f0b2850c101f890",
-      "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121"
+      "receiptHash": "sha256:1178ce9566ea9d19160d9269651434242c7d95ef61b337930e115d81179600ee",
+      "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2"
     },
     "batches": [
       {
@@ -1421,7 +1437,7 @@
                 }
               },
               "idempotencyKey": "runtime-idempotency-store-sample",
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "logicalLineageId": "runtime-logical-store-sample",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "profile": {
@@ -1435,24 +1451,26 @@
               "schema": "collector.page-action-execution-lineage.v1",
               "workUnitAttemptId": "runtime-work-attempt-store-sample"
             },
-            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
             "logicalLineage": {
               "actionKind": "store-sample",
               "businessSubject": {
                 "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                 "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "kind": "store-sample",
                 "memberId": "fixture-chain-member-1",
                 "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
               },
               "collectionTaskId": "runtime-collection-task-store-sample",
               "logicalLineageId": "runtime-logical-store-sample",
-              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.logical-page-action-lineage.v1",
               "workUnitId": "runtime-work-unit-store-sample"
             },
-            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
             "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
             "pageActionId": "runtime-page-action-store-sample",
             "schema": "collector.page-action-batch-evidence.v1",
@@ -1519,7 +1537,7 @@
                   }
                 },
                 "idempotencyKey": "runtime-idempotency-store-sample",
-                "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+                "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
                 "logicalLineageId": "runtime-logical-store-sample",
                 "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
                 "profile": {
@@ -1533,24 +1551,26 @@
                 "schema": "collector.page-action-execution-lineage.v1",
                 "workUnitAttemptId": "runtime-work-attempt-store-sample"
               },
-              "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+              "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
               "logicalLineage": {
                 "actionKind": "store-sample",
                 "businessSubject": {
                   "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                   "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                  "canonicalShopUrl": "https://fixture-store.1688.com/",
+                  "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                   "kind": "store-sample",
                   "memberId": "fixture-chain-member-1",
                   "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
                 },
                 "collectionTaskId": "runtime-collection-task-store-sample",
                 "logicalLineageId": "runtime-logical-store-sample",
-                "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+                "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
                 "pageActionId": "runtime-page-action-store-sample",
                 "schema": "collector.logical-page-action-lineage.v1",
                 "workUnitId": "runtime-work-unit-store-sample"
               },
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.page-action-batch-evidence.v1",
@@ -1728,7 +1748,7 @@
                 }
               },
               "idempotencyKey": "runtime-idempotency-store-sample",
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "logicalLineageId": "runtime-logical-store-sample",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "profile": {
@@ -1742,24 +1762,26 @@
               "schema": "collector.page-action-execution-lineage.v1",
               "workUnitAttemptId": "runtime-work-attempt-store-sample"
             },
-            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
             "logicalLineage": {
               "actionKind": "store-sample",
               "businessSubject": {
                 "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                 "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "kind": "store-sample",
                 "memberId": "fixture-chain-member-1",
                 "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
               },
               "collectionTaskId": "runtime-collection-task-store-sample",
               "logicalLineageId": "runtime-logical-store-sample",
-              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.logical-page-action-lineage.v1",
               "workUnitId": "runtime-work-unit-store-sample"
             },
-            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
             "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
             "pageActionId": "runtime-page-action-store-sample",
             "schema": "collector.page-action-batch-evidence.v1",
@@ -1831,7 +1853,7 @@
                   }
                 },
                 "idempotencyKey": "runtime-idempotency-store-sample",
-                "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+                "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
                 "logicalLineageId": "runtime-logical-store-sample",
                 "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
                 "profile": {
@@ -1845,24 +1867,26 @@
                 "schema": "collector.page-action-execution-lineage.v1",
                 "workUnitAttemptId": "runtime-work-attempt-store-sample"
               },
-              "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+              "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
               "logicalLineage": {
                 "actionKind": "store-sample",
                 "businessSubject": {
                   "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                   "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                  "canonicalShopUrl": "https://fixture-store.1688.com/",
+                  "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                   "kind": "store-sample",
                   "memberId": "fixture-chain-member-1",
                   "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
                 },
                 "collectionTaskId": "runtime-collection-task-store-sample",
                 "logicalLineageId": "runtime-logical-store-sample",
-                "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+                "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
                 "pageActionId": "runtime-page-action-store-sample",
                 "schema": "collector.logical-page-action-lineage.v1",
                 "workUnitId": "runtime-work-unit-store-sample"
               },
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.page-action-batch-evidence.v1",
@@ -1960,7 +1984,7 @@
                 }
               },
               "idempotencyKey": "runtime-idempotency-store-sample",
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "logicalLineageId": "runtime-logical-store-sample",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "profile": {
@@ -1974,24 +1998,26 @@
               "schema": "collector.page-action-execution-lineage.v1",
               "workUnitAttemptId": "runtime-work-attempt-store-sample"
             },
-            "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+            "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
             "logicalLineage": {
               "actionKind": "store-sample",
               "businessSubject": {
                 "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                 "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                "canonicalShopUrl": "https://fixture-store.1688.com/",
+                "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                 "kind": "store-sample",
                 "memberId": "fixture-chain-member-1",
                 "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
               },
               "collectionTaskId": "runtime-collection-task-store-sample",
               "logicalLineageId": "runtime-logical-store-sample",
-              "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+              "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.logical-page-action-lineage.v1",
               "workUnitId": "runtime-work-unit-store-sample"
             },
-            "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+            "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
             "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
             "pageActionId": "runtime-page-action-store-sample",
             "schema": "collector.page-action-batch-evidence.v1",
@@ -2058,7 +2084,7 @@
                   }
                 },
                 "idempotencyKey": "runtime-idempotency-store-sample",
-                "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+                "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
                 "logicalLineageId": "runtime-logical-store-sample",
                 "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
                 "profile": {
@@ -2072,24 +2098,26 @@
                 "schema": "collector.page-action-execution-lineage.v1",
                 "workUnitAttemptId": "runtime-work-attempt-store-sample"
               },
-              "executionLineageHash": "sha256:f5200377ee33ed776fd109f91693eb547775d3d32de7f61540d1bf05888db121",
+              "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2",
               "logicalLineage": {
                 "actionKind": "store-sample",
                 "businessSubject": {
                   "canonicalShopIdentityReceiptHash": "sha256:c66153d97acba937ef3f8cbba5f949f4ea872ec9d6e052a152263743acd63350",
                   "canonicalShopIdentityReceiptId": "runtime-store-identity",
+                  "canonicalShopUrl": "https://fixture-store.1688.com/",
+                  "canonicalStoreId": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
                   "kind": "store-sample",
                   "memberId": "fixture-chain-member-1",
                   "pageScopeBusinessHash": "sha256:888645098e3828458f2452c67308dfeef18a0aa6f734431f7f80a6885ffebd31"
                 },
                 "collectionTaskId": "runtime-collection-task-store-sample",
                 "logicalLineageId": "runtime-logical-store-sample",
-                "pageActionBusinessHash": "sha256:11bc24813b8dbca0c9d2e90c145685ebbb4e7147e57098c18d15735a96bd75ce",
+                "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
                 "pageActionId": "runtime-page-action-store-sample",
                 "schema": "collector.logical-page-action-lineage.v1",
                 "workUnitId": "runtime-work-unit-store-sample"
               },
-              "logicalLineageHash": "sha256:72a001f97230254992f79566d4fa6ce169e96cd8651afbcc41bf449c1c17b1cb",
+              "logicalLineageHash": "sha256:66bc1282e3e6bbd23b8edf3c04088a13371fdf9727c9c5d412d42cda03e8a660",
               "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
               "pageActionId": "runtime-page-action-store-sample",
               "schema": "collector.page-action-batch-evidence.v1",

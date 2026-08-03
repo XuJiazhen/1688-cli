@@ -445,11 +445,15 @@ function pageActionFixture(
       : kind === 'store-qualification'
         ? {
             kind, memberId: 'member-1',
+            canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            canonicalShopUrl: 'https://member-1.1688.com/',
             canonicalStoreIdentityReceiptId: 'store-identity-receipt-1',
             canonicalStoreIdentityReceiptHash: hash('store-identity-receipt'),
           }
         : {
             kind, memberId: 'member-1',
+            canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            canonicalShopUrl: 'https://member-1.1688.com/',
             canonicalShopIdentityReceiptId: 'shop-identity-receipt-1',
             canonicalShopIdentityReceiptHash: hash('shop-identity-receipt'),
             pageScopeBusinessHash: hash(pageScope),
@@ -486,6 +490,8 @@ function pageActionFixture(
       ? {
           kind,
           memberId: subject.memberId!,
+          canonicalStoreId: subject.canonicalStoreId!,
+          canonicalShopUrl: subject.canonicalShopUrl!,
           canonicalShopIdentityReceiptId: subject.canonicalShopIdentityReceiptId!,
           canonicalShopIdentityReceiptHash: subject.canonicalShopIdentityReceiptHash!,
           mode: 'phase-1-bounded' as const,

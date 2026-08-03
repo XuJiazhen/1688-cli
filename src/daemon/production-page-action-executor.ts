@@ -128,10 +128,6 @@ export interface ProductionPageActionExecutorOptions {
   ) => Promise<CanonicalSearchParameterSetV1>;
 }
 
-interface IdentityArtifactV1 extends TrustedCanonicalShopIdentityV1 {
-  schema: 'collector.canonical-shop-identity-artifact.v1';
-}
-
 interface SearchParameterSourceArtifactV1 {
   schema: 'collector.search-parameter-source.v1';
   intent: SearchIntentV1;
@@ -267,8 +263,6 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
       resolveCanonicalSearchParameterSet: (artifactRef) =>
         this.options.testOnlyResolveCanonicalSearchParameterSet?.(artifactRef)
           ?? this.resolveSearchParameterSet(artifactRef),
-      resolveCanonicalShopIdentity: (receiptId, receiptHash) =>
-        this.resolveShopIdentity(receiptId, receiptHash),
       runSearch: ({ parameterSet, signal }) =>
         this.runSearch(request, scope, remoteLedger, parameterSet, signal),
       runOffer: ({ offerId, memberId, signal }) =>
@@ -1290,24 +1284,8 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
     return structuredClone(archive);
   }
 
-  private async resolveShopIdentity(
-    receiptId: string,
-    receiptHash: string,
-  ): Promise<TrustedCanonicalShopIdentityV1> {
-    const value = await this.readArtifact(`identity:${receiptId}`) as IdentityArtifactV1;
-    if (
-      value.schema !== 'collector.canonical-shop-identity-artifact.v1'
-      || value.receiptId !== receiptId
-      || value.receiptHash !== receiptHash
-      || value.memberId.trim().length === 0
-    ) {
-      throw new Error('Canonical shop identity artifact binding mismatch.');
-    }
-    return value;
-  }
-
   private async readArtifact(reference: string): Promise<unknown> {
-    const match = reference.match(/^(?:artifact|identity):([A-Za-z0-9._-]+)$/u);
+    const match = reference.match(/^artifact:([A-Za-z0-9._-]+)$/u);
     if (!match?.[1]) throw new Error('Collector artifact reference is invalid.');
     const resolved = path.join(this.options.artifactDirectory, `${match[1]}.json`);
     const relative = path.relative(this.options.artifactDirectory, resolved);

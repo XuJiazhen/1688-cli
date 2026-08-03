@@ -886,47 +886,7 @@ async function seedArtifacts(
     );
     seeded.add(relativePath);
   }
-  if (actionKind === 'store-qualification') {
-    if (request.action.kind !== 'store-qualification') {
-      throw new TypeError('Qualification seed request drifted.');
-    }
-    await writeIdentityArtifact(
-      artifactDirectory,
-      request.action.canonicalStoreIdentityReceiptId,
-      request.action.canonicalStoreIdentityReceiptHash,
-      QUALIFICATION_INPUT.memberId,
-      'https://fixture-qualification-store.1688.com/',
-    );
-    seeded.add(`${request.action.canonicalStoreIdentityReceiptId}.json`);
-  }
-  if (actionKind === 'store-sample') {
-    if (request.action.kind !== 'store-sample') throw new TypeError('Store seed request drifted.');
-    await writeIdentityArtifact(
-      artifactDirectory,
-      request.action.canonicalShopIdentityReceiptId,
-      request.action.canonicalShopIdentityReceiptHash,
-      STORE_INPUT.memberId,
-      STORE_INPUT.canonicalShopUrl,
-    );
-    seeded.add(`${request.action.canonicalShopIdentityReceiptId}.json`);
-  }
   return seeded;
-}
-
-async function writeIdentityArtifact(
-  artifactDirectory: string,
-  receiptId: string,
-  receiptHash: string,
-  memberId: string,
-  canonicalShopUrl: string,
-): Promise<void> {
-  await fs.writeFile(path.join(artifactDirectory, `${receiptId}.json`), JSON.stringify({
-    schema: 'collector.canonical-shop-identity-artifact.v1',
-    memberId,
-    canonicalShopUrl,
-    receiptId,
-    receiptHash,
-  }), { mode: 0o600 });
 }
 
 function artifactIdFromRef(value: string, label: string): string {
@@ -972,6 +932,8 @@ function actionRequest(actionKind: ActionKind, now: Date): PageActionRequestV1 {
         ? {
             kind: 'store-qualification' as const,
             memberId: QUALIFICATION_INPUT.memberId,
+            canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+            canonicalShopUrl: 'https://fixture-qualification-store.1688.com/',
             canonicalStoreIdentityReceiptId: 'runtime-qualification-identity',
             canonicalStoreIdentityReceiptHash:
               canonicalCollectorSha256V1('runtime-qualification-identity'),
@@ -979,6 +941,8 @@ function actionRequest(actionKind: ActionKind, now: Date): PageActionRequestV1 {
         : {
             kind: 'store-sample' as const,
             memberId: STORE_INPUT.memberId,
+            canonicalStoreId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+            canonicalShopUrl: STORE_INPUT.canonicalShopUrl,
             canonicalShopIdentityReceiptId: 'runtime-store-identity',
             canonicalShopIdentityReceiptHash:
               canonicalCollectorSha256V1('runtime-store-identity'),
@@ -1096,6 +1060,8 @@ function actionRequest(actionKind: ActionKind, now: Date): PageActionRequestV1 {
       action: {
         kind: 'store-qualification',
         memberId: QUALIFICATION_INPUT.memberId,
+        canonicalStoreId: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        canonicalShopUrl: 'https://fixture-qualification-store.1688.com/',
         canonicalStoreIdentityReceiptId: 'runtime-qualification-identity',
         canonicalStoreIdentityReceiptHash:
           canonicalCollectorSha256V1('runtime-qualification-identity'),
@@ -1108,6 +1074,8 @@ function actionRequest(actionKind: ActionKind, now: Date): PageActionRequestV1 {
     action: {
       kind: 'store-sample',
       memberId: STORE_INPUT.memberId,
+      canonicalStoreId: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      canonicalShopUrl: STORE_INPUT.canonicalShopUrl,
       canonicalShopIdentityReceiptId: 'runtime-store-identity',
       canonicalShopIdentityReceiptHash:
         canonicalCollectorSha256V1('runtime-store-identity'),

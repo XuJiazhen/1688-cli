@@ -32,6 +32,7 @@ import { assertSearchTerminalReceiptV1 } from '../session/search-runtime.js';
 import { CliError } from '../io/errors.js';
 
 export interface TrustedCanonicalShopIdentityV1 {
+  canonicalStoreId: string;
   memberId: string;
   canonicalShopUrl: string;
   receiptId: string;
@@ -66,10 +67,6 @@ export interface CollectorPageActionExecutorPortsV1 {
   resolveCanonicalSearchParameterSet(
     artifactRef: string,
   ): Promise<CanonicalSearchParameterSetV1>;
-  resolveCanonicalShopIdentity(
-    receiptId: string,
-    receiptHash: string,
-  ): Promise<TrustedCanonicalShopIdentityV1>;
   runSearch(input: {
     request: PageActionRequestV1;
     parameterSet: CanonicalSearchParameterSetV1;
@@ -159,34 +156,19 @@ export async function executeCollectorPageActionV1(input: {
       signal: input.signal,
     });
   } else if (request.action.kind === 'store-qualification') {
-    const identity = await ports.resolveCanonicalShopIdentity(
-      request.action.canonicalStoreIdentityReceiptId,
-      request.action.canonicalStoreIdentityReceiptHash,
-    );
-    if (
-      identity.memberId !== request.action.memberId ||
-      identity.receiptId !== request.action.canonicalStoreIdentityReceiptId ||
-      identity.receiptHash !== request.action.canonicalStoreIdentityReceiptHash
-    ) {
-      throw contractError('QUALIFICATION_IDENTITY_RECEIPT_MISMATCH', 'Qualification identity receipt belongs to another member.');
-    }
     run = await ports.runQualification({
       request,
       memberId: request.action.memberId,
       signal: input.signal,
     });
   } else {
-    const identity = await ports.resolveCanonicalShopIdentity(
-      request.action.canonicalShopIdentityReceiptId,
-      request.action.canonicalShopIdentityReceiptHash,
-    );
-    if (
-      identity.memberId !== request.action.memberId ||
-      identity.receiptId !== request.action.canonicalShopIdentityReceiptId ||
-      identity.receiptHash !== request.action.canonicalShopIdentityReceiptHash
-    ) {
-      throw contractError('STORE_SAMPLE_IDENTITY_RECEIPT_MISMATCH', 'Store Sample identity receipt belongs to another member.');
-    }
+    const identity = Object.freeze({
+      canonicalStoreId: request.action.canonicalStoreId,
+      memberId: request.action.memberId,
+      canonicalShopUrl: request.action.canonicalShopUrl,
+      receiptId: request.action.canonicalShopIdentityReceiptId,
+      receiptHash: request.action.canonicalShopIdentityReceiptHash,
+    });
     trustedStoreIdentity = identity;
     assertStoreScopeBeforePage(request);
     run = await ports.runStoreSample({ request, identity, signal: input.signal });

@@ -154,12 +154,16 @@ export type LogicalPageActionBusinessSubjectV1 =
   | {
       kind: 'store-qualification';
       memberId: string;
+      canonicalStoreId: string;
+      canonicalShopUrl: string;
       canonicalStoreIdentityReceiptId: string;
       canonicalStoreIdentityReceiptHash: string;
     }
   | {
       kind: 'store-sample';
       memberId: string;
+      canonicalStoreId: string;
+      canonicalShopUrl: string;
       canonicalShopIdentityReceiptId: string;
       canonicalShopIdentityReceiptHash: string;
       pageScopeBusinessHash: string;
@@ -334,6 +338,8 @@ export interface OfferActionV1 {
 export interface QualificationActionV1 {
   kind: 'store-qualification';
   memberId: string;
+  canonicalStoreId: string;
+  canonicalShopUrl: string;
   canonicalStoreIdentityReceiptId: string;
   canonicalStoreIdentityReceiptHash: string;
   executionHandle: SignedCollectorExecutionHandleV1;
@@ -342,6 +348,8 @@ export interface QualificationActionV1 {
 export interface StoreSampleActionV1 {
   kind: 'store-sample';
   memberId: string;
+  canonicalStoreId: string;
+  canonicalShopUrl: string;
   canonicalShopIdentityReceiptId: string;
   canonicalShopIdentityReceiptHash: string;
   mode: 'phase-1-bounded' | 'approved-expansion';
@@ -1328,22 +1336,28 @@ function normalizeBusinessSubject(value: unknown): LogicalPageActionBusinessSubj
   }
   if (kind === 'store-qualification') {
     assertKeys(record, 'qualification businessSubject', [
-      'kind', 'memberId', 'canonicalStoreIdentityReceiptId', 'canonicalStoreIdentityReceiptHash',
+      'kind', 'memberId', 'canonicalStoreId', 'canonicalShopUrl',
+      'canonicalStoreIdentityReceiptId', 'canonicalStoreIdentityReceiptHash',
     ]);
     return {
       kind,
       memberId: requireMemberId(record.memberId, 'qualification businessSubject memberId'),
+      canonicalStoreId: requireUuid(record.canonicalStoreId, 'qualification businessSubject canonicalStoreId'),
+      canonicalShopUrl: requireCanonical1688Url(record.canonicalShopUrl, 'qualification businessSubject canonicalShopUrl'),
       canonicalStoreIdentityReceiptId: requireId(record.canonicalStoreIdentityReceiptId, 'canonicalStoreIdentityReceiptId'),
       canonicalStoreIdentityReceiptHash: requireHash(record.canonicalStoreIdentityReceiptHash, 'canonicalStoreIdentityReceiptHash'),
     };
   }
   assertKeys(record, 'store sample businessSubject', [
-    'kind', 'memberId', 'canonicalShopIdentityReceiptId',
+    'kind', 'memberId', 'canonicalStoreId', 'canonicalShopUrl',
+    'canonicalShopIdentityReceiptId',
     'canonicalShopIdentityReceiptHash', 'pageScopeBusinessHash',
   ]);
   return {
     kind,
     memberId: requireMemberId(record.memberId, 'store sample businessSubject memberId'),
+    canonicalStoreId: requireUuid(record.canonicalStoreId, 'store sample businessSubject canonicalStoreId'),
+    canonicalShopUrl: requireCanonical1688Url(record.canonicalShopUrl, 'store sample businessSubject canonicalShopUrl'),
     canonicalShopIdentityReceiptId: requireId(record.canonicalShopIdentityReceiptId, 'canonicalShopIdentityReceiptId'),
     canonicalShopIdentityReceiptHash: requireHash(record.canonicalShopIdentityReceiptHash, 'canonicalShopIdentityReceiptHash'),
     pageScopeBusinessHash: requireHash(record.pageScopeBusinessHash, 'pageScopeBusinessHash'),
@@ -1430,19 +1444,23 @@ function normalizePageActionPayload(value: unknown): PageActionPayloadV1 {
   }
   if (kind === 'store-qualification') {
     assertKeys(record, 'QualificationActionV1', [
-      'kind', 'memberId', 'canonicalStoreIdentityReceiptId',
-      'canonicalStoreIdentityReceiptHash', 'executionHandle',
+      'kind', 'memberId', 'canonicalStoreId', 'canonicalShopUrl',
+      'canonicalStoreIdentityReceiptId', 'canonicalStoreIdentityReceiptHash',
+      'executionHandle',
     ]);
     return {
       kind,
       memberId: requireMemberId(record.memberId, 'QualificationActionV1.memberId'),
+      canonicalStoreId: requireUuid(record.canonicalStoreId, 'QualificationActionV1.canonicalStoreId'),
+      canonicalShopUrl: requireCanonical1688Url(record.canonicalShopUrl, 'QualificationActionV1.canonicalShopUrl'),
       canonicalStoreIdentityReceiptId: requireId(record.canonicalStoreIdentityReceiptId, 'QualificationActionV1.canonicalStoreIdentityReceiptId'),
       canonicalStoreIdentityReceiptHash: requireHash(record.canonicalStoreIdentityReceiptHash, 'QualificationActionV1.canonicalStoreIdentityReceiptHash'),
       executionHandle: normalizeExecutionHandle(record.executionHandle),
     };
   }
   assertKeys(record, 'StoreSampleActionV1', [
-    'kind', 'memberId', 'canonicalShopIdentityReceiptId',
+    'kind', 'memberId', 'canonicalStoreId', 'canonicalShopUrl',
+    'canonicalShopIdentityReceiptId',
     'canonicalShopIdentityReceiptHash', 'mode', 'pageScope',
     'expansionApproval', 'executionHandle',
   ]);
@@ -1485,6 +1503,8 @@ function normalizePageActionPayload(value: unknown): PageActionPayloadV1 {
   return {
     kind,
     memberId: requireMemberId(record.memberId, 'StoreSampleActionV1.memberId'),
+    canonicalStoreId: requireUuid(record.canonicalStoreId, 'StoreSampleActionV1.canonicalStoreId'),
+    canonicalShopUrl: requireCanonical1688Url(record.canonicalShopUrl, 'StoreSampleActionV1.canonicalShopUrl'),
     canonicalShopIdentityReceiptId: requireId(record.canonicalShopIdentityReceiptId, 'StoreSampleActionV1.canonicalShopIdentityReceiptId'),
     canonicalShopIdentityReceiptHash: requireHash(record.canonicalShopIdentityReceiptHash, 'StoreSampleActionV1.canonicalShopIdentityReceiptHash'),
     mode,
@@ -1789,6 +1809,8 @@ function pageActionBusinessPayload(
     return {
       kind: action.kind,
       memberId: action.memberId,
+      canonicalStoreId: action.canonicalStoreId,
+      canonicalShopUrl: action.canonicalShopUrl,
       canonicalStoreIdentityReceiptId: action.canonicalStoreIdentityReceiptId,
       canonicalStoreIdentityReceiptHash: action.canonicalStoreIdentityReceiptHash,
     };
@@ -1796,6 +1818,8 @@ function pageActionBusinessPayload(
   return {
     kind: action.kind,
     memberId: action.memberId,
+    canonicalStoreId: action.canonicalStoreId,
+    canonicalShopUrl: action.canonicalShopUrl,
     canonicalShopIdentityReceiptId: action.canonicalShopIdentityReceiptId,
     canonicalShopIdentityReceiptHash: action.canonicalShopIdentityReceiptHash,
     mode: action.mode,
@@ -1930,10 +1954,14 @@ function assertActionMatchesSubject(
     subject.kind === 'store-qualification'
   ) {
     equal(action.memberId, subject.memberId, 'qualification memberId');
+    equal(action.canonicalStoreId, subject.canonicalStoreId, 'qualification canonical Store ID');
+    equal(action.canonicalShopUrl, subject.canonicalShopUrl, 'qualification canonical shop URL');
     equal(action.canonicalStoreIdentityReceiptId, subject.canonicalStoreIdentityReceiptId, 'store identity receiptId');
     equal(action.canonicalStoreIdentityReceiptHash, subject.canonicalStoreIdentityReceiptHash, 'store identity receiptHash');
   } else if (action.kind === 'store-sample' && subject.kind === 'store-sample') {
     equal(action.memberId, subject.memberId, 'store sample memberId');
+    equal(action.canonicalStoreId, subject.canonicalStoreId, 'store sample canonical Store ID');
+    equal(action.canonicalShopUrl, subject.canonicalShopUrl, 'store sample canonical shop URL');
     equal(action.canonicalShopIdentityReceiptId, subject.canonicalShopIdentityReceiptId, 'shop identity receiptId');
     equal(action.canonicalShopIdentityReceiptHash, subject.canonicalShopIdentityReceiptHash, 'shop identity receiptHash');
     equal(canonicalCollectorSha256V1(action.pageScope), subject.pageScopeBusinessHash, 'page scope business hash');
@@ -2154,6 +2182,35 @@ function requireMemberId(value: unknown, path: string): string {
   const memberId = requireText(value, path);
   if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,127}$/u.test(memberId)) invalid(`${path} is not a safe memberId.`);
   return memberId;
+}
+
+function requireUuid(value: unknown, path: string): string {
+  const id = requireText(value, path);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(id)) {
+    invalid(`${path} must be a UUID.`);
+  }
+  return id;
+}
+
+function requireCanonical1688Url(value: unknown, path: string): string {
+  const text = requireText(value, path);
+  let url: URL;
+  try {
+    url = new URL(text);
+  } catch {
+    invalid(`${path} must be a canonical HTTPS 1688 URL.`);
+  }
+  if (
+    url.protocol !== 'https:'
+    || !/(?:^|\.)1688\.com$/iu.test(url.hostname)
+    || url.username !== ''
+    || url.password !== ''
+    || url.hash !== ''
+    || url.toString() !== text
+  ) {
+    invalid(`${path} must be a canonical HTTPS 1688 URL.`);
+  }
+  return text;
 }
 
 function requireOfferId(value: unknown, path: string): string {
