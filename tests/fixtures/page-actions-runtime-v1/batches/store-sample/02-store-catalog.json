@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "batchId": "batch-store-sample-fixture-001",
+  "batchId": "batch-store-sample-fixture-001-page-3",
   "unitId": "runtime-work-unit-store-sample",
   "sourceRequestId": "runtime-request-store-sample",
   "kind": "store-catalog",
@@ -105,13 +105,15 @@
     "mode": "phase-1-bounded",
     "nextPage": null,
     "observedPages": [
-      1
+      1,
+      2,
+      3
     ],
-    "requestedScope": "page"
+    "requestedScope": "bounded-pages"
   },
   "observations": [
     {
-      "absolutePosition": 1,
+      "absolutePosition": 61,
       "categoryId": null,
       "collectorPageActionEvidence": {
         "executionLineage": {
@@ -201,8 +203,8 @@
       "evidenceUsage": "baseline-evidence",
       "imageUrl": null,
       "memberId": "fixture-chain-member-1",
-      "offerId": "700000000201",
-      "page": 1,
+      "offerId": "700000000203",
+      "page": 3,
       "pagePosition": 1,
       "price": null,
       "quantityBegin": null,
@@ -219,16 +221,18 @@
       },
       "storeSample": true,
       "taskCandidateEligible": false,
-      "title": "Runtime Fixture Store Offer 1",
+      "title": "Runtime Fixture Store Offer 3",
       "unit": null,
-      "url": "https://detail.1688.com/offer/700000000201.html"
+      "url": "https://detail.1688.com/offer/700000000203.html"
     }
   ],
   "completeness": {
-    "requestedScope": "page",
+    "requestedScope": "bounded-pages",
     "state": "complete",
     "observedPages": [
-      1
+      1,
+      2,
+      3
     ],
     "failedPages": [],
     "expectedItems": 90,

@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "batchId": "batch-store-sample-fixture-001",
+  "batchId": "batch-store-sample-fixture-002",
   "unitId": "runtime-work-unit-store-sample",
   "sourceRequestId": "runtime-request-store-sample",
-  "kind": "store-catalog",
+  "kind": "store-categories",
   "status": "completed",
   "startedAt": "2026-08-02T00:00:00.000Z",
   "completedAt": "2026-08-02T00:00:00.000Z",
@@ -105,14 +105,20 @@
     "mode": "phase-1-bounded",
     "nextPage": null,
     "observedPages": [
-      1
-    ],
-    "requestedScope": "page"
+      1,
+      2,
+      3
+    ]
   },
   "observations": [
     {
-      "absolutePosition": 1,
-      "categoryId": null,
+      "category": {
+        "children": [],
+        "count": 90,
+        "fullName": null,
+        "id": "fixture-cat-1",
+        "name": "Tools"
+      },
       "collectorPageActionEvidence": {
         "executionLineage": {
           "executionAttemptOrdinal": 1,
@@ -198,40 +204,19 @@
           "evidenceUsage": "baseline-evidence"
         }
       },
-      "evidenceUsage": "baseline-evidence",
-      "imageUrl": null,
       "memberId": "fixture-chain-member-1",
-      "offerId": "700000000201",
-      "page": 1,
-      "pagePosition": 1,
-      "price": null,
-      "quantityBegin": null,
-      "sales": {
-        "bookedCount": null,
-        "modelAgentBookedCount": null,
-        "modelBookedCount": null,
-        "modelQuantitySumMonth": null,
-        "modelSaleQuantity": null,
-        "ninetySaleQuantity": null,
-        "saleQuantity": null,
-        "thirtySaleQuantity": null,
-        "vagueSaleQuantity": null
-      },
-      "storeSample": true,
-      "taskCandidateEligible": false,
-      "title": "Runtime Fixture Store Offer 1",
-      "unit": null,
-      "url": "https://detail.1688.com/offer/700000000201.html"
+      "observedAt": "2026-08-02T00:00:00.000Z"
     }
   ],
   "completeness": {
-    "requestedScope": "page",
+    "requestedScope": "bounded-pages",
     "state": "complete",
     "observedPages": [
-      1
+      1,
+      2,
+      3
     ],
     "failedPages": [],
-    "expectedItems": 90,
     "uniqueItems": 1
   },
   "duplicateObservations": [],
@@ -244,8 +229,7 @@
     "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
   ],
   "metrics": {
-    "candidatesPublished": 0,
-    "remoteRequests": 1,
-    "uniqueCatalogOffers": 1
+    "categoryItems": 1,
+    "remoteRequests": 0
   }
 }

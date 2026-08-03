@@ -1113,7 +1113,7 @@ describe('Production PageAction bridge', () => {
       metrics: { remoteRequests: 4, catalogCandidatesPublished: 0 },
     });
     expect(response.executionAttemptReceipt.remoteRequestAttempts).toHaveLength(4);
-    expect(response.executionAttemptReceipt.batches).toHaveLength(3);
+    expect(response.executionAttemptReceipt.batches).toHaveLength(5);
     expect(response.executionAttemptReceipt.batches.every((batch) =>
       batch.rawEvidenceRefs.length === 4
       && batch.rawEvidenceRefs.every((ref) => /^artifact:collector-raw-store-response-/u.test(ref))
@@ -1161,13 +1161,13 @@ describe('Production PageAction bridge', () => {
     expect(receipt).toMatchObject({
       outcome: 'failed',
       error: { code: 'STORE_SAMPLE_PAGE1_SUMMARY_INCOMPLETE' },
-      metrics: { remoteRequests: 2, preservedBatches: 3 },
+      metrics: { remoteRequests: 2, preservedBatches: 2 },
     });
     expect(receipt.remoteRequestAttempts[1]).toMatchObject({
       ordinal: 2, status: 'failed',
       rawEvidenceRefs: [expect.stringMatching(/^artifact:collector-raw-store-response-/u)],
     });
-    expect(receipt.batches).toHaveLength(3);
+    expect(receipt.batches).toHaveLength(2);
     expect(receipt.batches.every((batch) => batch.rawEvidenceRefs.length === 2)).toBe(true);
     expect(receipt.batches.find((batch) => batch.kind === 'store-profile')?.observations)
       .toEqual([expect.objectContaining({ memberId: 'b2b-member-1' })]);

@@ -164,12 +164,19 @@ describe('bounded Store Sample runtime', () => {
       profileBatchId: 'profile-1', startedAt: NOW, completedAt: NOW,
       rawEvidenceRefs: ['artifact:store-pages-1-3'],
     });
-    expect(batches.map((batch) => batch.kind)).toEqual(['store-catalog', 'store-categories', 'store-profile']);
-    expect(batches[0].metrics).toMatchObject({ candidatesPublished: 0, remoteRequests: 3 });
-    expect(batches[0].observations.every((observation) =>
+    expect(batches.map((batch) => batch.kind)).toEqual([
+      'store-catalog', 'store-catalog', 'store-catalog',
+      'store-categories', 'store-profile',
+    ]);
+    expect(batches.slice(0, 3).map((batch) => batch.scope.requestedScope))
+      .toEqual(['page', 'page', 'bounded-pages']);
+    expect(batches.slice(0, 3).map((batch) => batch.completeness.observedPages))
+      .toEqual([[1], [2], [1, 2, 3]]);
+    expect(batches[0].metrics).toMatchObject({ candidatesPublished: 0, remoteRequests: 1 });
+    expect(batches.slice(0, 3).flatMap((batch) => batch.observations).every((observation) =>
       observation.taskCandidateEligible === false
     )).toBe(true);
-    expect(batches[1].metrics.remoteRequests).toBe(0);
+    expect(batches[3].metrics.remoteRequests).toBe(0);
   });
 
   it('rejects any phase-1 page 4 scope before invoking the remote port', async () => {

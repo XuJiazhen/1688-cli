@@ -69,7 +69,7 @@ export function createBoundedStoreSampleBatchesV1(input: {
   startedAt: string;
   completedAt: string;
   rawEvidenceRefs: string[];
-}): [CollectionBatch, CollectionBatch, CollectionBatch] {
+}): CollectionBatch[] {
   const firstObservedPageByOfferId = new Map<string, number>();
   input.result.pages.forEach(({ page, parsed }) => {
     parsed.offers.forEach((offer) => {
@@ -92,7 +92,6 @@ export function createBoundedStoreSampleBatchesV1(input: {
       },
     },
     scope: {
-      requestedScope: 'bounded-pages',
       mode: input.result.mode,
       generation: input.result.cursor.generation,
       observedPages: input.result.cursor.observedPages,
@@ -112,34 +111,52 @@ export function createBoundedStoreSampleBatchesV1(input: {
     rawEvidenceRefs: input.rawEvidenceRefs,
   };
   const completeness = {
-    requestedScope: 'bounded-pages' as const,
     state: input.result.status === 'completed' ? 'complete' as const : 'truncated' as const,
     observedPages: input.result.cursor.observedPages,
     failedPages: input.result.failedPages,
   };
-  const catalog = normalizeCollectionBatch({
-    ...common,
-    batchId: input.catalogBatchId,
-    kind: 'store-catalog',
-    observations: input.result.uniqueOffers.map((offer) =>
-      sanitizeCollectorPayloadV1({
+  const lastObservedPage = input.result.cursor.observedPages.at(-1);
+  const catalogs = input.result.pages.map(({ page }) => {
+    const terminalPage = page === lastObservedPage;
+    const requestedScope = terminalPage ? 'bounded-pages' as const : 'page' as const;
+    const observations = input.result.uniqueOffers
+      .filter((offer) => firstObservedPageByOfferId.get(offer.offerId) === page)
+      .map((offer) => sanitizeCollectorPayloadV1({
         ...offer,
-        page: firstObservedPageByOfferId.get(offer.offerId),
+        page,
         storeSample: true,
         taskCandidateEligible: false,
         evidenceUsage: input.result.evidenceUsage,
-      }) as Record<string, unknown>
-    ),
-    completeness: {
-      ...completeness,
-      expectedItems: input.result.cursor.sourceOfferCount ?? undefined,
-      uniqueItems: input.result.uniqueOffers.length,
-    },
-    metrics: {
-      remoteRequests: input.result.remoteRequests,
-      uniqueCatalogOffers: input.result.uniqueOffers.length,
-      candidatesPublished: 0,
-    },
+      }) as Record<string, unknown>);
+    return normalizeCollectionBatch({
+      ...common,
+      batchId: page === input.result.pages[0]?.page
+        ? input.catalogBatchId
+        : `${input.catalogBatchId}-page-${page}`,
+      kind: 'store-catalog',
+      scope: {
+        ...common.scope,
+        requestedScope,
+        observedPages: terminalPage
+          ? input.result.cursor.observedPages
+          : [page],
+      },
+      observations,
+      completeness: {
+        ...completeness,
+        requestedScope,
+        observedPages: terminalPage
+          ? input.result.cursor.observedPages
+          : [page],
+        expectedItems: input.result.cursor.sourceOfferCount ?? undefined,
+        uniqueItems: observations.length,
+      },
+      metrics: {
+        remoteRequests: 1,
+        uniqueCatalogOffers: observations.length,
+        candidatesPublished: 0,
+      },
+    });
   });
   const categories = normalizeCollectionBatch({
     ...common,
@@ -154,6 +171,7 @@ export function createBoundedStoreSampleBatchesV1(input: {
     ),
     completeness: {
       ...completeness,
+      requestedScope: 'bounded-pages',
       uniqueItems: input.result.categories.length,
     },
     metrics: {
@@ -174,6 +192,7 @@ export function createBoundedStoreSampleBatchesV1(input: {
         }) as Record<string, unknown>],
     completeness: {
       ...completeness,
+      requestedScope: 'bounded-pages',
       uniqueItems: input.result.profileObservation === null ? 0 : 1,
     },
     metrics: {
@@ -181,7 +200,7 @@ export function createBoundedStoreSampleBatchesV1(input: {
       profileObservations: input.result.profileObservation === null ? 0 : 1,
     },
   });
-  return [catalog, categories, profile];
+  return [...catalogs, categories, profile];
 }
 
 export async function executeCatalogBatch(
