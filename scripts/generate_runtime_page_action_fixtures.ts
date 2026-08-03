@@ -366,7 +366,8 @@ export function createRuntimeOfflinePageActionExecutor(
         artifactDirectory: input.artifactDirectory,
         now: input.now,
         idFactory: () => `offline-${requestPrefix}-${String(++sequence).padStart(3, '0')}`,
-        pace: async () => {},
+        // Preserve the production admission boundary without adding remote I/O.
+        pace: transportTurn,
         random: () => 0,
         ...(parameterSet === undefined
           ? {}

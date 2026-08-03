@@ -171,7 +171,7 @@
     {
       "path": "manifest.json",
       "bytes": 11607,
-      "sha256": "76bb887c210f1f41eff2189069aa96499f1d6af6a85d46c2098aaa48942f5dc8"
+      "sha256": "c5d13ad26f2f458fa25af6b2567f6f13c4d62db6ee9115505edbe6e069f7ec6a"
     },
     {
       "path": "responses/offer-detail.wire-response.json",
