@@ -1850,9 +1850,14 @@ function scanForSecretsAndPii(value: unknown, location: string, depth = 0): void
         throw new Error(`${location}.${key}: credential-bearing key is forbidden.`);
       }
       if (
-        /(?:hash|sha256)$/iu.test(key)
-        && typeof child === 'string'
-        && /^(?:sha256:)?[0-9a-f]{64}$/iu.test(child)
+        typeof child === 'string'
+        && (
+          /^sha256:[0-9a-f]{64}$/iu.test(child)
+          || (
+            /(?:hash|sha256)$/iu.test(key)
+            && /^[0-9a-f]{64}$/iu.test(child)
+          )
+        )
       ) {
         continue;
       }

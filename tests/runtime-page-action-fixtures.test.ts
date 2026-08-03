@@ -33,12 +33,17 @@ afterEach(async () => {
 describe('runtime-derived PageAction fixtures', () => {
   it('does not classify a typed cryptographic hash as contact PII', () => {
     const request = createRuntimeOfflineScenarioRequestForTest('search-list');
+    if (request.action.kind !== 'search-list') throw new Error('Search fixture drifted.');
     const digestWithPhoneDigits = `${'a'.repeat(10)}13800000000${'b'.repeat(43)}`;
     expect(digestWithPhoneDigits).toHaveLength(64);
     expect(() => assertRuntimeOfflineRequestSafety({
       ...request,
       action: {
         ...request.action,
+        request: {
+          ...request.action.request,
+          canonicalParameterSetArtifactRef: `sha256:${digestWithPhoneDigits}`,
+        },
         executionHandle: {
           ...request.action.executionHandle,
           actionPayloadBusinessHash: digestWithPhoneDigits,
