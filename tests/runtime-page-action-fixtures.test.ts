@@ -6,6 +6,7 @@ import path from 'node:path';
 import { promisify } from 'node:util';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  assertRuntimeOfflineRequestSafety,
   createRuntimeOfflinePageActionExecutor,
   createRuntimeOfflineScenarioDescriptor,
   createRuntimeOfflineScenarioRequestForTest,
@@ -30,6 +31,21 @@ afterEach(async () => {
 });
 
 describe('runtime-derived PageAction fixtures', () => {
+  it('does not classify a typed cryptographic hash as contact PII', () => {
+    const request = createRuntimeOfflineScenarioRequestForTest('search-list');
+    const digestWithPhoneDigits = `${'a'.repeat(10)}13800000000${'b'.repeat(43)}`;
+    expect(digestWithPhoneDigits).toHaveLength(64);
+    expect(() => assertRuntimeOfflineRequestSafety({
+      ...request,
+      action: {
+        ...request.action,
+        executionHandle: {
+          ...request.action.executionHandle,
+          actionPayloadBusinessHash: digestWithPhoneDigits,
+        },
+      },
+    })).not.toThrow();
+  });
   it('publishes canonical Search authority and boots as a managed-daemon-compatible binary', async () => {
     const descriptor = createRuntimeOfflineScenarioDescriptor();
     expect(descriptor).toMatchObject({

@@ -1261,7 +1261,7 @@ function assertRuntimeOfflineScenarioRequest(
   }
 }
 
-function assertRuntimeOfflineRequestSafety(request: PageActionRequestV1): void {
+export function assertRuntimeOfflineRequestSafety(request: PageActionRequestV1): void {
   scanForSecretsAndPii(request, 'offline PageAction request');
   scanForExternalUrls(request, 'offline PageAction request');
 }
@@ -1830,6 +1830,13 @@ function scanForSecretsAndPii(value: unknown, location: string, depth = 0): void
     for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
       if (/^(?:authorization|cookie|set-cookie|password|api[_-]?key|access[_-]?token|refresh[_-]?token|client[_-]?secret)$/iu.test(key)) {
         throw new Error(`${location}.${key}: credential-bearing key is forbidden.`);
+      }
+      if (
+        /(?:hash|sha256)$/iu.test(key)
+        && typeof child === 'string'
+        && /^(?:sha256:)?[0-9a-f]{64}$/iu.test(child)
+      ) {
+        continue;
       }
       scanForSecretsAndPii(child, `${location}.${key}`, depth + 1);
     }

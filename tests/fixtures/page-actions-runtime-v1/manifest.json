@@ -8,7 +8,7 @@
   "generator": {
     "revision": "production-page-action-executor-offline-fake-v1@1",
     "sourcePath": "scripts/generate_runtime_page_action_fixtures.ts",
-    "sourceSha256": "f6e7da372e372bd6ff231651f4eb6d50abad60c43970a5b2fdd53c272b93e34a"
+    "sourceSha256": "0f0963ca6af639ebccc240855b28ad7af80bf095f3648938b4a72dc73a059206"
   },
   "security": {
     "recursiveSanitizationGate": true,
