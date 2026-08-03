@@ -1,0 +1,10 @@
+{
+  "schema": "collector.sanitized-raw-archive.v1",
+  "kind": "offer-detail",
+  "parserRevision": "offer-detail-media-v2@1",
+  "pageActionId": "runtime-page-action-offer-detail",
+  "remoteRequestAttemptId": "remote-runtime-execution-attempt-offer-detail-1",
+  "requestBusinessHash": "sha256:e00f503a51635f46143ed57fb278b775e9a0864593cc248aa5ba3a8f2fd3de04",
+  "sanitizedPayload": "var offer_details={content:'<h2>Runtime fixture detail</h2><img src=\"https://img.example.test/runtime-detail-1.jpg\"><img src=\"https://img.example.test/runtime-detail-2.jpg\"><img src=\"https://img.example.test/runtime-detail-3.jpg\"><img src=\"https://img.example.test/runtime-detail-4.jpg\"><img src=\"https://img.example.test/runtime-detail-5.jpg\">'};",
+  "payloadHash": "sha256:95d420bfd3dbb60581343c293063a36cac6c42f2c365ab060847f5cbfdac38f7"
+}

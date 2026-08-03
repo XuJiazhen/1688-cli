@@ -2,7 +2,7 @@
   "executionAttemptReceipt": {
     "schema": "collector.page-action.execution-attempt-receipt.v1",
     "receiptId": "execution-receipt-offer-detail-fixture-003",
-    "receiptHash": "sha256:e0884805c308a4b09ba02ff196611312feaf9b7c0a7f34a327e51e1c36b9b900",
+    "receiptHash": "sha256:cf1ebd3edf02c5708e711096a0bcbb7f9cf51c34b8bde9adb71da8f6dad52bdc",
     "requestId": "runtime-request-offer-detail",
     "idempotencyKey": "runtime-idempotency-offer-detail",
     "pageActionId": "runtime-page-action-offer-detail",
@@ -79,7 +79,7 @@
         "rawEvidenceRefs": [
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
           "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
-          "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
+          "artifact:collector-raw-offer-detail-74916f0eb12d1bb784dfe2c726ac06a3f5554943cab9418b74dbf1f25c912092",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
           "artifact:collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a",
           "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc",
@@ -160,21 +160,77 @@
             "offer": {
               "mediaManifestV2": {
                 "availability": "available",
-                "itemSetHash": "sha256:142ae620f1a36f549b3bc8232ef402381c2cece117bb00cdafb6ef7a35694271",
+                "itemSetHash": "sha256:0547f816b4c62837ecb42c91b5ee001a9d0c1957f5fc79c3ccffb626879dd9d1",
                 "items": [
                   {
                     "availability": "available",
-                    "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "offerId": "700000000101",
                     "order": 0,
-                    "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                    "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "ownerKind": "target-offer",
                     "role": "detail",
                     "sourceField": "offer_details.content",
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:49dc42829cf7d9f156793017c32860b927c33ad994a15d78c3af03613e2828cb"
+                    "sourceReceiptContentSha256": "sha256:77d16e324e5d7791c5018ddb5670fb9639030fff522d89e92ff2ef7484afca13"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "offerId": "700000000101",
+                    "order": 1,
+                    "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 1,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:19eb702ee6bfaef977080e3979f589a668226d8318a1e4c5b9e28c51e9c9a4a5"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "offerId": "700000000101",
+                    "order": 2,
+                    "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 2,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:ce9547c05a6100acc6d2aff4d9fc3e7a4ba7e07284231258b27874424cb10d4d"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "offerId": "700000000101",
+                    "order": 3,
+                    "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 3,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:f7b96d6ec641bc8f04f2a6531f912aeb6ff90bde89af7f1a87280d71e521fab7"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "offerId": "700000000101",
+                    "order": 4,
+                    "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 4,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:885d577db0651407afdefcf449e93011cadeae514f25668aa512c5ef4f4ae616"
                   },
                   {
                     "availability": "available",
@@ -188,7 +244,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:2a20a93ae05b8e146c6c58f64658d4843be13c78f579a3d0ca3237576af7b8a8"
+                    "sourceReceiptContentSha256": "sha256:81480687cf503a39481584dfa80ba3e35ce92189b0c7d8b108d5d45db6a98456"
                   },
                   {
                     "availability": "available",
@@ -202,7 +258,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 1,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:c36a2414665752ea0e52f33a119de0f07157d6cfdb2c7b9276e89a2ab25d9060"
+                    "sourceReceiptContentSha256": "sha256:c9ffadcc4b8e851a8a0de524a3969c8e3beb13b190e3f79f21643d0971123192"
                   },
                   {
                     "availability": "available",
@@ -216,7 +272,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 2,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:9900ff4735cb1f20b755663388b4f389050a0159851c49d018f73bb439adcdb0"
+                    "sourceReceiptContentSha256": "sha256:1c21ba0bc9f6a859d268db4d248786e6c3f9cc31e89531d4cb5c79750d562f35"
                   },
                   {
                     "availability": "available",
@@ -230,7 +286,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:11de7289769fd943509fe5c8817ab138542223aeaf007178744090a1b8186aa6"
+                    "sourceReceiptContentSha256": "sha256:3d89fe7334323b14575713e2bf07cd8e2987c9579a1345c87aeb4c74a3a40974"
                   },
                   {
                     "availability": "available",
@@ -245,7 +301,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
-                    "sourceReceiptContentSha256": "sha256:905537570c860e42f2b682fcfb710bb1c2e665d9cd1c23af8b9431f6f23412e1"
+                    "sourceReceiptContentSha256": "sha256:48e31626598ab71415b1d34ec4ee49b4be905ea4f9caab2155334bff8e247678"
                   }
                 ],
                 "offerId": "700000000101",
@@ -281,6 +337,26 @@
                     "code": "MEDIA_URL_HOST_UNRECOGNIZED",
                     "sourceField": "offer_details.content",
                     "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 1
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 2
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 3
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 4
                   }
                 ]
               },
@@ -405,21 +481,77 @@
               "offer": {
                 "mediaManifestV2": {
                   "availability": "available",
-                  "itemSetHash": "sha256:142ae620f1a36f549b3bc8232ef402381c2cece117bb00cdafb6ef7a35694271",
+                  "itemSetHash": "sha256:0547f816b4c62837ecb42c91b5ee001a9d0c1957f5fc79c3ccffb626879dd9d1",
                   "items": [
                     {
                       "availability": "available",
-                      "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                       "offerId": "700000000101",
                       "order": 0,
-                      "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                      "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
                       "ownerKind": "target-offer",
                       "role": "detail",
                       "sourceField": "offer_details.content",
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:49dc42829cf7d9f156793017c32860b927c33ad994a15d78c3af03613e2828cb"
+                      "sourceReceiptContentSha256": "sha256:77d16e324e5d7791c5018ddb5670fb9639030fff522d89e92ff2ef7484afca13"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                      "offerId": "700000000101",
+                      "order": 1,
+                      "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 1,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:19eb702ee6bfaef977080e3979f589a668226d8318a1e4c5b9e28c51e9c9a4a5"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                      "offerId": "700000000101",
+                      "order": 2,
+                      "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 2,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:ce9547c05a6100acc6d2aff4d9fc3e7a4ba7e07284231258b27874424cb10d4d"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                      "offerId": "700000000101",
+                      "order": 3,
+                      "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 3,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:f7b96d6ec641bc8f04f2a6531f912aeb6ff90bde89af7f1a87280d71e521fab7"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                      "offerId": "700000000101",
+                      "order": 4,
+                      "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 4,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:885d577db0651407afdefcf449e93011cadeae514f25668aa512c5ef4f4ae616"
                     },
                     {
                       "availability": "available",
@@ -433,7 +565,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:2a20a93ae05b8e146c6c58f64658d4843be13c78f579a3d0ca3237576af7b8a8"
+                      "sourceReceiptContentSha256": "sha256:81480687cf503a39481584dfa80ba3e35ce92189b0c7d8b108d5d45db6a98456"
                     },
                     {
                       "availability": "available",
@@ -447,7 +579,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 1,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:c36a2414665752ea0e52f33a119de0f07157d6cfdb2c7b9276e89a2ab25d9060"
+                      "sourceReceiptContentSha256": "sha256:c9ffadcc4b8e851a8a0de524a3969c8e3beb13b190e3f79f21643d0971123192"
                     },
                     {
                       "availability": "available",
@@ -461,7 +593,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 2,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:9900ff4735cb1f20b755663388b4f389050a0159851c49d018f73bb439adcdb0"
+                      "sourceReceiptContentSha256": "sha256:1c21ba0bc9f6a859d268db4d248786e6c3f9cc31e89531d4cb5c79750d562f35"
                     },
                     {
                       "availability": "available",
@@ -475,7 +607,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:11de7289769fd943509fe5c8817ab138542223aeaf007178744090a1b8186aa6"
+                      "sourceReceiptContentSha256": "sha256:3d89fe7334323b14575713e2bf07cd8e2987c9579a1345c87aeb4c74a3a40974"
                     },
                     {
                       "availability": "available",
@@ -490,7 +622,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
-                      "sourceReceiptContentSha256": "sha256:905537570c860e42f2b682fcfb710bb1c2e665d9cd1c23af8b9431f6f23412e1"
+                      "sourceReceiptContentSha256": "sha256:48e31626598ab71415b1d34ec4ee49b4be905ea4f9caab2155334bff8e247678"
                     }
                   ],
                   "offerId": "700000000101",
@@ -526,6 +658,26 @@
                       "code": "MEDIA_URL_HOST_UNRECOGNIZED",
                       "sourceField": "offer_details.content",
                       "sourceOrdinal": 0
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 1
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 2
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 3
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 4
                     }
                   ]
                 },
@@ -673,9 +825,37 @@
                     "sourceField": "skuProps.imageUrl"
                   },
                   {
-                    "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "order": 0,
-                    "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                    "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
+                    "role": "detail",
+                    "sourceField": "offer_details.content"
+                  },
+                  {
+                    "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "order": 1,
+                    "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "role": "detail",
+                    "sourceField": "offer_details.content"
+                  },
+                  {
+                    "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "order": 2,
+                    "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "role": "detail",
+                    "sourceField": "offer_details.content"
+                  },
+                  {
+                    "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "order": 3,
+                    "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "role": "detail",
+                    "sourceField": "offer_details.content"
+                  },
+                  {
+                    "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "order": 4,
+                    "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
                     "role": "detail",
                     "sourceField": "offer_details.content"
                   }
@@ -799,7 +979,7 @@
         "rawEvidenceRefs": [
           "artifact:collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a",
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
-          "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
+          "artifact:collector-raw-offer-detail-74916f0eb12d1bb784dfe2c726ac06a3f5554943cab9418b74dbf1f25c912092",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
           "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
@@ -881,21 +1061,77 @@
             "offer": {
               "mediaManifestV2": {
                 "availability": "available",
-                "itemSetHash": "sha256:142ae620f1a36f549b3bc8232ef402381c2cece117bb00cdafb6ef7a35694271",
+                "itemSetHash": "sha256:0547f816b4c62837ecb42c91b5ee001a9d0c1957f5fc79c3ccffb626879dd9d1",
                 "items": [
                   {
                     "availability": "available",
-                    "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "offerId": "700000000101",
                     "order": 0,
-                    "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                    "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "ownerKind": "target-offer",
                     "role": "detail",
                     "sourceField": "offer_details.content",
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:49dc42829cf7d9f156793017c32860b927c33ad994a15d78c3af03613e2828cb"
+                    "sourceReceiptContentSha256": "sha256:77d16e324e5d7791c5018ddb5670fb9639030fff522d89e92ff2ef7484afca13"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "offerId": "700000000101",
+                    "order": 1,
+                    "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 1,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:19eb702ee6bfaef977080e3979f589a668226d8318a1e4c5b9e28c51e9c9a4a5"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "offerId": "700000000101",
+                    "order": 2,
+                    "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 2,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:ce9547c05a6100acc6d2aff4d9fc3e7a4ba7e07284231258b27874424cb10d4d"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "offerId": "700000000101",
+                    "order": 3,
+                    "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 3,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:f7b96d6ec641bc8f04f2a6531f912aeb6ff90bde89af7f1a87280d71e521fab7"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "offerId": "700000000101",
+                    "order": 4,
+                    "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 4,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:885d577db0651407afdefcf449e93011cadeae514f25668aa512c5ef4f4ae616"
                   },
                   {
                     "availability": "available",
@@ -909,7 +1145,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:2a20a93ae05b8e146c6c58f64658d4843be13c78f579a3d0ca3237576af7b8a8"
+                    "sourceReceiptContentSha256": "sha256:81480687cf503a39481584dfa80ba3e35ce92189b0c7d8b108d5d45db6a98456"
                   },
                   {
                     "availability": "available",
@@ -923,7 +1159,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 1,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:c36a2414665752ea0e52f33a119de0f07157d6cfdb2c7b9276e89a2ab25d9060"
+                    "sourceReceiptContentSha256": "sha256:c9ffadcc4b8e851a8a0de524a3969c8e3beb13b190e3f79f21643d0971123192"
                   },
                   {
                     "availability": "available",
@@ -937,7 +1173,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 2,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:9900ff4735cb1f20b755663388b4f389050a0159851c49d018f73bb439adcdb0"
+                    "sourceReceiptContentSha256": "sha256:1c21ba0bc9f6a859d268db4d248786e6c3f9cc31e89531d4cb5c79750d562f35"
                   },
                   {
                     "availability": "available",
@@ -951,7 +1187,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:11de7289769fd943509fe5c8817ab138542223aeaf007178744090a1b8186aa6"
+                    "sourceReceiptContentSha256": "sha256:3d89fe7334323b14575713e2bf07cd8e2987c9579a1345c87aeb4c74a3a40974"
                   },
                   {
                     "availability": "available",
@@ -966,7 +1202,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
-                    "sourceReceiptContentSha256": "sha256:905537570c860e42f2b682fcfb710bb1c2e665d9cd1c23af8b9431f6f23412e1"
+                    "sourceReceiptContentSha256": "sha256:48e31626598ab71415b1d34ec4ee49b4be905ea4f9caab2155334bff8e247678"
                   }
                 ],
                 "offerId": "700000000101",
@@ -1002,6 +1238,26 @@
                     "code": "MEDIA_URL_HOST_UNRECOGNIZED",
                     "sourceField": "offer_details.content",
                     "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 1
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 2
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 3
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 4
                   }
                 ]
               },
@@ -1126,21 +1382,77 @@
               "offer": {
                 "mediaManifestV2": {
                   "availability": "available",
-                  "itemSetHash": "sha256:142ae620f1a36f549b3bc8232ef402381c2cece117bb00cdafb6ef7a35694271",
+                  "itemSetHash": "sha256:0547f816b4c62837ecb42c91b5ee001a9d0c1957f5fc79c3ccffb626879dd9d1",
                   "items": [
                     {
                       "availability": "available",
-                      "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                       "offerId": "700000000101",
                       "order": 0,
-                      "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                      "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
                       "ownerKind": "target-offer",
                       "role": "detail",
                       "sourceField": "offer_details.content",
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:49dc42829cf7d9f156793017c32860b927c33ad994a15d78c3af03613e2828cb"
+                      "sourceReceiptContentSha256": "sha256:77d16e324e5d7791c5018ddb5670fb9639030fff522d89e92ff2ef7484afca13"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                      "offerId": "700000000101",
+                      "order": 1,
+                      "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 1,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:19eb702ee6bfaef977080e3979f589a668226d8318a1e4c5b9e28c51e9c9a4a5"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                      "offerId": "700000000101",
+                      "order": 2,
+                      "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 2,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:ce9547c05a6100acc6d2aff4d9fc3e7a4ba7e07284231258b27874424cb10d4d"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                      "offerId": "700000000101",
+                      "order": 3,
+                      "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 3,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:f7b96d6ec641bc8f04f2a6531f912aeb6ff90bde89af7f1a87280d71e521fab7"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                      "offerId": "700000000101",
+                      "order": 4,
+                      "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 4,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:885d577db0651407afdefcf449e93011cadeae514f25668aa512c5ef4f4ae616"
                     },
                     {
                       "availability": "available",
@@ -1154,7 +1466,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:2a20a93ae05b8e146c6c58f64658d4843be13c78f579a3d0ca3237576af7b8a8"
+                      "sourceReceiptContentSha256": "sha256:81480687cf503a39481584dfa80ba3e35ce92189b0c7d8b108d5d45db6a98456"
                     },
                     {
                       "availability": "available",
@@ -1168,7 +1480,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 1,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:c36a2414665752ea0e52f33a119de0f07157d6cfdb2c7b9276e89a2ab25d9060"
+                      "sourceReceiptContentSha256": "sha256:c9ffadcc4b8e851a8a0de524a3969c8e3beb13b190e3f79f21643d0971123192"
                     },
                     {
                       "availability": "available",
@@ -1182,7 +1494,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 2,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:9900ff4735cb1f20b755663388b4f389050a0159851c49d018f73bb439adcdb0"
+                      "sourceReceiptContentSha256": "sha256:1c21ba0bc9f6a859d268db4d248786e6c3f9cc31e89531d4cb5c79750d562f35"
                     },
                     {
                       "availability": "available",
@@ -1196,7 +1508,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:11de7289769fd943509fe5c8817ab138542223aeaf007178744090a1b8186aa6"
+                      "sourceReceiptContentSha256": "sha256:3d89fe7334323b14575713e2bf07cd8e2987c9579a1345c87aeb4c74a3a40974"
                     },
                     {
                       "availability": "available",
@@ -1211,7 +1523,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
-                      "sourceReceiptContentSha256": "sha256:905537570c860e42f2b682fcfb710bb1c2e665d9cd1c23af8b9431f6f23412e1"
+                      "sourceReceiptContentSha256": "sha256:48e31626598ab71415b1d34ec4ee49b4be905ea4f9caab2155334bff8e247678"
                     }
                   ],
                   "offerId": "700000000101",
@@ -1247,6 +1559,26 @@
                       "code": "MEDIA_URL_HOST_UNRECOGNIZED",
                       "sourceField": "offer_details.content",
                       "sourceOrdinal": 0
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 1
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 2
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 3
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 4
                     }
                   ]
                 },
@@ -1340,9 +1672,37 @@
                   "sourceField": "skuProps.imageUrl"
                 },
                 {
-                  "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                  "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                   "order": 0,
-                  "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                  "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                  "order": 1,
+                  "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                  "order": 2,
+                  "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                  "order": 3,
+                  "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                  "order": 4,
+                  "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
                   "role": "detail",
                   "sourceField": "offer_details.content"
                 }
@@ -1374,7 +1734,7 @@
         "rawEvidenceRefs": [
           "artifact:collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a",
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
-          "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
+          "artifact:collector-raw-offer-detail-74916f0eb12d1bb784dfe2c726ac06a3f5554943cab9418b74dbf1f25c912092",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
           "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
@@ -1382,7 +1742,7 @@
         ],
         "metrics": {
           "capturedOffers": 1,
-          "mediaItems": 5
+          "mediaItems": 9
         }
       }
     ],
@@ -1414,7 +1774,7 @@
   "completionReceipt": {
     "schema": "collector.page-action.completion-receipt.v1",
     "completionReceiptId": "completion-receipt-offer-detail-fixture-004",
-    "completionReceiptHash": "sha256:7c29f2383c7b80a42295f41a9c11447bc25053f796f45d0e8ecbf342dc2027f9",
+    "completionReceiptHash": "sha256:6c005d5bbe9989d34011e066c7c984126116fecba98981628056e79c11668cc3",
     "pageActionId": "runtime-page-action-offer-detail",
     "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
     "logicalLineage": {
@@ -1442,7 +1802,7 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
         "executionAttemptOrdinal": 1,
         "receiptId": "execution-receipt-offer-detail-fixture-003",
-        "receiptHash": "sha256:e0884805c308a4b09ba02ff196611312feaf9b7c0a7f34a327e51e1c36b9b900",
+        "receiptHash": "sha256:cf1ebd3edf02c5708e711096a0bcbb7f9cf51c34b8bde9adb71da8f6dad52bdc",
         "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7"
       }
     ],
@@ -1450,7 +1810,7 @@
       "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
       "executionAttemptOrdinal": 1,
       "receiptId": "execution-receipt-offer-detail-fixture-003",
-      "receiptHash": "sha256:e0884805c308a4b09ba02ff196611312feaf9b7c0a7f34a327e51e1c36b9b900",
+      "receiptHash": "sha256:cf1ebd3edf02c5708e711096a0bcbb7f9cf51c34b8bde9adb71da8f6dad52bdc",
       "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7"
     },
     "batches": [
@@ -1526,21 +1886,77 @@
             "offer": {
               "mediaManifestV2": {
                 "availability": "available",
-                "itemSetHash": "sha256:142ae620f1a36f549b3bc8232ef402381c2cece117bb00cdafb6ef7a35694271",
+                "itemSetHash": "sha256:0547f816b4c62837ecb42c91b5ee001a9d0c1957f5fc79c3ccffb626879dd9d1",
                 "items": [
                   {
                     "availability": "available",
-                    "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "offerId": "700000000101",
                     "order": 0,
-                    "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                    "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "ownerKind": "target-offer",
                     "role": "detail",
                     "sourceField": "offer_details.content",
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:49dc42829cf7d9f156793017c32860b927c33ad994a15d78c3af03613e2828cb"
+                    "sourceReceiptContentSha256": "sha256:77d16e324e5d7791c5018ddb5670fb9639030fff522d89e92ff2ef7484afca13"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "offerId": "700000000101",
+                    "order": 1,
+                    "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 1,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:19eb702ee6bfaef977080e3979f589a668226d8318a1e4c5b9e28c51e9c9a4a5"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "offerId": "700000000101",
+                    "order": 2,
+                    "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 2,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:ce9547c05a6100acc6d2aff4d9fc3e7a4ba7e07284231258b27874424cb10d4d"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "offerId": "700000000101",
+                    "order": 3,
+                    "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 3,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:f7b96d6ec641bc8f04f2a6531f912aeb6ff90bde89af7f1a87280d71e521fab7"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "offerId": "700000000101",
+                    "order": 4,
+                    "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 4,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:885d577db0651407afdefcf449e93011cadeae514f25668aa512c5ef4f4ae616"
                   },
                   {
                     "availability": "available",
@@ -1554,7 +1970,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:2a20a93ae05b8e146c6c58f64658d4843be13c78f579a3d0ca3237576af7b8a8"
+                    "sourceReceiptContentSha256": "sha256:81480687cf503a39481584dfa80ba3e35ce92189b0c7d8b108d5d45db6a98456"
                   },
                   {
                     "availability": "available",
@@ -1568,7 +1984,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 1,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:c36a2414665752ea0e52f33a119de0f07157d6cfdb2c7b9276e89a2ab25d9060"
+                    "sourceReceiptContentSha256": "sha256:c9ffadcc4b8e851a8a0de524a3969c8e3beb13b190e3f79f21643d0971123192"
                   },
                   {
                     "availability": "available",
@@ -1582,7 +1998,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 2,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:9900ff4735cb1f20b755663388b4f389050a0159851c49d018f73bb439adcdb0"
+                    "sourceReceiptContentSha256": "sha256:1c21ba0bc9f6a859d268db4d248786e6c3f9cc31e89531d4cb5c79750d562f35"
                   },
                   {
                     "availability": "available",
@@ -1596,7 +2012,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:11de7289769fd943509fe5c8817ab138542223aeaf007178744090a1b8186aa6"
+                    "sourceReceiptContentSha256": "sha256:3d89fe7334323b14575713e2bf07cd8e2987c9579a1345c87aeb4c74a3a40974"
                   },
                   {
                     "availability": "available",
@@ -1611,7 +2027,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
-                    "sourceReceiptContentSha256": "sha256:905537570c860e42f2b682fcfb710bb1c2e665d9cd1c23af8b9431f6f23412e1"
+                    "sourceReceiptContentSha256": "sha256:48e31626598ab71415b1d34ec4ee49b4be905ea4f9caab2155334bff8e247678"
                   }
                 ],
                 "offerId": "700000000101",
@@ -1647,6 +2063,26 @@
                     "code": "MEDIA_URL_HOST_UNRECOGNIZED",
                     "sourceField": "offer_details.content",
                     "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 1
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 2
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 3
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 4
                   }
                 ]
               },
@@ -1771,21 +2207,77 @@
               "offer": {
                 "mediaManifestV2": {
                   "availability": "available",
-                  "itemSetHash": "sha256:142ae620f1a36f549b3bc8232ef402381c2cece117bb00cdafb6ef7a35694271",
+                  "itemSetHash": "sha256:0547f816b4c62837ecb42c91b5ee001a9d0c1957f5fc79c3ccffb626879dd9d1",
                   "items": [
                     {
                       "availability": "available",
-                      "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                       "offerId": "700000000101",
                       "order": 0,
-                      "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                      "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
                       "ownerKind": "target-offer",
                       "role": "detail",
                       "sourceField": "offer_details.content",
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:49dc42829cf7d9f156793017c32860b927c33ad994a15d78c3af03613e2828cb"
+                      "sourceReceiptContentSha256": "sha256:77d16e324e5d7791c5018ddb5670fb9639030fff522d89e92ff2ef7484afca13"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                      "offerId": "700000000101",
+                      "order": 1,
+                      "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 1,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:19eb702ee6bfaef977080e3979f589a668226d8318a1e4c5b9e28c51e9c9a4a5"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                      "offerId": "700000000101",
+                      "order": 2,
+                      "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 2,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:ce9547c05a6100acc6d2aff4d9fc3e7a4ba7e07284231258b27874424cb10d4d"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                      "offerId": "700000000101",
+                      "order": 3,
+                      "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 3,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:f7b96d6ec641bc8f04f2a6531f912aeb6ff90bde89af7f1a87280d71e521fab7"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                      "offerId": "700000000101",
+                      "order": 4,
+                      "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 4,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:885d577db0651407afdefcf449e93011cadeae514f25668aa512c5ef4f4ae616"
                     },
                     {
                       "availability": "available",
@@ -1799,7 +2291,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:2a20a93ae05b8e146c6c58f64658d4843be13c78f579a3d0ca3237576af7b8a8"
+                      "sourceReceiptContentSha256": "sha256:81480687cf503a39481584dfa80ba3e35ce92189b0c7d8b108d5d45db6a98456"
                     },
                     {
                       "availability": "available",
@@ -1813,7 +2305,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 1,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:c36a2414665752ea0e52f33a119de0f07157d6cfdb2c7b9276e89a2ab25d9060"
+                      "sourceReceiptContentSha256": "sha256:c9ffadcc4b8e851a8a0de524a3969c8e3beb13b190e3f79f21643d0971123192"
                     },
                     {
                       "availability": "available",
@@ -1827,7 +2319,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 2,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:9900ff4735cb1f20b755663388b4f389050a0159851c49d018f73bb439adcdb0"
+                      "sourceReceiptContentSha256": "sha256:1c21ba0bc9f6a859d268db4d248786e6c3f9cc31e89531d4cb5c79750d562f35"
                     },
                     {
                       "availability": "available",
@@ -1841,7 +2333,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:11de7289769fd943509fe5c8817ab138542223aeaf007178744090a1b8186aa6"
+                      "sourceReceiptContentSha256": "sha256:3d89fe7334323b14575713e2bf07cd8e2987c9579a1345c87aeb4c74a3a40974"
                     },
                     {
                       "availability": "available",
@@ -1856,7 +2348,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
-                      "sourceReceiptContentSha256": "sha256:905537570c860e42f2b682fcfb710bb1c2e665d9cd1c23af8b9431f6f23412e1"
+                      "sourceReceiptContentSha256": "sha256:48e31626598ab71415b1d34ec4ee49b4be905ea4f9caab2155334bff8e247678"
                     }
                   ],
                   "offerId": "700000000101",
@@ -1892,6 +2384,26 @@
                       "code": "MEDIA_URL_HOST_UNRECOGNIZED",
                       "sourceField": "offer_details.content",
                       "sourceOrdinal": 0
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 1
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 2
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 3
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 4
                     }
                   ]
                 },
@@ -2039,9 +2551,37 @@
                     "sourceField": "skuProps.imageUrl"
                   },
                   {
-                    "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "order": 0,
-                    "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                    "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
+                    "role": "detail",
+                    "sourceField": "offer_details.content"
+                  },
+                  {
+                    "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "order": 1,
+                    "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "role": "detail",
+                    "sourceField": "offer_details.content"
+                  },
+                  {
+                    "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "order": 2,
+                    "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "role": "detail",
+                    "sourceField": "offer_details.content"
+                  },
+                  {
+                    "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "order": 3,
+                    "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "role": "detail",
+                    "sourceField": "offer_details.content"
+                  },
+                  {
+                    "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "order": 4,
+                    "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
                     "role": "detail",
                     "sourceField": "offer_details.content"
                   }
@@ -2165,7 +2705,7 @@
         "rawEvidenceRefs": [
           "artifact:collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a",
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
-          "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
+          "artifact:collector-raw-offer-detail-74916f0eb12d1bb784dfe2c726ac06a3f5554943cab9418b74dbf1f25c912092",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
           "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
@@ -2247,21 +2787,77 @@
             "offer": {
               "mediaManifestV2": {
                 "availability": "available",
-                "itemSetHash": "sha256:142ae620f1a36f549b3bc8232ef402381c2cece117bb00cdafb6ef7a35694271",
+                "itemSetHash": "sha256:0547f816b4c62837ecb42c91b5ee001a9d0c1957f5fc79c3ccffb626879dd9d1",
                 "items": [
                   {
                     "availability": "available",
-                    "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "offerId": "700000000101",
                     "order": 0,
-                    "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                    "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
                     "ownerKind": "target-offer",
                     "role": "detail",
                     "sourceField": "offer_details.content",
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:49dc42829cf7d9f156793017c32860b927c33ad994a15d78c3af03613e2828cb"
+                    "sourceReceiptContentSha256": "sha256:77d16e324e5d7791c5018ddb5670fb9639030fff522d89e92ff2ef7484afca13"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "offerId": "700000000101",
+                    "order": 1,
+                    "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 1,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:19eb702ee6bfaef977080e3979f589a668226d8318a1e4c5b9e28c51e9c9a4a5"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "offerId": "700000000101",
+                    "order": 2,
+                    "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 2,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:ce9547c05a6100acc6d2aff4d9fc3e7a4ba7e07284231258b27874424cb10d4d"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "offerId": "700000000101",
+                    "order": 3,
+                    "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 3,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:f7b96d6ec641bc8f04f2a6531f912aeb6ff90bde89af7f1a87280d71e521fab7"
+                  },
+                  {
+                    "availability": "available",
+                    "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "offerId": "700000000101",
+                    "order": 4,
+                    "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
+                    "ownerKind": "target-offer",
+                    "role": "detail",
+                    "sourceField": "offer_details.content",
+                    "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                    "sourceOrdinal": 4,
+                    "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                    "sourceReceiptContentSha256": "sha256:885d577db0651407afdefcf449e93011cadeae514f25668aa512c5ef4f4ae616"
                   },
                   {
                     "availability": "available",
@@ -2275,7 +2871,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:2a20a93ae05b8e146c6c58f64658d4843be13c78f579a3d0ca3237576af7b8a8"
+                    "sourceReceiptContentSha256": "sha256:81480687cf503a39481584dfa80ba3e35ce92189b0c7d8b108d5d45db6a98456"
                   },
                   {
                     "availability": "available",
@@ -2289,7 +2885,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 1,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:c36a2414665752ea0e52f33a119de0f07157d6cfdb2c7b9276e89a2ab25d9060"
+                    "sourceReceiptContentSha256": "sha256:c9ffadcc4b8e851a8a0de524a3969c8e3beb13b190e3f79f21643d0971123192"
                   },
                   {
                     "availability": "available",
@@ -2303,7 +2899,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 2,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:9900ff4735cb1f20b755663388b4f389050a0159851c49d018f73bb439adcdb0"
+                    "sourceReceiptContentSha256": "sha256:1c21ba0bc9f6a859d268db4d248786e6c3f9cc31e89531d4cb5c79750d562f35"
                   },
                   {
                     "availability": "available",
@@ -2317,7 +2913,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:11de7289769fd943509fe5c8817ab138542223aeaf007178744090a1b8186aa6"
+                    "sourceReceiptContentSha256": "sha256:3d89fe7334323b14575713e2bf07cd8e2987c9579a1345c87aeb4c74a3a40974"
                   },
                   {
                     "availability": "available",
@@ -2332,7 +2928,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
-                    "sourceReceiptContentSha256": "sha256:905537570c860e42f2b682fcfb710bb1c2e665d9cd1c23af8b9431f6f23412e1"
+                    "sourceReceiptContentSha256": "sha256:48e31626598ab71415b1d34ec4ee49b4be905ea4f9caab2155334bff8e247678"
                   }
                 ],
                 "offerId": "700000000101",
@@ -2368,6 +2964,26 @@
                     "code": "MEDIA_URL_HOST_UNRECOGNIZED",
                     "sourceField": "offer_details.content",
                     "sourceOrdinal": 0
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 1
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 2
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 3
+                  },
+                  {
+                    "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                    "sourceField": "offer_details.content",
+                    "sourceOrdinal": 4
                   }
                 ]
               },
@@ -2492,21 +3108,77 @@
               "offer": {
                 "mediaManifestV2": {
                   "availability": "available",
-                  "itemSetHash": "sha256:142ae620f1a36f549b3bc8232ef402381c2cece117bb00cdafb6ef7a35694271",
+                  "itemSetHash": "sha256:0547f816b4c62837ecb42c91b5ee001a9d0c1957f5fc79c3ccffb626879dd9d1",
                   "items": [
                     {
                       "availability": "available",
-                      "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                       "offerId": "700000000101",
                       "order": 0,
-                      "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                      "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
                       "ownerKind": "target-offer",
                       "role": "detail",
                       "sourceField": "offer_details.content",
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:49dc42829cf7d9f156793017c32860b927c33ad994a15d78c3af03613e2828cb"
+                      "sourceReceiptContentSha256": "sha256:77d16e324e5d7791c5018ddb5670fb9639030fff522d89e92ff2ef7484afca13"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                      "offerId": "700000000101",
+                      "order": 1,
+                      "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 1,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:19eb702ee6bfaef977080e3979f589a668226d8318a1e4c5b9e28c51e9c9a4a5"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                      "offerId": "700000000101",
+                      "order": 2,
+                      "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 2,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:ce9547c05a6100acc6d2aff4d9fc3e7a4ba7e07284231258b27874424cb10d4d"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                      "offerId": "700000000101",
+                      "order": 3,
+                      "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 3,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:f7b96d6ec641bc8f04f2a6531f912aeb6ff90bde89af7f1a87280d71e521fab7"
+                    },
+                    {
+                      "availability": "available",
+                      "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                      "offerId": "700000000101",
+                      "order": 4,
+                      "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
+                      "ownerKind": "target-offer",
+                      "role": "detail",
+                      "sourceField": "offer_details.content",
+                      "sourceObservationId": "runtime-execution-attempt-offer-detail",
+                      "sourceOrdinal": 4,
+                      "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
+                      "sourceReceiptContentSha256": "sha256:885d577db0651407afdefcf449e93011cadeae514f25668aa512c5ef4f4ae616"
                     },
                     {
                       "availability": "available",
@@ -2520,7 +3192,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:2a20a93ae05b8e146c6c58f64658d4843be13c78f579a3d0ca3237576af7b8a8"
+                      "sourceReceiptContentSha256": "sha256:81480687cf503a39481584dfa80ba3e35ce92189b0c7d8b108d5d45db6a98456"
                     },
                     {
                       "availability": "available",
@@ -2534,7 +3206,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 1,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:c36a2414665752ea0e52f33a119de0f07157d6cfdb2c7b9276e89a2ab25d9060"
+                      "sourceReceiptContentSha256": "sha256:c9ffadcc4b8e851a8a0de524a3969c8e3beb13b190e3f79f21643d0971123192"
                     },
                     {
                       "availability": "available",
@@ -2548,7 +3220,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 2,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:9900ff4735cb1f20b755663388b4f389050a0159851c49d018f73bb439adcdb0"
+                      "sourceReceiptContentSha256": "sha256:1c21ba0bc9f6a859d268db4d248786e6c3f9cc31e89531d4cb5c79750d562f35"
                     },
                     {
                       "availability": "available",
@@ -2562,7 +3234,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:11de7289769fd943509fe5c8817ab138542223aeaf007178744090a1b8186aa6"
+                      "sourceReceiptContentSha256": "sha256:3d89fe7334323b14575713e2bf07cd8e2987c9579a1345c87aeb4c74a3a40974"
                     },
                     {
                       "availability": "available",
@@ -2577,7 +3249,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
-                      "sourceReceiptContentSha256": "sha256:905537570c860e42f2b682fcfb710bb1c2e665d9cd1c23af8b9431f6f23412e1"
+                      "sourceReceiptContentSha256": "sha256:48e31626598ab71415b1d34ec4ee49b4be905ea4f9caab2155334bff8e247678"
                     }
                   ],
                   "offerId": "700000000101",
@@ -2613,6 +3285,26 @@
                       "code": "MEDIA_URL_HOST_UNRECOGNIZED",
                       "sourceField": "offer_details.content",
                       "sourceOrdinal": 0
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 1
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 2
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 3
+                    },
+                    {
+                      "code": "MEDIA_URL_HOST_UNRECOGNIZED",
+                      "sourceField": "offer_details.content",
+                      "sourceOrdinal": 4
                     }
                   ]
                 },
@@ -2706,9 +3398,37 @@
                   "sourceField": "skuProps.imageUrl"
                 },
                 {
-                  "normalizedUrl": "https://img.example.test/runtime-detail.jpg",
+                  "normalizedUrl": "https://img.example.test/runtime-detail-1.jpg",
                   "order": 0,
-                  "originalUrl": "https://img.example.test/runtime-detail.jpg",
+                  "originalUrl": "https://img.example.test/runtime-detail-1.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail-2.jpg",
+                  "order": 1,
+                  "originalUrl": "https://img.example.test/runtime-detail-2.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail-3.jpg",
+                  "order": 2,
+                  "originalUrl": "https://img.example.test/runtime-detail-3.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail-4.jpg",
+                  "order": 3,
+                  "originalUrl": "https://img.example.test/runtime-detail-4.jpg",
+                  "role": "detail",
+                  "sourceField": "offer_details.content"
+                },
+                {
+                  "normalizedUrl": "https://img.example.test/runtime-detail-5.jpg",
+                  "order": 4,
+                  "originalUrl": "https://img.example.test/runtime-detail-5.jpg",
                   "role": "detail",
                   "sourceField": "offer_details.content"
                 }
@@ -2740,7 +3460,7 @@
         "rawEvidenceRefs": [
           "artifact:collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a",
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
-          "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
+          "artifact:collector-raw-offer-detail-74916f0eb12d1bb784dfe2c726ac06a3f5554943cab9418b74dbf1f25c912092",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
           "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
@@ -2748,7 +3468,7 @@
         ],
         "metrics": {
           "capturedOffers": 1,
-          "mediaItems": 5
+          "mediaItems": 9
         }
       }
     ],

@@ -198,7 +198,7 @@ const OFFER_INPUT = Object.freeze({
     },
   },
   detailScript:
-    'var offer_details={content:\'<h2>Runtime fixture detail</h2><img src="https://img.example.test/runtime-detail.jpg">\'};',
+    'var offer_details={content:\'<h2>Runtime fixture detail</h2><img src="https://img.example.test/runtime-detail-1.jpg"><img src="https://img.example.test/runtime-detail-2.jpg"><img src="https://img.example.test/runtime-detail-3.jpg"><img src="https://img.example.test/runtime-detail-4.jpg"><img src="https://img.example.test/runtime-detail-5.jpg">\'};',
   pageInfo: {
     title: 'Runtime Fixture Offer',
     supplierName: 'Runtime Fixture Offer Store',
