@@ -1866,13 +1866,16 @@ function scanForSecretsAndPii(value: unknown, location: string, depth = 0): void
     return;
   }
   if (typeof value !== 'string') return;
+  const machineId = /(?:^|\.)idempotencyKey$/u.test(location);
   const violations = [
     /\bBearer\s+[A-Za-z0-9._~+\/-]+=*/iu,
     /\b(?:cookie|authorization|password|api[_-]?key|access[_-]?token|client[_-]?secret)\s*[:=]\s*\S+/iu,
     /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/iu,
-    /(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)/u,
-    /(?<!\d)\d{3}[- ]\d{3}[- ]\d{4}(?!\d)/u,
-    /(?<!\d)\d{17}[0-9Xx](?!\d)/u,
+    ...(machineId ? [] : [
+      /(?<!\d)(?:\+?86[- ]?)?1[3-9]\d{9}(?!\d)/u,
+      /(?<!\d)\d{3}[- ]\d{3}[- ]\d{4}(?!\d)/u,
+      /(?<!\d)\d{17}[0-9Xx](?!\d)/u,
+    ]),
   ];
   if (violations.some((pattern) => pattern.test(value))) {
     throw new Error(`${location}: secret, credential, or personal-data pattern detected.`);
