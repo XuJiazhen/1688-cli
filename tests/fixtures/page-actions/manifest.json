@@ -5,7 +5,7 @@
   "source": "synthetic-structural-derivative-no-raw-values",
   "sanitizationPolicy": {
     "identifiers": "deterministic fixture-prefixed placeholders",
-    "networkLocations": "reserved example.test hosts without query strings",
+    "networkLocations": "reserved example.test hosts plus the exact strict-contract fixture shop sentinel",
     "customerData": "omitted",
     "requestCredentials": "omitted",
     "freeText": "short ASCII structural labels only"

@@ -336,6 +336,22 @@ describe('sanitized PageAction fixture gate', () => {
     );
   });
 
+  it('keeps the strict-contract shop sentinel confined to canonicalShopUrl', async () => {
+    const { root } = await temporaryFixtureRoot();
+    const offerFile = path.join(root, 'offer-detail.json');
+    const offer = await readJson(offerFile);
+    const observations = offer.observations as Array<{
+      core: { title: string };
+    }>;
+    observations[0]!.core.title = 'https://fixture-store.1688.com/';
+    await writeJson(offerFile, offer);
+    await refreshReceipt(root);
+
+    await expect(verifyPageActionFixtures(root)).rejects.toThrow(
+      /offer-detail\.json\.observations\[0\]\.core\.title: production-1688-host/u,
+    );
+  });
+
   it.each([
     'source detail.1688.com./offer/123',
     'source HTTPS://DETAIL.1688.COM.:443/offer/123',

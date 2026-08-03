@@ -19,6 +19,7 @@ const FIXTURE_SET_ID = 'fixture-page-actions-t0-v1';
 const MANIFEST_SCHEMA = 'collector.page-action.sanitized-fixture-manifest.v1';
 const RECEIPT_SCHEMA = 'collector.page-action.fixture-sha256-receipt.v1';
 const FIXTURE_TIMESTAMP = '2026-07-31T00:00:00.000Z';
+const FIXTURE_CANONICAL_SHOP_URL = 'https://fixture-store.1688.com/';
 const EXPECTED_PAYLOAD_FILES = [
   'offer-detail.json',
   'store-sample-page-action-response.json',
@@ -34,7 +35,7 @@ const EXPECTED_FIXTURE_FILES = [
 ].sort();
 const EXPECTED_SANITIZATION_POLICY = Object.freeze({
   identifiers: 'deterministic fixture-prefixed placeholders',
-  networkLocations: 'reserved example.test hosts without query strings',
+  networkLocations: 'reserved example.test hosts plus the exact strict-contract fixture shop sentinel',
   customerData: 'omitted',
   requestCredentials: 'omitted',
   freeText: 'short ASCII structural labels only',
@@ -625,11 +626,24 @@ function validateText(text, relativePath, violations) {
     ['production-1688-host', /https?:\/\/(?:[^/]+\.)?1688\.com\b/iu],
   ];
   for (const [label, pattern] of patterns) {
+    if (
+      label === 'production-1688-host'
+      && relativePath === 'store-sample-page-action-response.json'
+    ) {
+      // Structured validation below permits the sentinel only at canonicalShopUrl.
+      continue;
+    }
     if (pattern.test(text)) violations.push(`${relativePath}: ${label}`);
   }
 }
 
+function isFixtureCanonicalShopUrl(value, jsonPath) {
+  return value === FIXTURE_CANONICAL_SHOP_URL
+    && jsonPath.endsWith('.businessSubject.canonicalShopUrl');
+}
+
 function validateDecodedString(value, jsonPath, violations) {
+  const fixtureCanonicalShopUrl = isFixtureCanonicalShopUrl(value, jsonPath);
   const patterns = [
     ['production-1688-host', /(?:^|[^a-z0-9.-])(?:[a-z0-9-]+\.)*1688\.com\.?(?::\d+)?(?=[/?#:\s]|$)/iu],
     ['private-key-material', /-----BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY-----/iu],
@@ -652,6 +666,7 @@ function validateDecodedString(value, jsonPath, violations) {
   const reportedPatterns = new Set();
   for (const variant of variants) {
     for (const [label, pattern] of patterns) {
+      if (label === 'production-1688-host' && fixtureCanonicalShopUrl) continue;
       if (pattern.test(variant) && !reportedPatterns.has(label)) {
         violations.push(`${jsonPath}: ${label}`);
         reportedPatterns.add(label);
@@ -675,6 +690,7 @@ function validateDecodedString(value, jsonPath, violations) {
         !reportedProductionHost &&
         parsedUrl !== undefined &&
         canonicalHostnameIsProduction1688(parsedUrl.hostname)
+        && !fixtureCanonicalShopUrl
       ) {
         violations.push(`${jsonPath}: production-1688-host`);
         reportedProductionHost = true;
@@ -986,7 +1002,9 @@ function validateValue(value, jsonPath, violations) {
       }
       if (url !== undefined) {
         const hostIsReserved =
-          url.hostname === 'example.test' || url.hostname.endsWith('.example.test');
+          url.hostname === 'example.test'
+          || url.hostname.endsWith('.example.test')
+          || isFixtureCanonicalShopUrl(child, childPath);
         if (
           url.protocol !== 'https:' ||
           !hostIsReserved ||
