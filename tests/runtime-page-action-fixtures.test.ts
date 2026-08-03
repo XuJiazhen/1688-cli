@@ -46,6 +46,7 @@ describe('runtime-derived PageAction fixtures', () => {
         },
         executionHandle: {
           ...request.action.executionHandle,
+          handleId: `capability-handle:${digestWithPhoneDigits}`,
           actionPayloadBusinessHash: digestWithPhoneDigits,
         },
       },

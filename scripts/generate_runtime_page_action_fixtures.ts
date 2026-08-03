@@ -1852,7 +1852,7 @@ function scanForSecretsAndPii(value: unknown, location: string, depth = 0): void
       if (
         typeof child === 'string'
         && (
-          /^sha256:[0-9a-f]{64}$/iu.test(child)
+          /^[a-z][a-z0-9.-]*:[0-9a-f]{64}$/iu.test(child)
           || (
             /(?:hash|sha256)$/iu.test(key)
             && /^[0-9a-f]{64}$/iu.test(child)
