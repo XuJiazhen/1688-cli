@@ -210,6 +210,7 @@ const OFFER_INPUT = Object.freeze({
     images: [
       'https://img.example.test/runtime-main.jpg',
       'https://img.example.test/runtime-gallery.jpg',
+      'https://img.example.test/runtime-gallery-2.jpg',
     ],
     sendArea: 'fixture-region',
     province: null,
@@ -272,12 +273,15 @@ const STORE_INPUT = Object.freeze({
         content: {
           offerCount: 90,
           totalPages: 3,
-          offerList: [{
-            id: `70000000020${pageNumber}`,
+          offerList: [1, 2].map((offset) => ({
+            id: `7000000002${pageNumber}${offset}`,
             memberId: 'fixture-chain-member-1',
-            subject: `Runtime Fixture Store Offer ${pageNumber}`,
-            offerImages: [`https://img.example.test/runtime-store-${pageNumber}.jpg`],
-          }],
+            subject: `Runtime Fixture Store Offer ${pageNumber}-${offset}`,
+            offerImages: [
+              `https://img.example.test/runtime-store-${pageNumber}-${offset}.jpg`,
+            ],
+            thirtySaleQuantity: pageNumber * 10 + offset,
+          })),
           offerCategoryDataModel: {
             offerCategoryList: [{ id: 'fixture-cat-1', name: 'Tools', count: 90 }],
           },

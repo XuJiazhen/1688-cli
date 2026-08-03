@@ -32,12 +32,22 @@
             "totalPages": 3,
             "offerList": [
               {
-                "id": "700000000201",
+                "id": "700000000211",
                 "memberId": "fixture-chain-member-1",
-                "subject": "Runtime Fixture Store Offer 1",
+                "subject": "Runtime Fixture Store Offer 1-1",
                 "offerImages": [
-                  "https://img.example.test/runtime-store-1.jpg"
-                ]
+                  "https://img.example.test/runtime-store-1-1.jpg"
+                ],
+                "thirtySaleQuantity": 11
+              },
+              {
+                "id": "700000000212",
+                "memberId": "fixture-chain-member-1",
+                "subject": "Runtime Fixture Store Offer 1-2",
+                "offerImages": [
+                  "https://img.example.test/runtime-store-1-2.jpg"
+                ],
+                "thirtySaleQuantity": 12
               }
             ],
             "offerCategoryDataModel": {
@@ -65,12 +75,22 @@
             "totalPages": 3,
             "offerList": [
               {
-                "id": "700000000202",
+                "id": "700000000221",
                 "memberId": "fixture-chain-member-1",
-                "subject": "Runtime Fixture Store Offer 2",
+                "subject": "Runtime Fixture Store Offer 2-1",
                 "offerImages": [
-                  "https://img.example.test/runtime-store-2.jpg"
-                ]
+                  "https://img.example.test/runtime-store-2-1.jpg"
+                ],
+                "thirtySaleQuantity": 21
+              },
+              {
+                "id": "700000000222",
+                "memberId": "fixture-chain-member-1",
+                "subject": "Runtime Fixture Store Offer 2-2",
+                "offerImages": [
+                  "https://img.example.test/runtime-store-2-2.jpg"
+                ],
+                "thirtySaleQuantity": 22
               }
             ],
             "offerCategoryDataModel": {
@@ -98,12 +118,22 @@
             "totalPages": 3,
             "offerList": [
               {
-                "id": "700000000203",
+                "id": "700000000231",
                 "memberId": "fixture-chain-member-1",
-                "subject": "Runtime Fixture Store Offer 3",
+                "subject": "Runtime Fixture Store Offer 3-1",
                 "offerImages": [
-                  "https://img.example.test/runtime-store-3.jpg"
-                ]
+                  "https://img.example.test/runtime-store-3-1.jpg"
+                ],
+                "thirtySaleQuantity": 31
+              },
+              {
+                "id": "700000000232",
+                "memberId": "fixture-chain-member-1",
+                "subject": "Runtime Fixture Store Offer 3-2",
+                "offerImages": [
+                  "https://img.example.test/runtime-store-3-2.jpg"
+                ],
+                "thirtySaleQuantity": 32
               }
             ],
             "offerCategoryDataModel": {

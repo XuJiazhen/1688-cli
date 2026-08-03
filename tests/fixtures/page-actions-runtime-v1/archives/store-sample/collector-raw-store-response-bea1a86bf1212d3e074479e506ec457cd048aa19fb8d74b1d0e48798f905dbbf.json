@@ -15,12 +15,22 @@
         "totalPages": 3,
         "offerList": [
           {
-            "id": "700000000202",
+            "id": "700000000221",
             "memberId": "fixture-chain-member-1",
-            "subject": "Runtime Fixture Store Offer 2",
+            "subject": "Runtime Fixture Store Offer 2-1",
             "offerImages": [
-              "https://img.example.test/runtime-store-2.jpg"
-            ]
+              "https://img.example.test/runtime-store-2-1.jpg"
+            ],
+            "thirtySaleQuantity": 21
+          },
+          {
+            "id": "700000000222",
+            "memberId": "fixture-chain-member-1",
+            "subject": "Runtime Fixture Store Offer 2-2",
+            "offerImages": [
+              "https://img.example.test/runtime-store-2-2.jpg"
+            ],
+            "thirtySaleQuantity": 22
           }
         ],
         "offerCategoryDataModel": {
@@ -35,5 +45,5 @@
       }
     }
   },
-  "payloadHash": "sha256:364cd69a7465a231a784414c38b0af9b5fdf4f7ef10eda0cd5bf167995eed1d5"
+  "payloadHash": "sha256:7454a3dfa8db67fc5ef55689074a4d360729c2a3c759ce071db95ce77722ec06"
 }

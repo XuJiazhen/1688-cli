@@ -108,7 +108,8 @@
     "mainImage": "https://img.example.test/runtime-main.jpg",
     "images": [
       "https://img.example.test/runtime-main.jpg",
-      "https://img.example.test/runtime-gallery.jpg"
+      "https://img.example.test/runtime-gallery.jpg",
+      "https://img.example.test/runtime-gallery-2.jpg"
     ],
     "sendArea": "fixture-region",
     "province": null,

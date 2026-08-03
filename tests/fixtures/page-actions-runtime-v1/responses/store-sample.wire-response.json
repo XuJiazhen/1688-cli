@@ -2,7 +2,7 @@
   "executionAttemptReceipt": {
     "schema": "collector.page-action.execution-attempt-receipt.v1",
     "receiptId": "execution-receipt-store-sample-fixture-004",
-    "receiptHash": "sha256:2fe1985d1b7076ff29d8a6cd7868791df9f71203269a0098c31ae5d91f751b6f",
+    "receiptHash": "sha256:865d545dd7a837a36d4c36bdf217df54496ce3f6cfa2f235ba82a9ea57688dfc",
     "requestId": "runtime-request-store-sample",
     "idempotencyKey": "runtime-idempotency-store-sample",
     "pageActionId": "runtime-page-action-store-sample",
@@ -93,7 +93,7 @@
         "completedAt": "2026-08-02T00:00:00.002Z",
         "status": "succeeded",
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae"
         ]
       },
       {
@@ -106,7 +106,7 @@
         "completedAt": "2026-08-02T00:00:00.003Z",
         "status": "succeeded",
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704"
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ]
       },
       {
@@ -119,7 +119,7 @@
         "completedAt": "2026-08-02T00:00:00.004Z",
         "status": "succeeded",
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090"
         ]
       }
     ],
@@ -327,7 +327,7 @@
             "evidenceUsage": "baseline-evidence",
             "imageUrl": null,
             "memberId": "fixture-chain-member-1",
-            "offerId": "700000000201",
+            "offerId": "700000000211",
             "page": 1,
             "pagePosition": 1,
             "price": null,
@@ -340,14 +340,42 @@
               "modelSaleQuantity": null,
               "ninetySaleQuantity": null,
               "saleQuantity": null,
-              "thirtySaleQuantity": null,
+              "thirtySaleQuantity": 11,
               "vagueSaleQuantity": null
             },
             "storeSample": true,
             "taskCandidateEligible": false,
-            "title": "Runtime Fixture Store Offer 1",
+            "title": "Runtime Fixture Store Offer 1-1",
             "unit": null,
-            "url": "https://detail.1688.com/offer/700000000201.html"
+            "url": "https://detail.1688.com/offer/700000000211.html"
+          },
+          {
+            "absolutePosition": 2,
+            "categoryId": null,
+            "evidenceUsage": "baseline-evidence",
+            "imageUrl": null,
+            "memberId": "fixture-chain-member-1",
+            "offerId": "700000000212",
+            "page": 1,
+            "pagePosition": 2,
+            "price": null,
+            "quantityBegin": null,
+            "sales": {
+              "bookedCount": null,
+              "modelAgentBookedCount": null,
+              "modelBookedCount": null,
+              "modelQuantitySumMonth": null,
+              "modelSaleQuantity": null,
+              "ninetySaleQuantity": null,
+              "saleQuantity": null,
+              "thirtySaleQuantity": 12,
+              "vagueSaleQuantity": null
+            },
+            "storeSample": true,
+            "taskCandidateEligible": false,
+            "title": "Runtime Fixture Store Offer 1-2",
+            "unit": null,
+            "url": "https://detail.1688.com/offer/700000000212.html"
           }
         ],
         "completeness": {
@@ -358,21 +386,21 @@
           ],
           "failedPages": [],
           "expectedItems": 90,
-          "uniqueItems": 1
+          "uniqueItems": 2
         },
         "duplicateObservations": [],
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "candidatesPublished": 0,
           "remoteRequests": 1,
-          "uniqueCatalogOffers": 1
+          "uniqueCatalogOffers": 2
         }
       },
       {
@@ -578,7 +606,7 @@
             "evidenceUsage": "baseline-evidence",
             "imageUrl": null,
             "memberId": "fixture-chain-member-1",
-            "offerId": "700000000202",
+            "offerId": "700000000221",
             "page": 2,
             "pagePosition": 1,
             "price": null,
@@ -591,14 +619,42 @@
               "modelSaleQuantity": null,
               "ninetySaleQuantity": null,
               "saleQuantity": null,
-              "thirtySaleQuantity": null,
+              "thirtySaleQuantity": 21,
               "vagueSaleQuantity": null
             },
             "storeSample": true,
             "taskCandidateEligible": false,
-            "title": "Runtime Fixture Store Offer 2",
+            "title": "Runtime Fixture Store Offer 2-1",
             "unit": null,
-            "url": "https://detail.1688.com/offer/700000000202.html"
+            "url": "https://detail.1688.com/offer/700000000221.html"
+          },
+          {
+            "absolutePosition": 32,
+            "categoryId": null,
+            "evidenceUsage": "baseline-evidence",
+            "imageUrl": null,
+            "memberId": "fixture-chain-member-1",
+            "offerId": "700000000222",
+            "page": 2,
+            "pagePosition": 2,
+            "price": null,
+            "quantityBegin": null,
+            "sales": {
+              "bookedCount": null,
+              "modelAgentBookedCount": null,
+              "modelBookedCount": null,
+              "modelQuantitySumMonth": null,
+              "modelSaleQuantity": null,
+              "ninetySaleQuantity": null,
+              "saleQuantity": null,
+              "thirtySaleQuantity": 22,
+              "vagueSaleQuantity": null
+            },
+            "storeSample": true,
+            "taskCandidateEligible": false,
+            "title": "Runtime Fixture Store Offer 2-2",
+            "unit": null,
+            "url": "https://detail.1688.com/offer/700000000222.html"
           }
         ],
         "completeness": {
@@ -609,21 +665,21 @@
           ],
           "failedPages": [],
           "expectedItems": 90,
-          "uniqueItems": 1
+          "uniqueItems": 2
         },
         "duplicateObservations": [],
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "candidatesPublished": 0,
           "remoteRequests": 1,
-          "uniqueCatalogOffers": 1
+          "uniqueCatalogOffers": 2
         }
       },
       {
@@ -831,7 +887,7 @@
             "evidenceUsage": "baseline-evidence",
             "imageUrl": null,
             "memberId": "fixture-chain-member-1",
-            "offerId": "700000000203",
+            "offerId": "700000000231",
             "page": 3,
             "pagePosition": 1,
             "price": null,
@@ -844,14 +900,42 @@
               "modelSaleQuantity": null,
               "ninetySaleQuantity": null,
               "saleQuantity": null,
-              "thirtySaleQuantity": null,
+              "thirtySaleQuantity": 31,
               "vagueSaleQuantity": null
             },
             "storeSample": true,
             "taskCandidateEligible": false,
-            "title": "Runtime Fixture Store Offer 3",
+            "title": "Runtime Fixture Store Offer 3-1",
             "unit": null,
-            "url": "https://detail.1688.com/offer/700000000203.html"
+            "url": "https://detail.1688.com/offer/700000000231.html"
+          },
+          {
+            "absolutePosition": 62,
+            "categoryId": null,
+            "evidenceUsage": "baseline-evidence",
+            "imageUrl": null,
+            "memberId": "fixture-chain-member-1",
+            "offerId": "700000000232",
+            "page": 3,
+            "pagePosition": 2,
+            "price": null,
+            "quantityBegin": null,
+            "sales": {
+              "bookedCount": null,
+              "modelAgentBookedCount": null,
+              "modelBookedCount": null,
+              "modelQuantitySumMonth": null,
+              "modelSaleQuantity": null,
+              "ninetySaleQuantity": null,
+              "saleQuantity": null,
+              "thirtySaleQuantity": 32,
+              "vagueSaleQuantity": null
+            },
+            "storeSample": true,
+            "taskCandidateEligible": false,
+            "title": "Runtime Fixture Store Offer 3-2",
+            "unit": null,
+            "url": "https://detail.1688.com/offer/700000000232.html"
           }
         ],
         "completeness": {
@@ -864,21 +948,21 @@
           ],
           "failedPages": [],
           "expectedItems": 90,
-          "uniqueItems": 1
+          "uniqueItems": 2
         },
         "duplicateObservations": [],
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "candidatesPublished": 0,
           "remoteRequests": 1,
-          "uniqueCatalogOffers": 1
+          "uniqueCatalogOffers": 2
         }
       },
       {
@@ -1106,10 +1190,10 @@
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "categoryItems": 1,
@@ -1722,10 +1806,10 @@
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "profileObservations": 1,
@@ -1798,7 +1882,7 @@
   "completionReceipt": {
     "schema": "collector.page-action.completion-receipt.v1",
     "completionReceiptId": "completion-receipt-store-sample-fixture-005",
-    "completionReceiptHash": "sha256:2a55b4dcd62f6c9c86d4deb3414a66f9cd3cb6fbff17930dbf4f1537b1227b48",
+    "completionReceiptHash": "sha256:a680f508425d18b5af025acafc6c922d0ca9ef290e2ac91ad8592f71dc7e7651",
     "pageActionId": "runtime-page-action-store-sample",
     "pageActionBusinessHash": "sha256:d20582b363de6753ce93d36320405fdefbef1b029ad03d2e52c0fe67828581d4",
     "logicalLineage": {
@@ -1828,7 +1912,7 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
         "executionAttemptOrdinal": 1,
         "receiptId": "execution-receipt-store-sample-fixture-004",
-        "receiptHash": "sha256:2fe1985d1b7076ff29d8a6cd7868791df9f71203269a0098c31ae5d91f751b6f",
+        "receiptHash": "sha256:865d545dd7a837a36d4c36bdf217df54496ce3f6cfa2f235ba82a9ea57688dfc",
         "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2"
       }
     ],
@@ -1836,7 +1920,7 @@
       "pageActionExecutionAttemptId": "runtime-execution-attempt-store-sample",
       "executionAttemptOrdinal": 1,
       "receiptId": "execution-receipt-store-sample-fixture-004",
-      "receiptHash": "sha256:2fe1985d1b7076ff29d8a6cd7868791df9f71203269a0098c31ae5d91f751b6f",
+      "receiptHash": "sha256:865d545dd7a837a36d4c36bdf217df54496ce3f6cfa2f235ba82a9ea57688dfc",
       "executionLineageHash": "sha256:2e08e8e2923e99b6bdaac87f771a990990cb2665861cfd3ffeabb21816b71ac2"
     },
     "batches": [
@@ -2043,7 +2127,7 @@
             "evidenceUsage": "baseline-evidence",
             "imageUrl": null,
             "memberId": "fixture-chain-member-1",
-            "offerId": "700000000201",
+            "offerId": "700000000211",
             "page": 1,
             "pagePosition": 1,
             "price": null,
@@ -2056,14 +2140,42 @@
               "modelSaleQuantity": null,
               "ninetySaleQuantity": null,
               "saleQuantity": null,
-              "thirtySaleQuantity": null,
+              "thirtySaleQuantity": 11,
               "vagueSaleQuantity": null
             },
             "storeSample": true,
             "taskCandidateEligible": false,
-            "title": "Runtime Fixture Store Offer 1",
+            "title": "Runtime Fixture Store Offer 1-1",
             "unit": null,
-            "url": "https://detail.1688.com/offer/700000000201.html"
+            "url": "https://detail.1688.com/offer/700000000211.html"
+          },
+          {
+            "absolutePosition": 2,
+            "categoryId": null,
+            "evidenceUsage": "baseline-evidence",
+            "imageUrl": null,
+            "memberId": "fixture-chain-member-1",
+            "offerId": "700000000212",
+            "page": 1,
+            "pagePosition": 2,
+            "price": null,
+            "quantityBegin": null,
+            "sales": {
+              "bookedCount": null,
+              "modelAgentBookedCount": null,
+              "modelBookedCount": null,
+              "modelQuantitySumMonth": null,
+              "modelSaleQuantity": null,
+              "ninetySaleQuantity": null,
+              "saleQuantity": null,
+              "thirtySaleQuantity": 12,
+              "vagueSaleQuantity": null
+            },
+            "storeSample": true,
+            "taskCandidateEligible": false,
+            "title": "Runtime Fixture Store Offer 1-2",
+            "unit": null,
+            "url": "https://detail.1688.com/offer/700000000212.html"
           }
         ],
         "completeness": {
@@ -2074,21 +2186,21 @@
           ],
           "failedPages": [],
           "expectedItems": 90,
-          "uniqueItems": 1
+          "uniqueItems": 2
         },
         "duplicateObservations": [],
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "candidatesPublished": 0,
           "remoteRequests": 1,
-          "uniqueCatalogOffers": 1
+          "uniqueCatalogOffers": 2
         }
       },
       {
@@ -2294,7 +2406,7 @@
             "evidenceUsage": "baseline-evidence",
             "imageUrl": null,
             "memberId": "fixture-chain-member-1",
-            "offerId": "700000000202",
+            "offerId": "700000000221",
             "page": 2,
             "pagePosition": 1,
             "price": null,
@@ -2307,14 +2419,42 @@
               "modelSaleQuantity": null,
               "ninetySaleQuantity": null,
               "saleQuantity": null,
-              "thirtySaleQuantity": null,
+              "thirtySaleQuantity": 21,
               "vagueSaleQuantity": null
             },
             "storeSample": true,
             "taskCandidateEligible": false,
-            "title": "Runtime Fixture Store Offer 2",
+            "title": "Runtime Fixture Store Offer 2-1",
             "unit": null,
-            "url": "https://detail.1688.com/offer/700000000202.html"
+            "url": "https://detail.1688.com/offer/700000000221.html"
+          },
+          {
+            "absolutePosition": 32,
+            "categoryId": null,
+            "evidenceUsage": "baseline-evidence",
+            "imageUrl": null,
+            "memberId": "fixture-chain-member-1",
+            "offerId": "700000000222",
+            "page": 2,
+            "pagePosition": 2,
+            "price": null,
+            "quantityBegin": null,
+            "sales": {
+              "bookedCount": null,
+              "modelAgentBookedCount": null,
+              "modelBookedCount": null,
+              "modelQuantitySumMonth": null,
+              "modelSaleQuantity": null,
+              "ninetySaleQuantity": null,
+              "saleQuantity": null,
+              "thirtySaleQuantity": 22,
+              "vagueSaleQuantity": null
+            },
+            "storeSample": true,
+            "taskCandidateEligible": false,
+            "title": "Runtime Fixture Store Offer 2-2",
+            "unit": null,
+            "url": "https://detail.1688.com/offer/700000000222.html"
           }
         ],
         "completeness": {
@@ -2325,21 +2465,21 @@
           ],
           "failedPages": [],
           "expectedItems": 90,
-          "uniqueItems": 1
+          "uniqueItems": 2
         },
         "duplicateObservations": [],
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "candidatesPublished": 0,
           "remoteRequests": 1,
-          "uniqueCatalogOffers": 1
+          "uniqueCatalogOffers": 2
         }
       },
       {
@@ -2547,7 +2687,7 @@
             "evidenceUsage": "baseline-evidence",
             "imageUrl": null,
             "memberId": "fixture-chain-member-1",
-            "offerId": "700000000203",
+            "offerId": "700000000231",
             "page": 3,
             "pagePosition": 1,
             "price": null,
@@ -2560,14 +2700,42 @@
               "modelSaleQuantity": null,
               "ninetySaleQuantity": null,
               "saleQuantity": null,
-              "thirtySaleQuantity": null,
+              "thirtySaleQuantity": 31,
               "vagueSaleQuantity": null
             },
             "storeSample": true,
             "taskCandidateEligible": false,
-            "title": "Runtime Fixture Store Offer 3",
+            "title": "Runtime Fixture Store Offer 3-1",
             "unit": null,
-            "url": "https://detail.1688.com/offer/700000000203.html"
+            "url": "https://detail.1688.com/offer/700000000231.html"
+          },
+          {
+            "absolutePosition": 62,
+            "categoryId": null,
+            "evidenceUsage": "baseline-evidence",
+            "imageUrl": null,
+            "memberId": "fixture-chain-member-1",
+            "offerId": "700000000232",
+            "page": 3,
+            "pagePosition": 2,
+            "price": null,
+            "quantityBegin": null,
+            "sales": {
+              "bookedCount": null,
+              "modelAgentBookedCount": null,
+              "modelBookedCount": null,
+              "modelQuantitySumMonth": null,
+              "modelSaleQuantity": null,
+              "ninetySaleQuantity": null,
+              "saleQuantity": null,
+              "thirtySaleQuantity": 32,
+              "vagueSaleQuantity": null
+            },
+            "storeSample": true,
+            "taskCandidateEligible": false,
+            "title": "Runtime Fixture Store Offer 3-2",
+            "unit": null,
+            "url": "https://detail.1688.com/offer/700000000232.html"
           }
         ],
         "completeness": {
@@ -2580,21 +2748,21 @@
           ],
           "failedPages": [],
           "expectedItems": 90,
-          "uniqueItems": 1
+          "uniqueItems": 2
         },
         "duplicateObservations": [],
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "candidatesPublished": 0,
           "remoteRequests": 1,
-          "uniqueCatalogOffers": 1
+          "uniqueCatalogOffers": 2
         }
       },
       {
@@ -2822,10 +2990,10 @@
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "categoryItems": 1,
@@ -3438,10 +3606,10 @@
         "warnings": [],
         "errors": [],
         "rawEvidenceRefs": [
-          "artifact:collector-raw-store-response-0506af11ac9c14fda78b589064a4058e03105f0082c7d0ca5489dd26c1670af1",
+          "artifact:collector-raw-store-response-1a8c2e6fc5b8cc9c68ab2e239b2788aa73796113d2a34765b690d9fb46052090",
           "artifact:collector-raw-store-response-69fe61cea3957688862a1fde187bd4daaf87383b8014bb5438ae5e5ce822e601",
-          "artifact:collector-raw-store-response-a92d8902853fee95615a7422916ff162a8e35cc27855713ee52d8542f4bb3704",
-          "artifact:collector-raw-store-response-a9686e5e9fa176277e41299754cd619fefdaa54774aa9152ff1949c7b24f3184"
+          "artifact:collector-raw-store-response-8c612eb4d54ddabce15be2984829e0719887f7fde2e646f522727758adaf35ae",
+          "artifact:collector-raw-store-response-bea1a86bf1212d3e074479e506ec457cd048aa19fb8d74b1d0e48798f905dbbf"
         ],
         "metrics": {
           "profileObservations": 1,
