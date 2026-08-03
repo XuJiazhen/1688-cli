@@ -8,7 +8,7 @@
   "generator": {
     "revision": "production-page-action-executor-offline-fake-v1@1",
     "sourcePath": "scripts/generate_runtime_page_action_fixtures.ts",
-    "sourceSha256": "b23b0f280eb8a2b343f818ed906c0a3d3b28b29016692bec07bd2b824bc705e9"
+    "sourceSha256": "1571020290ca5480749941ac00705648cd0535882bb78767034e89a8b1f65d6e"
   },
   "security": {
     "recursiveSanitizationGate": true,
@@ -85,23 +85,23 @@
         }
       ],
       "transportInputPath": "inputs/offer-detail.transport.json",
-      "transportInputSha256": "1b64c47e8e06b7e1bfc2757ccebc51d1a6932373ff53611aa2c245b2b1df95e6",
+      "transportInputSha256": "4d1f9bf65aad927c1ee59d8770ceedb9d517e1b6b8a95df8d800d0a4d630cc83",
       "responsePath": "responses/offer-detail.wire-response.json",
-      "responseSha256": "ddac56a5c193ae277361f78fb998aca66767480143a219db630a5099e4b247f9",
+      "responseSha256": "a5656eed211088e0f2b431af326b05ee0676f3af68279c074dacbfac67912742",
       "executionEnvelopePath": "envelopes/offer-detail.execution-attempt-receipt.json",
-      "executionEnvelopeSha256": "ce070a6cac880aa3435a3d9da80dece014b0a5d1627fef10d474092e3c1b3ef3",
+      "executionEnvelopeSha256": "e328a762b8dc921376fc4750eb268ccb22f79b43ca5e29a21af4decfee194b6b",
       "completionEnvelopePath": "envelopes/offer-detail.completion-receipt.json",
-      "completionEnvelopeSha256": "b0c3d47c47b142583af0376581742b905a44d7d5a7755ee0be580006c62d1de1",
+      "completionEnvelopeSha256": "e023898bd5232c86f2c85942c7bd701dfbcbc44fa5722edc524d6a5163b370a4",
       "batchFiles": [
         {
           "path": "batches/offer-detail/00-offer-detail.json",
-          "bytes": 28680,
-          "sha256": "169a7b267562767b79bd35a4cdac37a9056e38693b09b2aaff2cefde6fb13820"
+          "bytes": 28674,
+          "sha256": "4f35d2170b7e9aeb011f7463a1db88511f42abdcff571bf7fd9d8967168add42"
         },
         {
           "path": "batches/offer-detail/01-offer-media-manifest.json",
-          "bytes": 24313,
-          "sha256": "8465e8a07b026a9ee74c8b4848479191999ba6d1dba910c9f02d88c210c00b74"
+          "bytes": 24308,
+          "sha256": "a10ba6e343f8efad80bf970c6ae47f599a8ea8baeda8a81ba510fdcc531a4164"
         }
       ],
       "archiveFiles": [
@@ -126,9 +126,9 @@
           "sha256": "42102a7375c5d5958b3eb9978ce644e87500970eb6d5e4fbc1e47cc9f858b4b1"
         },
         {
-          "path": "archives/offer-detail/collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e.json",
-          "bytes": 1464,
-          "sha256": "f34cd65ce610adfa0fd9b8ab2c96fc91c30c896718735517c0a117ac13b9eaa3"
+          "path": "archives/offer-detail/collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f.json",
+          "bytes": 1463,
+          "sha256": "1e02f9cc16a7e91e4403dd1d85e726785ec7468e843bd5831de0916260e21bb6"
         },
         {
           "path": "archives/offer-detail/offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f.json",

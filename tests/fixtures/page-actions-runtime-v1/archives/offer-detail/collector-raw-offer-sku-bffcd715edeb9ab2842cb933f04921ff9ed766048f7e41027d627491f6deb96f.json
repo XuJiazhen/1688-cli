@@ -25,7 +25,7 @@
         ],
         "skuInfoMap": {
           "fixture-a": {
-            "skuId": "runtime-sku-1",
+            "skuId": "800000000101",
             "specAttrs": "variant:fixture-a",
             "price": "8.00",
             "canBookCount": "25",
@@ -49,5 +49,5 @@
       }
     }
   },
-  "payloadHash": "sha256:c72a53d6f4136fda510758fd6131a4fd794e9d10825b28b0ac9d26deb563ee35"
+  "payloadHash": "sha256:c5e7483432245baeaadc210e856d7e410d2eb36978d975ea52b34869025d88cc"
 }

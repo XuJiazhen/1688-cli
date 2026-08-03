@@ -2,7 +2,7 @@
   "executionAttemptReceipt": {
     "schema": "collector.page-action.execution-attempt-receipt.v1",
     "receiptId": "execution-receipt-offer-detail-fixture-003",
-    "receiptHash": "sha256:9566225bd59b7056095dd98a480d6f40268082f7f9c5b7f2336630b5931a43a8",
+    "receiptHash": "sha256:ca02d030459f8ec3714142aee574910758c71f90417250f2ae460e65ed1a5b34",
     "requestId": "runtime-request-offer-detail",
     "idempotencyKey": "runtime-idempotency-offer-detail",
     "pageActionId": "runtime-page-action-offer-detail",
@@ -78,7 +78,7 @@
         "status": "succeeded",
         "rawEvidenceRefs": [
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
-          "artifact:collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e",
+          "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
           "artifact:collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a",
@@ -160,7 +160,7 @@
             "offer": {
               "mediaManifestV2": {
                 "availability": "available",
-                "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                "itemSetHash": "sha256:9c041359eccf14c3a152db21735b4b46ef0e22565a7a57bcd053002c92734523",
                 "items": [
                   {
                     "availability": "available",
@@ -174,7 +174,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                    "sourceReceiptContentSha256": "sha256:fee2c399b6ce0a4be50741587f430500b13c3f25a94631ea160a7c409b7bb6ce"
                   },
                   {
                     "availability": "available",
@@ -188,7 +188,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                    "sourceReceiptContentSha256": "sha256:627c091c5f015056b51825d58ee4431f65c5a44f606265e383cb2f9856ecf469"
                   },
                   {
                     "availability": "available",
@@ -202,7 +202,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 1,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                    "sourceReceiptContentSha256": "sha256:52783f9880ff722cd46aae41e85a558f81c28d5f098ca178e33ac9ae89e153cc"
                   },
                   {
                     "availability": "available",
@@ -216,7 +216,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                    "sourceReceiptContentSha256": "sha256:30c03d5358b6abf6bb1d2dda55807d6a89aaf266bea908360d689458a422b4ce"
                   },
                   {
                     "availability": "available",
@@ -225,13 +225,13 @@
                     "order": 0,
                     "originalUrl": "https://img.example.test/runtime-main.jpg",
                     "ownerKind": "target-sku",
-                    "platformSkuId": "runtime-sku-1",
+                    "platformSkuId": "800000000101",
                     "role": "sku",
                     "sourceField": "skuProps.imageUrl",
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
-                    "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
-                    "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                    "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
+                    "sourceReceiptContentSha256": "sha256:dfd4abbf5afcf0df7ab301045ea324143315badcf74da8119b5528d1478d2206"
                   }
                 ],
                 "offerId": "700000000101",
@@ -267,14 +267,14 @@
               },
               "skuManifest": {
                 "explicitSkuCount": 1,
-                "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                "manifestHash": "sha256:85355f3e58d56a3a25aa0a49cd3092c8eeb69b3a2ac4f84c5c58d7d473baaf7c",
                 "nullFactsCarryAvailability": true,
                 "offerId": "700000000101",
                 "optionCount": 1,
                 "schema": "offer-sku-manifest-v1",
                 "singletonSourceKey": null,
                 "skuIds": [
-                  "runtime-sku-1"
+                  "800000000101"
                 ],
                 "state": "explicit-variants"
               },
@@ -386,7 +386,7 @@
               "offer": {
                 "mediaManifestV2": {
                   "availability": "available",
-                  "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                  "itemSetHash": "sha256:9c041359eccf14c3a152db21735b4b46ef0e22565a7a57bcd053002c92734523",
                   "items": [
                     {
                       "availability": "available",
@@ -400,7 +400,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                      "sourceReceiptContentSha256": "sha256:fee2c399b6ce0a4be50741587f430500b13c3f25a94631ea160a7c409b7bb6ce"
                     },
                     {
                       "availability": "available",
@@ -414,7 +414,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                      "sourceReceiptContentSha256": "sha256:627c091c5f015056b51825d58ee4431f65c5a44f606265e383cb2f9856ecf469"
                     },
                     {
                       "availability": "available",
@@ -428,7 +428,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 1,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                      "sourceReceiptContentSha256": "sha256:52783f9880ff722cd46aae41e85a558f81c28d5f098ca178e33ac9ae89e153cc"
                     },
                     {
                       "availability": "available",
@@ -442,7 +442,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                      "sourceReceiptContentSha256": "sha256:30c03d5358b6abf6bb1d2dda55807d6a89aaf266bea908360d689458a422b4ce"
                     },
                     {
                       "availability": "available",
@@ -451,13 +451,13 @@
                       "order": 0,
                       "originalUrl": "https://img.example.test/runtime-main.jpg",
                       "ownerKind": "target-sku",
-                      "platformSkuId": "runtime-sku-1",
+                      "platformSkuId": "800000000101",
                       "role": "sku",
                       "sourceField": "skuProps.imageUrl",
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
-                      "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
-                      "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                      "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
+                      "sourceReceiptContentSha256": "sha256:dfd4abbf5afcf0df7ab301045ea324143315badcf74da8119b5528d1478d2206"
                     }
                   ],
                   "offerId": "700000000101",
@@ -493,14 +493,14 @@
                 },
                 "skuManifest": {
                   "explicitSkuCount": 1,
-                  "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                  "manifestHash": "sha256:85355f3e58d56a3a25aa0a49cd3092c8eeb69b3a2ac4f84c5c58d7d473baaf7c",
                   "nullFactsCarryAvailability": true,
                   "offerId": "700000000101",
                   "optionCount": 1,
                   "schema": "offer-sku-manifest-v1",
                   "singletonSourceKey": null,
                   "skuIds": [
-                    "runtime-sku-1"
+                    "800000000101"
                   ],
                   "state": "explicit-variants"
                 },
@@ -623,7 +623,7 @@
                     "order": 0,
                     "originalUrl": "https://img.example.test/runtime-main.jpg",
                     "role": "sku",
-                    "skuId": "runtime-sku-1",
+                    "skuId": "800000000101",
                     "sourceField": "skuProps.imageUrl"
                   },
                   {
@@ -713,7 +713,7 @@
                   "multiPrice": null,
                   "price": 8,
                   "saleCount": 4,
-                  "skuId": "runtime-sku-1",
+                  "skuId": "800000000101",
                   "specs": "variant:fixture-a",
                   "stock": 25
                 }
@@ -755,7 +755,7 @@
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
           "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
-          "artifact:collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e",
+          "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
           "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
         ],
@@ -835,7 +835,7 @@
             "offer": {
               "mediaManifestV2": {
                 "availability": "available",
-                "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                "itemSetHash": "sha256:9c041359eccf14c3a152db21735b4b46ef0e22565a7a57bcd053002c92734523",
                 "items": [
                   {
                     "availability": "available",
@@ -849,7 +849,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                    "sourceReceiptContentSha256": "sha256:fee2c399b6ce0a4be50741587f430500b13c3f25a94631ea160a7c409b7bb6ce"
                   },
                   {
                     "availability": "available",
@@ -863,7 +863,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                    "sourceReceiptContentSha256": "sha256:627c091c5f015056b51825d58ee4431f65c5a44f606265e383cb2f9856ecf469"
                   },
                   {
                     "availability": "available",
@@ -877,7 +877,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 1,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                    "sourceReceiptContentSha256": "sha256:52783f9880ff722cd46aae41e85a558f81c28d5f098ca178e33ac9ae89e153cc"
                   },
                   {
                     "availability": "available",
@@ -891,7 +891,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                    "sourceReceiptContentSha256": "sha256:30c03d5358b6abf6bb1d2dda55807d6a89aaf266bea908360d689458a422b4ce"
                   },
                   {
                     "availability": "available",
@@ -900,13 +900,13 @@
                     "order": 0,
                     "originalUrl": "https://img.example.test/runtime-main.jpg",
                     "ownerKind": "target-sku",
-                    "platformSkuId": "runtime-sku-1",
+                    "platformSkuId": "800000000101",
                     "role": "sku",
                     "sourceField": "skuProps.imageUrl",
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
-                    "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
-                    "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                    "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
+                    "sourceReceiptContentSha256": "sha256:dfd4abbf5afcf0df7ab301045ea324143315badcf74da8119b5528d1478d2206"
                   }
                 ],
                 "offerId": "700000000101",
@@ -942,14 +942,14 @@
               },
               "skuManifest": {
                 "explicitSkuCount": 1,
-                "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                "manifestHash": "sha256:85355f3e58d56a3a25aa0a49cd3092c8eeb69b3a2ac4f84c5c58d7d473baaf7c",
                 "nullFactsCarryAvailability": true,
                 "offerId": "700000000101",
                 "optionCount": 1,
                 "schema": "offer-sku-manifest-v1",
                 "singletonSourceKey": null,
                 "skuIds": [
-                  "runtime-sku-1"
+                  "800000000101"
                 ],
                 "state": "explicit-variants"
               },
@@ -1061,7 +1061,7 @@
               "offer": {
                 "mediaManifestV2": {
                   "availability": "available",
-                  "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                  "itemSetHash": "sha256:9c041359eccf14c3a152db21735b4b46ef0e22565a7a57bcd053002c92734523",
                   "items": [
                     {
                       "availability": "available",
@@ -1075,7 +1075,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                      "sourceReceiptContentSha256": "sha256:fee2c399b6ce0a4be50741587f430500b13c3f25a94631ea160a7c409b7bb6ce"
                     },
                     {
                       "availability": "available",
@@ -1089,7 +1089,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                      "sourceReceiptContentSha256": "sha256:627c091c5f015056b51825d58ee4431f65c5a44f606265e383cb2f9856ecf469"
                     },
                     {
                       "availability": "available",
@@ -1103,7 +1103,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 1,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                      "sourceReceiptContentSha256": "sha256:52783f9880ff722cd46aae41e85a558f81c28d5f098ca178e33ac9ae89e153cc"
                     },
                     {
                       "availability": "available",
@@ -1117,7 +1117,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                      "sourceReceiptContentSha256": "sha256:30c03d5358b6abf6bb1d2dda55807d6a89aaf266bea908360d689458a422b4ce"
                     },
                     {
                       "availability": "available",
@@ -1126,13 +1126,13 @@
                       "order": 0,
                       "originalUrl": "https://img.example.test/runtime-main.jpg",
                       "ownerKind": "target-sku",
-                      "platformSkuId": "runtime-sku-1",
+                      "platformSkuId": "800000000101",
                       "role": "sku",
                       "sourceField": "skuProps.imageUrl",
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
-                      "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
-                      "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                      "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
+                      "sourceReceiptContentSha256": "sha256:dfd4abbf5afcf0df7ab301045ea324143315badcf74da8119b5528d1478d2206"
                     }
                   ],
                   "offerId": "700000000101",
@@ -1168,14 +1168,14 @@
                 },
                 "skuManifest": {
                   "explicitSkuCount": 1,
-                  "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                  "manifestHash": "sha256:85355f3e58d56a3a25aa0a49cd3092c8eeb69b3a2ac4f84c5c58d7d473baaf7c",
                   "nullFactsCarryAvailability": true,
                   "offerId": "700000000101",
                   "optionCount": 1,
                   "schema": "offer-sku-manifest-v1",
                   "singletonSourceKey": null,
                   "skuIds": [
-                    "runtime-sku-1"
+                    "800000000101"
                   ],
                   "state": "explicit-variants"
                 },
@@ -1245,7 +1245,7 @@
                   "order": 0,
                   "originalUrl": "https://img.example.test/runtime-main.jpg",
                   "role": "sku",
-                  "skuId": "runtime-sku-1",
+                  "skuId": "800000000101",
                   "sourceField": "skuProps.imageUrl"
                 },
                 {
@@ -1285,7 +1285,7 @@
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
           "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
-          "artifact:collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e",
+          "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
           "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
         ],
@@ -1323,7 +1323,7 @@
   "completionReceipt": {
     "schema": "collector.page-action.completion-receipt.v1",
     "completionReceiptId": "completion-receipt-offer-detail-fixture-004",
-    "completionReceiptHash": "sha256:96f7a472ce91a8cc909dff2ced93b5798eb0f78bcd74e7c4417d51da1a1e3fd9",
+    "completionReceiptHash": "sha256:4b0ab11dc1e5b181b716e425e2f5a85a60518541f74296cea4c144f91f3d060c",
     "pageActionId": "runtime-page-action-offer-detail",
     "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
     "logicalLineage": {
@@ -1351,7 +1351,7 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
         "executionAttemptOrdinal": 1,
         "receiptId": "execution-receipt-offer-detail-fixture-003",
-        "receiptHash": "sha256:9566225bd59b7056095dd98a480d6f40268082f7f9c5b7f2336630b5931a43a8",
+        "receiptHash": "sha256:ca02d030459f8ec3714142aee574910758c71f90417250f2ae460e65ed1a5b34",
         "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7"
       }
     ],
@@ -1359,7 +1359,7 @@
       "pageActionExecutionAttemptId": "runtime-execution-attempt-offer-detail",
       "executionAttemptOrdinal": 1,
       "receiptId": "execution-receipt-offer-detail-fixture-003",
-      "receiptHash": "sha256:9566225bd59b7056095dd98a480d6f40268082f7f9c5b7f2336630b5931a43a8",
+      "receiptHash": "sha256:ca02d030459f8ec3714142aee574910758c71f90417250f2ae460e65ed1a5b34",
       "executionLineageHash": "sha256:5fac6019ffafb6bf57644b99fb1edf64a626bd487926a84cd8e1653f666222d7"
     },
     "batches": [
@@ -1435,7 +1435,7 @@
             "offer": {
               "mediaManifestV2": {
                 "availability": "available",
-                "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                "itemSetHash": "sha256:9c041359eccf14c3a152db21735b4b46ef0e22565a7a57bcd053002c92734523",
                 "items": [
                   {
                     "availability": "available",
@@ -1449,7 +1449,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                    "sourceReceiptContentSha256": "sha256:fee2c399b6ce0a4be50741587f430500b13c3f25a94631ea160a7c409b7bb6ce"
                   },
                   {
                     "availability": "available",
@@ -1463,7 +1463,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                    "sourceReceiptContentSha256": "sha256:627c091c5f015056b51825d58ee4431f65c5a44f606265e383cb2f9856ecf469"
                   },
                   {
                     "availability": "available",
@@ -1477,7 +1477,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 1,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                    "sourceReceiptContentSha256": "sha256:52783f9880ff722cd46aae41e85a558f81c28d5f098ca178e33ac9ae89e153cc"
                   },
                   {
                     "availability": "available",
@@ -1491,7 +1491,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                    "sourceReceiptContentSha256": "sha256:30c03d5358b6abf6bb1d2dda55807d6a89aaf266bea908360d689458a422b4ce"
                   },
                   {
                     "availability": "available",
@@ -1500,13 +1500,13 @@
                     "order": 0,
                     "originalUrl": "https://img.example.test/runtime-main.jpg",
                     "ownerKind": "target-sku",
-                    "platformSkuId": "runtime-sku-1",
+                    "platformSkuId": "800000000101",
                     "role": "sku",
                     "sourceField": "skuProps.imageUrl",
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
-                    "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
-                    "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                    "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
+                    "sourceReceiptContentSha256": "sha256:dfd4abbf5afcf0df7ab301045ea324143315badcf74da8119b5528d1478d2206"
                   }
                 ],
                 "offerId": "700000000101",
@@ -1542,14 +1542,14 @@
               },
               "skuManifest": {
                 "explicitSkuCount": 1,
-                "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                "manifestHash": "sha256:85355f3e58d56a3a25aa0a49cd3092c8eeb69b3a2ac4f84c5c58d7d473baaf7c",
                 "nullFactsCarryAvailability": true,
                 "offerId": "700000000101",
                 "optionCount": 1,
                 "schema": "offer-sku-manifest-v1",
                 "singletonSourceKey": null,
                 "skuIds": [
-                  "runtime-sku-1"
+                  "800000000101"
                 ],
                 "state": "explicit-variants"
               },
@@ -1661,7 +1661,7 @@
               "offer": {
                 "mediaManifestV2": {
                   "availability": "available",
-                  "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                  "itemSetHash": "sha256:9c041359eccf14c3a152db21735b4b46ef0e22565a7a57bcd053002c92734523",
                   "items": [
                     {
                       "availability": "available",
@@ -1675,7 +1675,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                      "sourceReceiptContentSha256": "sha256:fee2c399b6ce0a4be50741587f430500b13c3f25a94631ea160a7c409b7bb6ce"
                     },
                     {
                       "availability": "available",
@@ -1689,7 +1689,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                      "sourceReceiptContentSha256": "sha256:627c091c5f015056b51825d58ee4431f65c5a44f606265e383cb2f9856ecf469"
                     },
                     {
                       "availability": "available",
@@ -1703,7 +1703,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 1,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                      "sourceReceiptContentSha256": "sha256:52783f9880ff722cd46aae41e85a558f81c28d5f098ca178e33ac9ae89e153cc"
                     },
                     {
                       "availability": "available",
@@ -1717,7 +1717,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                      "sourceReceiptContentSha256": "sha256:30c03d5358b6abf6bb1d2dda55807d6a89aaf266bea908360d689458a422b4ce"
                     },
                     {
                       "availability": "available",
@@ -1726,13 +1726,13 @@
                       "order": 0,
                       "originalUrl": "https://img.example.test/runtime-main.jpg",
                       "ownerKind": "target-sku",
-                      "platformSkuId": "runtime-sku-1",
+                      "platformSkuId": "800000000101",
                       "role": "sku",
                       "sourceField": "skuProps.imageUrl",
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
-                      "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
-                      "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                      "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
+                      "sourceReceiptContentSha256": "sha256:dfd4abbf5afcf0df7ab301045ea324143315badcf74da8119b5528d1478d2206"
                     }
                   ],
                   "offerId": "700000000101",
@@ -1768,14 +1768,14 @@
                 },
                 "skuManifest": {
                   "explicitSkuCount": 1,
-                  "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                  "manifestHash": "sha256:85355f3e58d56a3a25aa0a49cd3092c8eeb69b3a2ac4f84c5c58d7d473baaf7c",
                   "nullFactsCarryAvailability": true,
                   "offerId": "700000000101",
                   "optionCount": 1,
                   "schema": "offer-sku-manifest-v1",
                   "singletonSourceKey": null,
                   "skuIds": [
-                    "runtime-sku-1"
+                    "800000000101"
                   ],
                   "state": "explicit-variants"
                 },
@@ -1898,7 +1898,7 @@
                     "order": 0,
                     "originalUrl": "https://img.example.test/runtime-main.jpg",
                     "role": "sku",
-                    "skuId": "runtime-sku-1",
+                    "skuId": "800000000101",
                     "sourceField": "skuProps.imageUrl"
                   },
                   {
@@ -1988,7 +1988,7 @@
                   "multiPrice": null,
                   "price": 8,
                   "saleCount": 4,
-                  "skuId": "runtime-sku-1",
+                  "skuId": "800000000101",
                   "specs": "variant:fixture-a",
                   "stock": 25
                 }
@@ -2030,7 +2030,7 @@
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
           "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
-          "artifact:collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e",
+          "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
           "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
         ],
@@ -2110,7 +2110,7 @@
             "offer": {
               "mediaManifestV2": {
                 "availability": "available",
-                "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                "itemSetHash": "sha256:9c041359eccf14c3a152db21735b4b46ef0e22565a7a57bcd053002c92734523",
                 "items": [
                   {
                     "availability": "available",
@@ -2124,7 +2124,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                    "sourceReceiptContentSha256": "sha256:fee2c399b6ce0a4be50741587f430500b13c3f25a94631ea160a7c409b7bb6ce"
                   },
                   {
                     "availability": "available",
@@ -2138,7 +2138,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                    "sourceReceiptContentSha256": "sha256:627c091c5f015056b51825d58ee4431f65c5a44f606265e383cb2f9856ecf469"
                   },
                   {
                     "availability": "available",
@@ -2152,7 +2152,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 1,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                    "sourceReceiptContentSha256": "sha256:52783f9880ff722cd46aae41e85a558f81c28d5f098ca178e33ac9ae89e153cc"
                   },
                   {
                     "availability": "available",
@@ -2166,7 +2166,7 @@
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
                     "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                    "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                    "sourceReceiptContentSha256": "sha256:30c03d5358b6abf6bb1d2dda55807d6a89aaf266bea908360d689458a422b4ce"
                   },
                   {
                     "availability": "available",
@@ -2175,13 +2175,13 @@
                     "order": 0,
                     "originalUrl": "https://img.example.test/runtime-main.jpg",
                     "ownerKind": "target-sku",
-                    "platformSkuId": "runtime-sku-1",
+                    "platformSkuId": "800000000101",
                     "role": "sku",
                     "sourceField": "skuProps.imageUrl",
                     "sourceObservationId": "runtime-execution-attempt-offer-detail",
                     "sourceOrdinal": 0,
-                    "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
-                    "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                    "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
+                    "sourceReceiptContentSha256": "sha256:dfd4abbf5afcf0df7ab301045ea324143315badcf74da8119b5528d1478d2206"
                   }
                 ],
                 "offerId": "700000000101",
@@ -2217,14 +2217,14 @@
               },
               "skuManifest": {
                 "explicitSkuCount": 1,
-                "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                "manifestHash": "sha256:85355f3e58d56a3a25aa0a49cd3092c8eeb69b3a2ac4f84c5c58d7d473baaf7c",
                 "nullFactsCarryAvailability": true,
                 "offerId": "700000000101",
                 "optionCount": 1,
                 "schema": "offer-sku-manifest-v1",
                 "singletonSourceKey": null,
                 "skuIds": [
-                  "runtime-sku-1"
+                  "800000000101"
                 ],
                 "state": "explicit-variants"
               },
@@ -2336,7 +2336,7 @@
               "offer": {
                 "mediaManifestV2": {
                   "availability": "available",
-                  "itemSetHash": "sha256:a584f73114b472e4980b7ad7dae45760c3f66823c337874a68b0cb9039e27945",
+                  "itemSetHash": "sha256:9c041359eccf14c3a152db21735b4b46ef0e22565a7a57bcd053002c92734523",
                   "items": [
                     {
                       "availability": "available",
@@ -2350,7 +2350,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:d14820acc4c3abaef0aa6307c6ea5cc6183a3f0794a256a3e7e4b722bd2860cd"
+                      "sourceReceiptContentSha256": "sha256:fee2c399b6ce0a4be50741587f430500b13c3f25a94631ea160a7c409b7bb6ce"
                     },
                     {
                       "availability": "available",
@@ -2364,7 +2364,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:58526561ebb29cf106f3f8e9ef52169fc5cf049f9be6a60dc154819d8d6ee5f3"
+                      "sourceReceiptContentSha256": "sha256:627c091c5f015056b51825d58ee4431f65c5a44f606265e383cb2f9856ecf469"
                     },
                     {
                       "availability": "available",
@@ -2378,7 +2378,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 1,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:b661c0222b7998fd9a7cc797271bf38e3b3e9dd73f3e946a271a3615fd090e25"
+                      "sourceReceiptContentSha256": "sha256:52783f9880ff722cd46aae41e85a558f81c28d5f098ca178e33ac9ae89e153cc"
                     },
                     {
                       "availability": "available",
@@ -2392,7 +2392,7 @@
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
                       "sourceOwnerKey": "1688-media-owner-v2:c30e4da8b8e6a17debc21cbc5d0fa61d6b908f6e04a7da327c86aaf43ee63e76",
-                      "sourceReceiptContentSha256": "sha256:3edd7d3f35c2e064030e0d3a78cf144727c461ae7481f0237b120112395a690f"
+                      "sourceReceiptContentSha256": "sha256:30c03d5358b6abf6bb1d2dda55807d6a89aaf266bea908360d689458a422b4ce"
                     },
                     {
                       "availability": "available",
@@ -2401,13 +2401,13 @@
                       "order": 0,
                       "originalUrl": "https://img.example.test/runtime-main.jpg",
                       "ownerKind": "target-sku",
-                      "platformSkuId": "runtime-sku-1",
+                      "platformSkuId": "800000000101",
                       "role": "sku",
                       "sourceField": "skuProps.imageUrl",
                       "sourceObservationId": "runtime-execution-attempt-offer-detail",
                       "sourceOrdinal": 0,
-                      "sourceOwnerKey": "1688-media-owner-v2:19733f577c9782bb52a5949c9a9f81991a0c75ede8d44ffdae6736903ce2264f",
-                      "sourceReceiptContentSha256": "sha256:bfe15d4ac311c335138af7dc5191876a25ba891fa3a46066ab0c492cd77bdb7b"
+                      "sourceOwnerKey": "1688-media-owner-v2:d29df994d911ba1c83a27ee6e07e84fd8b50178a15a13b4903f66562ebf50d3d",
+                      "sourceReceiptContentSha256": "sha256:dfd4abbf5afcf0df7ab301045ea324143315badcf74da8119b5528d1478d2206"
                     }
                   ],
                   "offerId": "700000000101",
@@ -2443,14 +2443,14 @@
                 },
                 "skuManifest": {
                   "explicitSkuCount": 1,
-                  "manifestHash": "sha256:68daf0d80f9be4bdf0158795057213fa951f50bf3711db269cfe6d904c61667f",
+                  "manifestHash": "sha256:85355f3e58d56a3a25aa0a49cd3092c8eeb69b3a2ac4f84c5c58d7d473baaf7c",
                   "nullFactsCarryAvailability": true,
                   "offerId": "700000000101",
                   "optionCount": 1,
                   "schema": "offer-sku-manifest-v1",
                   "singletonSourceKey": null,
                   "skuIds": [
-                    "runtime-sku-1"
+                    "800000000101"
                   ],
                   "state": "explicit-variants"
                 },
@@ -2520,7 +2520,7 @@
                   "order": 0,
                   "originalUrl": "https://img.example.test/runtime-main.jpg",
                   "role": "sku",
-                  "skuId": "runtime-sku-1",
+                  "skuId": "800000000101",
                   "sourceField": "skuProps.imageUrl"
                 },
                 {
@@ -2560,7 +2560,7 @@
           "artifact:collector-raw-offer-core-a4b23cc994d676cce33b31b2ff72496a39cabf3e36d6c84f461754f441d2dc30",
           "artifact:collector-raw-offer-detail-af6ba67582ec09c2a7a56c347a3841ff18895dcd2de1a4913863f7e6a5990fc1",
           "artifact:collector-raw-offer-shop-card-933c919783e5f8002ff4a7740f5c89f4a173a22791d86d58ab82f780b7f436e4",
-          "artifact:collector-raw-offer-sku-98cba3e298e960883849660240d3064129a04fd5ad9c4cb75a2e84a79421de3e",
+          "artifact:collector-raw-offer-sku-bffcd715edeb9ab2842cb933f04921ff9ed766048f7e41027d627491f6deb96f",
           "artifact:offer-source-offer-consignment-3ef6a0a88c4850a72c28b1d89e916ac6e046f4ea825a14c879cad85fb1c1f20f",
           "artifact:offer-source-shop-card-7e61c77a67fa4769b2e26c49be44c353ad6867d657dcc12eb1f7f2aa533557dc"
         ],

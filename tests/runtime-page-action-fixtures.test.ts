@@ -416,6 +416,7 @@ describe('runtime-derived PageAction fixtures', () => {
       offer: {
         offerId: '700000000101',
         supplier: { memberId: 'fixture-chain-member-1' },
+        skus: [{ skuId: '800000000101' }],
       },
     });
     expect(Object.keys(observation ?? {}).sort()).toEqual([

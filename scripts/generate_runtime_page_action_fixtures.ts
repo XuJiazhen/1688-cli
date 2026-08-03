@@ -143,7 +143,7 @@ const OFFER_INPUT = Object.freeze({
         }],
         skuInfoMap: {
           'fixture-a': {
-            skuId: 'runtime-sku-1',
+            skuId: '800000000101',
             specAttrs: 'variant:fixture-a',
             price: '8.00',
             canBookCount: '25',
