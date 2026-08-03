@@ -1317,8 +1317,15 @@ function fakePage(
         : new RuntimeOfferPage();
     case 'store-qualification':
       return new RuntimeQualificationPage();
-    case 'store-sample':
-      return new RuntimeStorePage();
+    case 'store-sample': {
+      if (request.action.kind !== 'store-sample') {
+        throw new TypeError('Store Sample request drifted.');
+      }
+      return new RuntimeStorePage(
+        request.action.memberId,
+        request.action.canonicalShopUrl,
+      );
+    }
   }
 }
 
@@ -1429,15 +1436,25 @@ class RuntimeQualificationPage extends EventEmitter {
 class RuntimeStorePage extends EventEmitter {
   private currentUrl = 'about:blank';
 
+  constructor(
+    private readonly memberId: string,
+    private readonly canonicalShopUrl: string,
+  ) {
+    super();
+  }
+
   async goto(url: string): Promise<null> {
     this.currentUrl = url;
     const data = encodeURIComponent(JSON.stringify({
       componentKey: 'wp_pc_common_header',
-      params: JSON.stringify({ memberId: STORE_INPUT.memberId }),
+      params: JSON.stringify({ memberId: this.memberId }),
     }));
+    const headerResponse = structuredClone(STORE_INPUT.headerResponse);
+    headerResponse.data.data.memberId = this.memberId;
+    headerResponse.data.data.commonUrl.shopUrl = this.canonicalShopUrl;
     this.emit('response', response(
       `https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/?data=${data}`,
-      JSON.stringify(STORE_INPUT.headerResponse),
+      JSON.stringify(headerResponse),
     ));
     return null;
   }
