@@ -117,6 +117,41 @@ describe('Profile Supervisor RPC protocol', () => {
     }, parseOptions)).toThrow(/unknown fields/);
   });
 
+  it('requires a completion intent only for verified intervention ends', () => {
+    const verified = {
+      ...controlRequest(),
+      method: 'supervisor.intervention.end',
+      payload: {
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+        completionIntentSha256: 'c'.repeat(64),
+      },
+    };
+    expect(parseSupervisorRpcRequest(verified, parseOptions)).toMatchObject({
+      method: 'supervisor.intervention.end',
+      payload: {
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+        completionIntentSha256: 'c'.repeat(64),
+      },
+    });
+    expect(() => parseSupervisorRpcRequest({
+      ...verified,
+      payload: {
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+      },
+    }, parseOptions)).toThrow(/SHA-256 hex digest/u);
+    expect(() => parseSupervisorRpcRequest({
+      ...verified,
+      payload: {
+        interventionSessionId: 'intervention-1',
+        reason: 'cancelled',
+        completionIntentSha256: 'c'.repeat(64),
+      },
+    }, parseOptions)).toThrow(/only valid for a verified/u);
+  });
+
   it('enforces the framed transport size before JSON parsing', () => {
     expect(() => parseSupervisorRpcFrame('x'.repeat(101), {
       verification,

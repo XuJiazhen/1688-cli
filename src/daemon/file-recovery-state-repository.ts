@@ -1,10 +1,13 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { ProfileRecoveryStateRepository } from './supervisor-runtime.js';
+import {
+  normalizeProfileRecoveryState,
+  type ProfileRecoveryState,
+  type ProfileRecoveryStateRepository,
+} from './supervisor-runtime.js';
 
-interface RecoveryStateV1 {
+interface RecoveryStateV1 extends ProfileRecoveryState {
   schema: 'profile-daemon.recovery-state.v1';
-  cooldownUntil: string | null;
   updatedAt: string;
 }
 
@@ -17,36 +20,58 @@ implements ProfileRecoveryStateRepository {
     if (!path.isAbsolute(filePath)) throw new TypeError('Recovery state path must be absolute.');
   }
 
-  async load(): Promise<{ cooldownUntil: string | null }> {
+  async load(): Promise<ProfileRecoveryState> {
     try {
-      const value = JSON.parse(await fs.readFile(this.filePath, 'utf8')) as RecoveryStateV1;
+      const value = JSON.parse(await fs.readFile(this.filePath, 'utf8')) as unknown;
       if (
-        value.schema !== 'profile-daemon.recovery-state.v1'
-        || (value.cooldownUntil !== null && !Number.isFinite(Date.parse(value.cooldownUntil)))
-        || !Number.isFinite(Date.parse(value.updatedAt))
+        value === null
+        || typeof value !== 'object'
+        || Array.isArray(value)
       ) {
         throw new Error('Recovery state is invalid.');
       }
-      return { cooldownUntil: value.cooldownUntil };
+      const record = value as Record<string, unknown>;
+      const unknown = Object.keys(record).filter((key) => ![
+        'schema', 'cooldownUntil', 'verifiedInterventionEndReceipts', 'updatedAt',
+      ].includes(key));
+      if (
+        unknown.length !== 0
+        || record['schema'] !== 'profile-daemon.recovery-state.v1'
+        || !isIsoTimestamp(record['updatedAt'])
+      ) {
+        throw new Error('Recovery state is invalid.');
+      }
+      return normalizeProfileRecoveryState({
+        cooldownUntil: record['cooldownUntil'],
+        ...(record['verifiedInterventionEndReceipts'] === undefined
+          ? {}
+          : { verifiedInterventionEndReceipts: record['verifiedInterventionEndReceipts'] }),
+      });
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { cooldownUntil: null };
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return { cooldownUntil: null, verifiedInterventionEndReceipts: [] };
+      }
       throw error;
     }
   }
 
-  async save(input: { cooldownUntil: string | null; updatedAt: string }): Promise<void> {
+  async save(input: ProfileRecoveryState & { updatedAt: string }): Promise<void> {
     await this.serial(async () => {
-      if (
-        (input.cooldownUntil !== null && !Number.isFinite(Date.parse(input.cooldownUntil)))
-        || !Number.isFinite(Date.parse(input.updatedAt))
-      ) throw new TypeError('Recovery state timestamps are invalid.');
+      const normalized = normalizeProfileRecoveryState({
+        cooldownUntil: input.cooldownUntil,
+        verifiedInterventionEndReceipts: input.verifiedInterventionEndReceipts,
+      });
+      if (!isIsoTimestamp(input.updatedAt)) {
+        throw new TypeError('Recovery state timestamps are invalid.');
+      }
       const directory = path.dirname(this.filePath);
       await fs.mkdir(directory, { recursive: true, mode: 0o700 });
       if (process.platform !== 'win32') await fs.chmod(directory, 0o700);
       const temporary = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
       const value: RecoveryStateV1 = {
         schema: 'profile-daemon.recovery-state.v1',
-        cooldownUntil: input.cooldownUntil,
+        cooldownUntil: normalized.cooldownUntil,
+        verifiedInterventionEndReceipts: normalized.verifiedInterventionEndReceipts,
         updatedAt: new Date(input.updatedAt).toISOString(),
       };
       const handle = await fs.open(temporary, 'wx', 0o600);
@@ -84,4 +109,10 @@ implements ProfileRecoveryStateRepository {
       release();
     }
   }
+}
+
+function isIsoTimestamp(value: unknown): value is string {
+  return typeof value === 'string'
+    && Number.isFinite(Date.parse(value))
+    && new Date(value).toISOString() === value;
 }

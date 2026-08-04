@@ -208,9 +208,108 @@ export interface SupervisorRuntimeEventSink {
   append(event: SupervisorRuntimeEvent): Promise<void> | void;
 }
 
+export const INTERVENTION_END_RECEIPT_SCHEMA =
+  'profile-supervisor.intervention-end-receipt.v1' as const;
+
+/**
+ * A terminal, replayable acknowledgement for a verified intervention end.
+ * The completion intent is owned by the supervisor's database transaction;
+ * the daemon binds that immutable token to the exact retained Page outcome.
+ */
+export interface InterventionEndReceiptV1 {
+  schema: typeof INTERVENTION_END_RECEIPT_SCHEMA;
+  interventionSessionId: string;
+  completionIntentSha256: string;
+  daemonInstanceId: string;
+  contextGeneration: number;
+  pageSessionId: string;
+  endedAt: string;
+  cooldownUntil: string;
+  runtimeState: 'warm';
+}
+
+export interface ProfileRecoveryState {
+  cooldownUntil: string | null;
+  verifiedInterventionEndReceipts: readonly InterventionEndReceiptV1[];
+}
+
 export interface ProfileRecoveryStateRepository {
-  load(): Promise<{ cooldownUntil: string | null }>;
-  save(input: { cooldownUntil: string | null; updatedAt: string }): Promise<void>;
+  load(): Promise<ProfileRecoveryState>;
+  save(input: ProfileRecoveryState & { updatedAt: string }): Promise<void>;
+}
+
+/**
+ * Normalizes the durable subset of daemon recovery state before it can affect
+ * runtime authority. A corrupt terminal receipt must never become a success.
+ */
+export function normalizeProfileRecoveryState(value: unknown): ProfileRecoveryState {
+  const record = recoveryRecord(value, 'ProfileRecoveryState', [
+    'cooldownUntil',
+    'verifiedInterventionEndReceipts',
+  ]);
+  const cooldownUntil = nullableRecoveryTimestamp(
+    record['cooldownUntil'],
+    'recovery cooldownUntil',
+  );
+  const rawReceipts = record['verifiedInterventionEndReceipts'];
+  if (rawReceipts === undefined) {
+    return { cooldownUntil, verifiedInterventionEndReceipts: [] };
+  }
+  if (!Array.isArray(rawReceipts)) {
+    throw recoveryStateInvalid('recovery verifiedInterventionEndReceipts must be an array.');
+  }
+  return {
+    cooldownUntil,
+    verifiedInterventionEndReceipts: rawReceipts.map((receipt, index) =>
+      normalizeInterventionEndReceiptV1(receipt, `recovery receipt ${index}`),
+    ),
+  };
+}
+
+export function normalizeInterventionEndReceiptV1(
+  value: unknown,
+  path = 'InterventionEndReceipt',
+): InterventionEndReceiptV1 {
+  const record = recoveryRecord(value, path, [
+    'schema',
+    'interventionSessionId',
+    'completionIntentSha256',
+    'daemonInstanceId',
+    'contextGeneration',
+    'pageSessionId',
+    'endedAt',
+    'cooldownUntil',
+    'runtimeState',
+  ]);
+  if (record['schema'] !== INTERVENTION_END_RECEIPT_SCHEMA) {
+    throw recoveryStateInvalid(`${path} has an unsupported schema.`);
+  }
+  if (record['runtimeState'] !== 'warm') {
+    throw recoveryStateInvalid(`${path} must record a warm terminal runtime state.`);
+  }
+  return {
+    schema: INTERVENTION_END_RECEIPT_SCHEMA,
+    interventionSessionId: recoveryIdentifier(
+      record['interventionSessionId'],
+      `${path}.interventionSessionId`,
+    ),
+    completionIntentSha256: recoverySha256(
+      record['completionIntentSha256'],
+      `${path}.completionIntentSha256`,
+    ),
+    daemonInstanceId: recoveryIdentifier(
+      record['daemonInstanceId'],
+      `${path}.daemonInstanceId`,
+    ),
+    contextGeneration: recoveryPositiveInteger(
+      record['contextGeneration'],
+      `${path}.contextGeneration`,
+    ),
+    pageSessionId: recoveryIdentifier(record['pageSessionId'], `${path}.pageSessionId`),
+    endedAt: recoveryTimestamp(record['endedAt'], `${path}.endedAt`),
+    cooldownUntil: recoveryTimestamp(record['cooldownUntil'], `${path}.cooldownUntil`),
+    runtimeState: 'warm',
+  };
 }
 
 export interface ProfileDaemonRuntimeOptions {
@@ -301,6 +400,10 @@ export class ProfileDaemonRuntime {
   private active: ActiveExecution | null = null;
   private intervention: ActiveIntervention | null = null;
   private cooldownUntil: string | null = null;
+  private readonly verifiedInterventionEndReceipts = new Map<
+    string,
+    InterventionEndReceiptV1
+  >();
   private recoveryStateLoaded = false;
   private tail: Promise<void> = Promise.resolve();
   private acceptanceTail: Promise<void> = Promise.resolve();
@@ -337,11 +440,7 @@ export class ProfileDaemonRuntime {
 
   async ensureWarm(): Promise<ProfileDaemonStatus> {
     return this.controlSerial(async () => {
-      if (!this.recoveryStateLoaded) {
-        const persisted = await this.options.recoveryStateRepository?.load();
-        this.cooldownUntil = persisted?.cooldownUntil ?? null;
-        this.recoveryStateLoaded = true;
-      }
+      await this.ensureRecoveryStateLoaded();
       if (this.state === 'warm') return this.status();
       if (this.state === 'intervention' || this.state === 'draining') {
         throw new SupervisorRuntimeError(
@@ -738,6 +837,14 @@ export class ProfileDaemonRuntime {
     command: BeginInterventionCommandV1,
   ): Promise<InterventionHandle> {
     return this.controlSerial(async () => {
+      await this.ensureRecoveryStateLoaded();
+      if (this.verifiedInterventionEndReceipts.has(command.interventionSessionId)) {
+        throw new SupervisorRuntimeError(
+          'INTERVENTION_SESSION_TERMINAL',
+          'A verified InterventionSession cannot be reused after its durable end receipt.',
+          false,
+        );
+      }
       if (this.intervention !== null) {
         if (this.intervention.interventionSessionId === command.interventionSessionId) {
           return this.interventionHandle(this.intervention);
@@ -877,10 +984,32 @@ export class ProfileDaemonRuntime {
 
   async endIntervention(
     command: EndInterventionCommandV1,
-  ): Promise<{ cooldownUntil: string | null; runtimeState: SupervisorDaemonRuntimeState }> {
+  ): Promise<InterventionEndReceiptV1 | {
+    cooldownUntil: string | null;
+    runtimeState: SupervisorDaemonRuntimeState;
+  }> {
     return this.controlSerial(async () => {
-      const intervention = this.requireIntervention(command.interventionSessionId);
+      await this.ensureRecoveryStateLoaded();
       if (command.reason === 'verified') {
+        const completionIntentSha256 = requiredSha256(
+          command.completionIntentSha256,
+          'completionIntentSha256',
+          'COMPLETION_INTENT_REQUIRED',
+        );
+        const existingReceipt = this.verifiedInterventionEndReceipts.get(
+          command.interventionSessionId,
+        );
+        if (existingReceipt !== undefined) {
+          if (existingReceipt.completionIntentSha256 !== completionIntentSha256) {
+            throw new SupervisorRuntimeError(
+              'COMPLETION_INTENT_MISMATCH',
+              'The verified InterventionSession already ended under a different completion intent.',
+              false,
+            );
+          }
+          return structuredClone(existingReceipt);
+        }
+        const intervention = this.requireIntervention(command.interventionSessionId);
         if (!intervention.probeReceipt?.passed) {
           throw new SupervisorRuntimeError(
             'IDENTITY_PROBE_REQUIRED',
@@ -899,10 +1028,45 @@ export class ProfileDaemonRuntime {
         const cooldownUntil = new Date(
           this.now().getTime() + this.postRecoveryCooldownMs,
         ).toISOString();
-        await this.persistCooldown(cooldownUntil);
+        const receipt: InterventionEndReceiptV1 = {
+          schema: INTERVENTION_END_RECEIPT_SCHEMA,
+          interventionSessionId: intervention.interventionSessionId,
+          completionIntentSha256,
+          daemonInstanceId: this.options.daemonInstanceId,
+          contextGeneration: this.contextGeneration,
+          pageSessionId: intervention.pageSessionId,
+          endedAt: this.now().toISOString(),
+          cooldownUntil,
+          runtimeState: 'warm',
+        };
+        const nextReceipts = [
+          ...this.verifiedInterventionEndReceipts.values(),
+          receipt,
+        ];
+        await this.persistRecoveryState(cooldownUntil, nextReceipts);
         this.cooldownUntil = cooldownUntil;
+        this.verifiedInterventionEndReceipts.set(
+          intervention.interventionSessionId,
+          receipt,
+        );
         this.state = 'warm';
+        this.intervention = null;
+        await this.event('intervention_ended', {
+          interventionSessionId: command.interventionSessionId,
+          reason: command.reason,
+          cooldownUntil: this.cooldownUntil,
+          completionIntentSha256,
+        });
+        return structuredClone(receipt);
       } else {
+        if (command.completionIntentSha256 !== undefined) {
+          throw new SupervisorRuntimeError(
+            'COMPLETION_INTENT_FORBIDDEN',
+            'Only a verified intervention end can carry a completion intent.',
+            false,
+          );
+        }
+        const intervention = this.requireIntervention(command.interventionSessionId);
         await this.registry.close(
           intervention.pageSessionId,
           {
@@ -1528,9 +1692,49 @@ export class ProfileDaemonRuntime {
     });
   }
 
+  private async ensureRecoveryStateLoaded(): Promise<void> {
+    if (this.recoveryStateLoaded) return;
+    const persisted = await this.options.recoveryStateRepository?.load();
+    const normalized = normalizeProfileRecoveryState(
+      persisted ?? {
+        cooldownUntil: null,
+        verifiedInterventionEndReceipts: [],
+      },
+    );
+    this.cooldownUntil = normalized.cooldownUntil;
+    this.verifiedInterventionEndReceipts.clear();
+    normalized.verifiedInterventionEndReceipts.forEach((receipt) => {
+      if (this.verifiedInterventionEndReceipts.has(receipt.interventionSessionId)) {
+        throw new SupervisorRuntimeError(
+          'RECOVERY_STATE_INVALID',
+          'Recovery state contains duplicate verified InterventionSession receipts.',
+          false,
+        );
+      }
+      this.verifiedInterventionEndReceipts.set(
+        receipt.interventionSessionId,
+        structuredClone(receipt),
+      );
+    });
+    this.recoveryStateLoaded = true;
+  }
+
   private async persistCooldown(cooldownUntil: string | null): Promise<void> {
+    await this.persistRecoveryState(
+      cooldownUntil,
+      [...this.verifiedInterventionEndReceipts.values()],
+    );
+  }
+
+  private async persistRecoveryState(
+    cooldownUntil: string | null,
+    verifiedInterventionEndReceipts: readonly InterventionEndReceiptV1[],
+  ): Promise<void> {
     await this.options.recoveryStateRepository?.save({
       cooldownUntil,
+      verifiedInterventionEndReceipts: verifiedInterventionEndReceipts.map(
+        (receipt) => structuredClone(receipt),
+      ),
       updatedAt: this.now().toISOString(),
     });
   }
@@ -2379,6 +2583,89 @@ function required(value: string | null | undefined, name: string): string {
     throw new TypeError(`${name} must not be empty.`);
   }
   return value;
+}
+
+function requiredSha256(
+  value: unknown,
+  name: string,
+  missingCode: string,
+): string {
+  if (value === undefined || value === null || value === '') {
+    throw new SupervisorRuntimeError(
+      missingCode,
+      `${name} is required for a verified intervention end.`,
+      false,
+    );
+  }
+  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/u.test(value)) {
+    throw new SupervisorRuntimeError(
+      'COMPLETION_INTENT_INVALID',
+      `${name} must be a SHA-256 hex digest.`,
+      false,
+    );
+  }
+  return value;
+}
+
+function recoveryRecord(
+  value: unknown,
+  path: string,
+  allowedKeys: readonly string[],
+): Record<string, unknown> {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw recoveryStateInvalid(`${path} must be an object.`);
+  }
+  const record = value as Record<string, unknown>;
+  const unknown = Object.keys(record).filter((key) => !allowedKeys.includes(key));
+  if (unknown.length !== 0) {
+    throw recoveryStateInvalid(`${path} has unknown fields: ${unknown.sort().join(', ')}.`);
+  }
+  return record;
+}
+
+function recoveryIdentifier(value: unknown, path: string): string {
+  if (
+    typeof value !== 'string'
+    || value.length === 0
+    || value.length > 256
+    || !/^[A-Za-z0-9._:@/-]+$/u.test(value)
+  ) {
+    throw recoveryStateInvalid(`${path} must be a safe identifier.`);
+  }
+  return value;
+}
+
+function recoverySha256(value: unknown, path: string): string {
+  if (typeof value !== 'string' || !/^[a-f0-9]{64}$/u.test(value)) {
+    throw recoveryStateInvalid(`${path} must be a SHA-256 hex digest.`);
+  }
+  return value;
+}
+
+function recoveryPositiveInteger(value: unknown, path: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+    throw recoveryStateInvalid(`${path} must be a positive integer.`);
+  }
+  return value as number;
+}
+
+function nullableRecoveryTimestamp(value: unknown, path: string): string | null {
+  return value === null ? null : recoveryTimestamp(value, path);
+}
+
+function recoveryTimestamp(value: unknown, path: string): string {
+  if (
+    typeof value !== 'string'
+    || !Number.isFinite(Date.parse(value))
+    || new Date(value).toISOString() !== value
+  ) {
+    throw recoveryStateInvalid(`${path} must be an ISO timestamp.`);
+  }
+  return value;
+}
+
+function recoveryStateInvalid(message: string): SupervisorRuntimeError {
+  return new SupervisorRuntimeError('RECOVERY_STATE_INVALID', message, false);
 }
 
 function positiveInteger(value: number, name: string): number {

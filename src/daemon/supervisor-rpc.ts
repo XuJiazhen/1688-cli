@@ -92,6 +92,14 @@ export const SUPERVISOR_PROTOCOL_CANONICAL_CONTENT_V2 = Object.freeze({
     'remoteActionStartId', 'admittedAt', 'transportAuthority',
     'parentCanonicalRequestHash',
   ],
+  interventionEndPayloadKeys: [
+    'interventionSessionId', 'reason', 'completionIntentSha256?',
+  ],
+  interventionEndReceiptKeys: [
+    'schema', 'interventionSessionId', 'completionIntentSha256',
+    'daemonInstanceId', 'contextGeneration', 'pageSessionId', 'endedAt',
+    'cooldownUntil', 'runtimeState',
+  ],
 } as const);
 
 export const SUPERVISOR_PROTOCOL_SHA256_V2 = createHash('sha256')
@@ -345,6 +353,8 @@ export interface VerifyInterventionCommandV1 {
 export interface EndInterventionCommandV1 {
   interventionSessionId: string;
   reason: 'verified' | 'cancelled' | 'timed_out';
+  /** Required for a verified end and prohibited for every other reason. */
+  completionIntentSha256?: string;
 }
 
 export type ParsedSupervisorRpcRequestV2 =
@@ -1082,11 +1092,31 @@ function parseVerifyIntervention(value: unknown): VerifyInterventionCommandV1 {
 
 function parseEndIntervention(value: unknown): EndInterventionCommandV1 {
   const record = strictRecord(value, 'EndInterventionCommand', [
-    'interventionSessionId', 'reason',
+    'interventionSessionId', 'reason', 'completionIntentSha256',
   ]);
+  const reason = enumValue(
+    record['reason'],
+    ['verified', 'cancelled', 'timed_out'] as const,
+    'reason',
+  );
+  if (reason !== 'verified' && record['completionIntentSha256'] !== undefined) {
+    throw new SupervisorRpcError(
+      'RPC_CONTRACT_INVALID',
+      'completionIntentSha256 is only valid for a verified intervention end.',
+      false,
+    );
+  }
   return {
     interventionSessionId: identifier(record['interventionSessionId'], 'interventionSessionId'),
-    reason: enumValue(record['reason'], ['verified', 'cancelled', 'timed_out'] as const, 'reason'),
+    reason,
+    ...(reason !== 'verified'
+      ? {}
+      : {
+          completionIntentSha256: hash(
+            record['completionIntentSha256'],
+            'completionIntentSha256',
+          ),
+        }),
   };
 }
 

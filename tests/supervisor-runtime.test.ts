@@ -17,6 +17,7 @@ import {
 } from '../src/collection/page-action-contracts.js';
 import type { ManagedPage } from '../src/daemon/page-registry.js';
 import { FilePageActionAcceptanceRepository } from '../src/daemon/file-acceptance-repository.js';
+import { FileProfileRecoveryStateRepository } from '../src/daemon/file-recovery-state-repository.js';
 import {
   DatabaseAnchoredMonotonicClock,
   HmacRenewalCredentialVerifier,
@@ -395,77 +396,131 @@ describe('ProfileDaemonRuntime', () => {
 
   it('transfers the same challenge Page/PID/Context to intervention and enforces cooldown', async () => {
     const host = new FakeHost();
-    let persistedCooldown: string | null = null;
-    const recoveryStateRepository: ProfileRecoveryStateRepository = {
-      load: async () => ({ cooldownUntil: persistedCooldown }),
-      save: async (input) => { persistedCooldown = input.cooldownUntil; },
-    };
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'supervisor-intervention-end-'));
+    const recoveryStatePath = path.join(directory, 'profile-recovery-state.json');
+    const recoveryStateRepository = new FileProfileRecoveryStateRepository(recoveryStatePath);
     let current = now.getTime();
     let entered!: () => void;
     const pageEntered = new Promise<void>((resolve) => { entered = resolve; });
-    const runtime = makeRuntime(host, {
-      async execute(request, scope) {
-        entered();
-        await new Promise<void>((resolve, reject) => {
-          scope.signal.addEventListener('abort', () => reject(new Error('intervention')), { once: true });
+    try {
+      const runtime = makeRuntime(host, {
+        async execute(request, scope) {
+          entered();
+          await new Promise<void>((resolve, reject) => {
+            scope.signal.addEventListener('abort', () => reject(new Error('intervention')), { once: true });
+          });
+          return fakeResponse(request);
+        },
+      }, { now: () => new Date(current), recoveryStateRepository });
+      await runtime.ensureWarm();
+      const request = signedExecuteRequest(1);
+      const execution = handleExecute(runtime, request);
+      await pageEntered;
+      const before = runtime.status();
+      const handle = await runtime.beginIntervention({
+        interventionSessionId: 'intervention-1',
+        pageSessionId: before.activePageSessionId!,
+        expectedWorkUnitId: 'work-1',
+        operatorId: 'operator-1',
+        expiresAt: '2026-07-31T08:10:00.000Z',
+      });
+      expect(handle).toMatchObject({
+        chromiumPid: 4242,
+        contextGeneration: 1,
+        pageSessionId: before.activePageSessionId,
+      });
+      await expect(execution).resolves.toMatchObject({ ok: false });
+      const probe = await runtime.verifyIntervention({
+        interventionSessionId: 'intervention-1',
+        expectedMemberId: 'member-1',
+        probeRevision: 'probe-v1',
+      });
+      expect(probe.passed).toBe(true);
+      await expect(runtime.endIntervention({
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+      })).rejects.toMatchObject({ code: 'COMPLETION_INTENT_REQUIRED' });
+      expect(host.ownedPages[0]?.isClosed()).toBe(false);
+
+      const completionIntentSha256 = 'c'.repeat(64);
+      const endReceipt = await runtime.endIntervention({
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+        completionIntentSha256,
+      });
+      expect(endReceipt).toEqual({
+        schema: 'profile-supervisor.intervention-end-receipt.v1',
+        interventionSessionId: 'intervention-1',
+        completionIntentSha256,
+        daemonInstanceId: DAEMON_ID,
+        contextGeneration: 1,
+        pageSessionId: before.activePageSessionId,
+        endedAt: now.toISOString(),
+        cooldownUntil: '2026-07-31T08:10:00.000Z',
+        runtimeState: 'warm',
+      });
+      await expect(runtime.endIntervention({
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+        completionIntentSha256,
+      })).resolves.toEqual(endReceipt);
+      await expect(runtime.endIntervention({
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+        completionIntentSha256: 'd'.repeat(64),
+      })).rejects.toMatchObject({ code: 'COMPLETION_INTENT_MISMATCH' });
+
+      const restartedRuntime = makeRuntime(
+        new FakeHost(),
+        { execute: async (request) => fakeResponse(request) },
+        {
+          now: () => new Date(current),
+          recoveryStateRepository: new FileProfileRecoveryStateRepository(recoveryStatePath),
+        },
+      );
+      await restartedRuntime.ensureWarm();
+      expect(restartedRuntime.status().cooldownUntil).toBe('2026-07-31T08:10:00.000Z');
+      await expect(restartedRuntime.endIntervention({
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+        completionIntentSha256,
+      })).resolves.toEqual(endReceipt);
+      await expect(restartedRuntime.endIntervention({
+        interventionSessionId: 'intervention-1',
+        reason: 'verified',
+        completionIntentSha256: 'd'.repeat(64),
+      })).rejects.toMatchObject({ code: 'COMPLETION_INTENT_MISMATCH' });
+      await expect(restartedRuntime.beginIntervention({
+        interventionSessionId: 'intervention-1',
+        pageSessionId: 'page-session-reused',
+        expectedWorkUnitId: 'work-reused',
+        operatorId: 'operator-1',
+        expiresAt: '2026-07-31T08:10:00.000Z',
+      })).rejects.toMatchObject({ code: 'INTERVENTION_SESSION_TERMINAL' });
+
+      const blockedRequest = signedExecuteRequest(2);
+      await expect(handleExecute(runtime, blockedRequest)).resolves.toMatchObject({
+        ok: false,
+        error: { code: 'POST_RECOVERY_COOLDOWN' },
+      });
+      expect(host.ensureCount).toBe(1);
+      expect(host.restartCount).toBe(0);
+      current += 10 * 60_000;
+      await expect(runtime.finalReadinessProbe({
+        expectedMemberId: 'member-1',
+        probeRevision: 'final-probe-v1',
+      })).resolves.toMatchObject({ passed: true });
+      expect(host.probedPages).toHaveLength(2);
+      expect(host.probedPages[1]?.isClosed()).toBe(true);
+      expect(runtime.status().cooldownUntil).toBeNull();
+      await expect(new FileProfileRecoveryStateRepository(recoveryStatePath).load())
+        .resolves.toEqual({
+          cooldownUntil: null,
+          verifiedInterventionEndReceipts: [endReceipt],
         });
-        return fakeResponse(request);
-      },
-    }, { now: () => new Date(current), recoveryStateRepository });
-    await runtime.ensureWarm();
-    const request = signedExecuteRequest(1);
-    const execution = handleExecute(runtime, request);
-    await pageEntered;
-    const before = runtime.status();
-    const handle = await runtime.beginIntervention({
-      interventionSessionId: 'intervention-1',
-      pageSessionId: before.activePageSessionId!,
-      expectedWorkUnitId: 'work-1',
-      operatorId: 'operator-1',
-      expiresAt: '2026-07-31T08:10:00.000Z',
-    });
-    expect(handle).toMatchObject({
-      chromiumPid: 4242,
-      contextGeneration: 1,
-      pageSessionId: before.activePageSessionId,
-    });
-    await expect(execution).resolves.toMatchObject({ ok: false });
-    const probe = await runtime.verifyIntervention({
-      interventionSessionId: 'intervention-1',
-      expectedMemberId: 'member-1',
-      probeRevision: 'probe-v1',
-    });
-    expect(probe.passed).toBe(true);
-    await expect(runtime.endIntervention({
-      interventionSessionId: 'intervention-1',
-      reason: 'verified',
-    })).resolves.toEqual({
-      cooldownUntil: '2026-07-31T08:10:00.000Z',
-      runtimeState: 'warm',
-    });
-    const restartedRuntime = makeRuntime(
-      new FakeHost(),
-      { execute: async (request) => fakeResponse(request) },
-      { now: () => new Date(current), recoveryStateRepository },
-    );
-    await restartedRuntime.ensureWarm();
-    expect(restartedRuntime.status().cooldownUntil).toBe('2026-07-31T08:10:00.000Z');
-    const blockedRequest = signedExecuteRequest(2);
-    await expect(handleExecute(runtime, blockedRequest)).resolves.toMatchObject({
-      ok: false,
-      error: { code: 'POST_RECOVERY_COOLDOWN' },
-    });
-    expect(host.ensureCount).toBe(1);
-    expect(host.restartCount).toBe(0);
-    current += 10 * 60_000;
-    await expect(runtime.finalReadinessProbe({
-      expectedMemberId: 'member-1',
-      probeRevision: 'final-probe-v1',
-    })).resolves.toMatchObject({ passed: true });
-    expect(host.probedPages).toHaveLength(2);
-    expect(host.probedPages[1]?.isClosed()).toBe(true);
-    expect(runtime.status().cooldownUntil).toBeNull();
-    expect(persistedCooldown).toBeNull();
+    } finally {
+      await fs.rm(directory, { recursive: true, force: true });
+    }
   });
 
   it('retains a challenge response Page after the executor requests close', async () => {
