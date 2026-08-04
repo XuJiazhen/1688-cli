@@ -751,6 +751,128 @@ describe('Production PageAction bridge', () => {
     });
   });
 
+  it('carries every approved dynamic key, sort pair, and frozen page template through production Search', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-dynamic-parity-'));
+    const filterParams = {
+      bizType: '1',
+      city: '广州',
+      complexTags: '1013;1001',
+      featurePair: '1995:33711371,1995:4081;10363190:8969439',
+      filtMemberTags: '5179713,5125953;3938689',
+      filtOfferTags: '1988226,98306,235906;21186',
+      freeShipping: '1',
+      priceEnd: '99',
+      priceStart: '10.5',
+      province: '广东',
+      quantityBegin: '2',
+      shopCountEnd: '300',
+      shopCountStart: '1',
+      tags: 'industry-select',
+      uniqfield: 'userid',
+    } as const;
+    const sortCases = [
+      ['relevance', 'normal', true],
+      ['sales', 'va_sales360', true],
+      ['price-asc', 'price', false],
+      ['price-desc', 'price', true],
+    ] as const;
+    try {
+      for (const [sort, remoteSort, descendOrder] of sortCases) {
+        const parameterSet = compileSearchParameterSetV1({
+          keyword: '灭火器',
+          sort,
+          compatibilitySortInput: null,
+          filterConfigSnapshotId: 'dynamic-filter-snapshot-1',
+          filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
+          serializerCapabilitySnapshotId: 'dynamic-serializer-snapshot-1',
+          serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
+          filterParams,
+          selectedOptions: [],
+          maxPages: 2,
+          maxOffers: 120,
+          advertisementPolicy: 'exclude-p4p',
+        });
+        await fs.writeFile(
+          path.join(artifactDirectory, 'parameter-set.json'),
+          JSON.stringify(parameterSet),
+          { mode: 0o600 },
+        );
+        const outerRequests = [1, 2].map((page) => compileSearchPageRequestV1({
+          parameterSet,
+          page,
+          pageSessionId: 'dynamic-page-session-1',
+        }).outerDataJson);
+        const page = new FakeSearchPage(outerRequests, true);
+        let idOrdinal = 0;
+        const response = await new ProductionPageActionExecutor({
+          artifactDirectory,
+          now: () => now,
+          idFactory: () => `dynamic-${sort}-${++idOrdinal}`,
+          pace: async () => {},
+          random: () => 0,
+        }).execute(executableSearchRequest(now, parameterSet), {
+          page: page as never,
+          pageSessionId: 'dynamic-page-session-1',
+          signal: new AbortController().signal,
+          assertAuthorized: async () => {},
+          admitRemoteAttempt: async (input) => ({
+            remoteActionStartId: `start-${sort}-${input.ordinal}`,
+            admittedAt: now.toISOString(),
+          }),
+          classifyUrl: async () => {},
+          closeOwnedPage: async () => {},
+        });
+
+        expect(response.executionAttemptReceipt).toMatchObject({
+          outcome: 'completed',
+          batches: [{ kind: 'search-page' }, { kind: 'search-page' }],
+        });
+        expect(page.clickCalls).toBe(0);
+        expect(page.navigationCalls.map(({ url }) => {
+          const query = new URL(url).searchParams;
+          return {
+            beginPage: query.get('beginPage'),
+            sortType: query.get('sortType'),
+            descendOrder: query.get('descendOrder'),
+            filterParams: Object.fromEntries(
+              Object.keys(filterParams).map((key) => [key, query.get(key)]),
+            ),
+          };
+        })).toEqual([
+          {
+            beginPage: '1',
+            sortType: remoteSort,
+            descendOrder: String(descendOrder),
+            filterParams,
+          },
+          {
+            beginPage: '2',
+            sortType: remoteSort,
+            descendOrder: String(descendOrder),
+            filterParams,
+          },
+        ]);
+        expect(response.executionAttemptReceipt.requestSnapshots).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              page: 1,
+              sort: remoteSort,
+              filterParams,
+            }),
+            expect.objectContaining({
+              page: 2,
+              sort: remoteSort,
+              filterParams,
+            }),
+          ]),
+        );
+      }
+    } finally {
+      await fs.rm(artifactDirectory, { recursive: true, force: true });
+    }
+  });
+
   it('marks the maxOffers overflow cut in the committed Search Batch', async () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-overflow-'));

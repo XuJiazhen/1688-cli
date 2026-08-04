@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   createSearchSerializerCapabilitySnapshotV1,
@@ -10,6 +11,7 @@ import {
   assertSearchPageDerivationV1,
   compileSearchPageRequestV1,
   compileSearchParameterSetV1,
+  verifyParameterSetHash,
 } from '../src/session/search-compiler.js';
 
 const NOW = '2026-07-31T00:00:00.000Z';
@@ -210,4 +212,56 @@ describe('Search Contract Resolver and Compiler V1', () => {
     expect(JSON.stringify(legacy)).not.toContain('va_rmdarkgmv30');
     expect(legacy).not.toHaveProperty('compatibilitySortInput');
   });
+
+  it.each([
+    ['sort pair', (value: Record<string, unknown>) => {
+      value['sortType'] = 'normal';
+    }],
+    ['GBK keyword encoding', (value: Record<string, unknown>) => {
+      value['encodedKeyword'] = '%E6%BB%85%E7%81%AB%E5%99%A8';
+    }],
+    ['unknown filter', (value: Record<string, unknown>) => {
+      value['filterParams'] = { arbitrary: 'caller-owned' };
+    }],
+    ['noncanonical numeric filter', (value: Record<string, unknown>) => {
+      value['filterParams'] = { priceStart: '01.50' };
+    }],
+    ['unexpected field', (value: Record<string, unknown>) => {
+      value['unexpected'] = true;
+    }],
+  ] as const)('rejects a self-hashed parameter artifact with %s drift', (_name, mutate) => {
+    const filterSnapshot = snapshot();
+    const compiled = compileSearchParameterSetV1(resolveSearchIntentV1({
+      intent: intent({ filterConfigSnapshotHash: filterSnapshot.snapshotHash }),
+      filterSnapshot,
+      capabilitySnapshot: capabilities(),
+      now: NOW,
+    }));
+    const corrupted = structuredClone(compiled) as Record<string, unknown>;
+    mutate(corrupted);
+    corrupted['parameterSetHash'] = hashParameterSet(corrupted);
+
+    expect(() => verifyParameterSetHash(corrupted as typeof compiled)).toThrowError(
+      expect.objectContaining({ code: 'SEARCH_PARAMETER_SET_CONTRACT_DRIFT' }),
+    );
+  });
 });
+
+function hashParameterSet(value: Record<string, unknown>): string {
+  const { parameterSetHash: _ignored, ...content } = value;
+  return `sha256:${createHash('sha256')
+    .update(JSON.stringify(canonicalize(content)), 'utf8')
+    .digest('hex')}`;
+}
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value !== null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    return Object.fromEntries(Object.keys(record).sort().map((key) => [
+      key,
+      canonicalize(record[key]),
+    ]));
+  }
+  return value;
+}

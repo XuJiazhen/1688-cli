@@ -106,6 +106,7 @@ export function compileSearchPageRequestV1(input: {
   endpoint?: string;
 }): CompiledSearchPageRequestV1 {
   const { parameterSet, page } = input;
+  verifyParameterSetHash(parameterSet);
   if (!Number.isInteger(page) || page < 1 || page > parameterSet.maxPages) {
     protocolError('SEARCH_PAGE_OUT_OF_SCOPE', `Search page ${page} is outside the compiled scope.`);
   }
@@ -113,7 +114,6 @@ export function compileSearchPageRequestV1(input: {
   if (!pageSessionId || /[\u0000-\u001f\u007f]/.test(pageSessionId)) {
     protocolError('SEARCH_PAGE_SESSION_INVALID', 'Search page session ID is invalid.');
   }
-  verifyParameterSetHash(parameterSet);
   const params: Record<string, string | number | boolean> = {
     method: 'getOfferList',
     keywords: parameterSet.encodedKeyword,
@@ -216,10 +216,150 @@ export function assertSearchPageDerivationV1(
 export function verifyParameterSetHash(
   parameterSet: CanonicalSearchParameterSetV1,
 ): void {
+  assertCanonicalSearchParameterSetContractV1(parameterSet);
   const { parameterSetHash, ...content } = parameterSet;
   if (parameterSetHash !== sha256(content)) {
     protocolError('SEARCH_PARAMETER_SET_HASH_MISMATCH', 'Canonical parameter set failed hash verification.');
   }
+}
+
+/**
+ * A content-addressed parameter artifact is still untrusted at the browser
+ * boundary. Verify its frozen protocol shape before using it to navigate.
+ */
+function assertCanonicalSearchParameterSetContractV1(
+  parameterSet: CanonicalSearchParameterSetV1,
+): void {
+  const value = parameterSet as unknown;
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    parameterSetContractDrift('Canonical Search parameter set must be an object.');
+  }
+  const record = value as Record<string, unknown>;
+  const expectedKeys = [
+    'schema', 'compilerRevision', 'serializerRevision', 'keyword',
+    'encodedKeyword', 'sort', 'sortType', 'descendOrder', 'filterParams',
+    'pageSize', 'pageIdPlaceholder', 'filterConfigSnapshotId',
+    'filterConfigSnapshotHash', 'serializerCapabilitySnapshotId',
+    'serializerCapabilitySnapshotHash', 'advertisementPolicy', 'maxPages',
+    'maxOffers', 'parameterSetHash',
+  ].sort();
+  const actualKeys = Object.keys(record).sort();
+  if (JSON.stringify(actualKeys) !== JSON.stringify(expectedKeys)) {
+    parameterSetContractDrift('Canonical Search parameter set has an unexpected field shape.');
+  }
+  if (
+    record['schema'] !== 'canonical-search-parameter-set-v1'
+    || record['compilerRevision'] !== SEARCH_COMPILER_REVISION
+    || record['serializerRevision'] !== SEARCH_SERIALIZER_REVISION
+    || record['pageSize'] !== SEARCH_PAGE_SIZE
+    || record['pageIdPlaceholder'] !== SEARCH_PAGE_ID_PLACEHOLDER
+  ) {
+    parameterSetContractDrift('Canonical Search parameter set has an unsupported schema or revision.');
+  }
+  const keyword = exactText(record['keyword']);
+  const encodedKeyword = exactText(record['encodedKeyword']);
+  if (encodedKeyword !== encodeGbkPercent(keyword)) {
+    parameterSetContractDrift('Canonical Search parameter set keyword encoding drifted.');
+  }
+  const sort = record['sort'];
+  if (
+    sort !== 'relevance'
+    && sort !== 'sales'
+    && sort !== 'price-asc'
+    && sort !== 'price-desc'
+  ) {
+    parameterSetContractDrift('Canonical Search parameter set has an unsupported business sort.');
+  }
+  const expectedSort = SORT_PROTOCOL[sort];
+  if (
+    record['sortType'] !== expectedSort.sortType
+    || record['descendOrder'] !== expectedSort.descendOrder
+  ) {
+    parameterSetContractDrift('Canonical Search parameter set sort pair drifted.');
+  }
+  if (!isSha256(record['filterConfigSnapshotHash'])
+    || !isSha256(record['serializerCapabilitySnapshotHash'])
+    || !isSha256(record['parameterSetHash'])
+    || !safeIdentifier(record['filterConfigSnapshotId'])
+    || !safeIdentifier(record['serializerCapabilitySnapshotId'])) {
+    parameterSetContractDrift('Canonical Search parameter set authority binding is invalid.');
+  }
+  const filterParams = record['filterParams'];
+  if (filterParams === null || typeof filterParams !== 'object' || Array.isArray(filterParams)) {
+    parameterSetContractDrift('Canonical Search parameter set filters must be an object.');
+  }
+  const filterRecord = filterParams as Record<string, unknown>;
+  const filterKeys = Object.keys(filterRecord);
+  const expectedFilterKeys = [...filterKeys].sort((left, right) => left.localeCompare(right));
+  if (JSON.stringify(filterKeys) !== JSON.stringify(expectedFilterKeys)) {
+    parameterSetContractDrift('Canonical Search parameter set filters are not deterministically ordered.');
+  }
+  for (const key of filterKeys) {
+    if (!(SEARCH_FILTER_REQUEST_KEYS as readonly string[]).includes(key)) {
+      parameterSetContractDrift(`Canonical Search parameter set contains unsupported filter ${key}.`);
+    }
+    const filterValue = filterRecord[key];
+    if (typeof filterValue !== 'string' || filterValue.length === 0 || filterValue.trim() !== filterValue) {
+      parameterSetContractDrift(`Canonical Search parameter set filter ${key} is invalid.`);
+    }
+    if (!canonicalNumericFilter(key, filterValue)) {
+      parameterSetContractDrift(`Canonical Search parameter set numeric filter ${key} is not canonical.`);
+    }
+  }
+  const maxPages = record['maxPages'];
+  const maxOffers = record['maxOffers'];
+  if (
+    typeof maxPages !== 'number'
+    || !Number.isSafeInteger(maxPages)
+    || maxPages < 1
+    || typeof maxOffers !== 'number'
+    || !Number.isSafeInteger(maxOffers)
+    || maxOffers < 1
+  ) {
+    parameterSetContractDrift('Canonical Search parameter set bounds are invalid.');
+  }
+  if (
+    record['advertisementPolicy'] !== 'exclude-p4p'
+    && record['advertisementPolicy'] !== 'archive-and-mark'
+  ) {
+    parameterSetContractDrift('Canonical Search parameter set advertisement policy is invalid.');
+  }
+}
+
+function canonicalNumericFilter(key: string, value: string): boolean {
+  switch (key) {
+    case 'quantityBegin':
+    case 'shopCountStart':
+    case 'shopCountEnd':
+      return /^(?:0|[1-9][0-9]*)$/u.test(value);
+    case 'priceStart':
+    case 'priceEnd':
+      return /^(?:0|[1-9][0-9]*)(?:\.[0-9]*[1-9])?$/u.test(value);
+    default:
+      return true;
+  }
+}
+
+function exactText(value: unknown): string {
+  if (typeof value !== 'string' || value.length === 0 || value.trim() !== value) {
+    parameterSetContractDrift('Canonical Search parameter set text is invalid.');
+  }
+  return value;
+}
+
+function safeIdentifier(value: unknown): boolean {
+  return typeof value === 'string'
+    && value.length > 0
+    && value.trim() === value
+    && !/[\u0000-\u001f\u007f]/u.test(value);
+}
+
+function isSha256(value: unknown): boolean {
+  return typeof value === 'string' && /^sha256:[0-9a-f]{64}$/u.test(value);
+}
+
+function parameterSetContractDrift(message: string): never {
+  protocolError('SEARCH_PARAMETER_SET_CONTRACT_DRIFT', message);
 }
 
 function protocolError(code: string, message: string): never {
