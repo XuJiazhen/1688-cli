@@ -240,12 +240,16 @@ describe('ProfileDaemonRuntime', () => {
     const repository = new CloseObservingAcceptanceRepository(host);
     const request = signedExecuteRequest(1);
     const candidate = fullCompletedResponse(request.payload);
+    const lifecycleFinalizedAt = new Date(now.getTime() + 1_000);
     const previousExecutionHash = candidate.executionAttemptReceipt.receiptHash;
     const previousCompletionHash = candidate.completionReceipt!.completionReceiptHash;
     const runtime = makeRuntime(
       host,
       { execute: async () => candidate },
-      { acceptanceRepository: repository },
+      {
+        acceptanceRepository: repository,
+        now: () => lifecycleFinalizedAt,
+      },
     );
     await runtime.ensureWarm();
     const terminal = await handleExecute(runtime, request);
@@ -258,7 +262,7 @@ describe('ProfileDaemonRuntime', () => {
         baselinePages: 0, createdPages: 1, closedPages: 1,
         transferredPages: 0, remainingOwnedPages: 0,
       },
-      metrics: { pageLifecycleFinalizedAtMs: now.getTime() },
+      metrics: { pageLifecycleFinalizedAtMs: lifecycleFinalizedAt.getTime() },
     });
     expect(rebound.executionAttemptReceipt.receiptHash).not.toBe(previousExecutionHash);
     expect(rebound.completionReceipt!.completionReceiptHash).not.toBe(previousCompletionHash);
@@ -266,6 +270,7 @@ describe('ProfileDaemonRuntime', () => {
       .toBe(rebound.executionAttemptReceipt.receiptHash);
     expect(rebound.completionReceipt!.finalizedByExecutionRef?.receiptHash)
       .toBe(rebound.executionAttemptReceipt.receiptHash);
+    expect(rebound.completionReceipt!.completedAt).toBe(now.toISOString());
     expect(repository.completeObservedClosedPage).toBe(true);
   });
 

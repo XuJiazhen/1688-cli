@@ -598,7 +598,7 @@ function buildResponse(
     executionAttemptReceiptRefs: allRefs,
     finalizedByExecutionRef: attemptRef,
     batches: run.batches as [CollectionBatch, ...CollectionBatch[]],
-    completedAt: ports.now().toISOString(),
+    completedAt: completionTimestampFromBatches(run.batches),
   };
   const completionReceipt: PageActionCompletionReceiptV1 = {
     ...completionContent,
@@ -608,6 +608,28 @@ function buildResponse(
     executionAttemptReceipt,
     completionReceipt,
   });
+}
+
+function completionTimestampFromBatches(
+  batches: readonly CollectionBatch[],
+): string {
+  const latest = batches.reduce<number | null>((current, batch) => {
+    const completedAt = Date.parse(batch.completedAt);
+    if (!Number.isFinite(completedAt)) {
+      throw contractError(
+        'PAGE_ACTION_BATCH_COMPLETION_INVALID',
+        'Completed PageAction contains a Batch with an invalid completion timestamp.',
+      );
+    }
+    return current === null ? completedAt : Math.max(current, completedAt);
+  }, null);
+  if (latest === null) {
+    throw contractError(
+      'PAGE_ACTION_OUTPUT_MISSING',
+      'Completed PageAction requires at least one CollectionBatch.',
+    );
+  }
+  return new Date(latest).toISOString();
 }
 
 function assertStoreScopeBeforePage(request: PageActionRequestV1): void {

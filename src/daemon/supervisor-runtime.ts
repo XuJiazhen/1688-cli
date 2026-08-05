@@ -2184,9 +2184,19 @@ function rebindPageLifecycleReceipt(
     finalizedByExecutionRef: _previousFinalizedRef,
     ...previousCompletionContent
   } = response.completionReceipt;
+  const completedAt = completionTimestampFromBatches(
+    response.completionReceipt.batches,
+  );
+  if (Date.parse(lifecycleFinalizedAt) < Date.parse(completedAt)) {
+    throw new SupervisorRuntimeError(
+      'PAGE_LIFECYCLE_PRECEDES_BATCH_COMPLETION',
+      'Managed Page lifecycle finalized before its immutable Batch completion evidence.',
+      false,
+    );
+  }
   const completionContent = {
     ...previousCompletionContent,
-    completedAt: lifecycleFinalizedAt,
+    completedAt,
     executionAttemptReceiptRefs: reboundRefs as [
       typeof reboundRefs[number],
       ...Array<typeof reboundRefs[number]>
@@ -2203,6 +2213,31 @@ function rebindPageLifecycleReceipt(
     executionAttemptReceipt: reboundExecution,
     completionReceipt: reboundCompletion,
   });
+}
+
+function completionTimestampFromBatches(
+  batches: readonly { completedAt: string }[],
+): string {
+  let latest: number | null = null;
+  for (const batch of batches) {
+    const completedAt = Date.parse(batch.completedAt);
+    if (!Number.isFinite(completedAt)) {
+      throw new SupervisorRuntimeError(
+        'PAGE_ACTION_BATCH_COMPLETION_INVALID',
+        'Managed PageAction completion contains an invalid Batch completion timestamp.',
+        false,
+      );
+    }
+    latest = latest === null ? completedAt : Math.max(latest, completedAt);
+  }
+  if (latest === null) {
+    throw new SupervisorRuntimeError(
+      'PAGE_ACTION_BATCH_COMPLETION_MISSING',
+      'Managed PageAction completion requires immutable Batch evidence.',
+      false,
+    );
+  }
+  return new Date(latest).toISOString();
 }
 
 function sameFenceIdentity(left: LeaseFenceV1 | null, right: LeaseFenceV1 | null): boolean {
