@@ -12,7 +12,6 @@ import {
   createRuntimeOfflineScenarioRequestForTest,
   DEFAULT_RUNTIME_PAGE_ACTION_FIXTURE_ROOT,
   generateRuntimeDerivedPageActionFixtures,
-  type RuntimeOfflineSearchParameterSetArtifact,
   verifyRuntimeDerivedPageActionFixtureSet,
 } from '../scripts/generate_runtime_page_action_fixtures.js';
 import type { PageActionRequestV1 } from '../src/collection/page-action-contracts.js';
@@ -239,96 +238,63 @@ describe('runtime-derived PageAction fixtures', () => {
     const fixture = resolvedSearchFixture();
     const beforeRequest = JSON.stringify(fixture.request);
     const beforeArtifact = Buffer.from(fixture.artifact.bytes);
-    const resolvedRefs: string[] = [];
+    await writeResolvedSearchArtifact(root, fixture.artifact);
     const response = await createRuntimeOfflinePageActionExecutor({
       artifactDirectory: root,
       now: () => new Date('2026-08-02T00:00:00.000Z'),
       scenario: 'chain-coherent-available-v1',
-      resolveSearchParameterSetArtifact: async (artifactRef) => {
-        resolvedRefs.push(artifactRef);
-        return fixture.artifact;
-      },
     }).execute(fixture.request, harnessScope('search-list'));
     expect(response).toMatchObject({
       executionAttemptReceipt: { actionKind: 'search-list', outcome: 'completed' },
       completionReceipt: { actionKind: 'search-list', status: 'completed' },
     });
-    expect(resolvedRefs).toEqual([fixture.artifact.artifactRef]);
     expect(JSON.stringify(fixture.request)).toBe(beforeRequest);
-    expect(Buffer.from(fixture.artifact.bytes)).toEqual(beforeArtifact);
-    await expect(fs.readdir(root)).resolves.not.toContain(
-      `${fixture.artifact.contentSha256}.json`,
-    );
+    await expect(fs.readFile(resolvedSearchArtifactPath(root, fixture.artifact)))
+      .resolves.toEqual(beforeArtifact);
   });
 
-  it('fails closed when non-static Search authority cannot be resolved exactly', async () => {
+  it('fails closed when non-static Search authority cannot be read from its content-addressed artifact', async () => {
     const absent = resolvedSearchFixture();
     await expect(executeResolvedSearch('offline-harness-resolver-absent-', absent.request))
-      .rejects.toThrow(/explicit test-only resolver/u);
+      .rejects.toThrow(/artifact bytes are missing/u);
 
-    const missing = resolvedSearchFixture();
+    const corrupt = resolvedSearchFixture();
     await expect(executeResolvedSearch(
-      'offline-harness-resolver-missing-',
-      missing.request,
-      async () => { throw new Error('parameter-set artifact is missing'); },
-    )).rejects.toThrow(/artifact is missing/u);
+      'offline-harness-resolver-corrupt-',
+      corrupt.request,
+      corrupt.artifact,
+      Buffer.concat([Buffer.from(corrupt.artifact.bytes), Buffer.from(' ')]),
+    )).rejects.toThrow(/digest|hash|corrupt|mismatch/u);
 
-    const invalidCases: Array<{
-      name: string;
-      mutate(
-        request: PageActionRequestV1,
-        artifact: RuntimeOfflineSearchParameterSetArtifact,
-      ): RuntimeOfflineSearchParameterSetArtifact;
-      error: RegExp;
-    }> = [
+    const invalidJson = resolvedSearchFixture();
+    const invalidJsonBytes = Buffer.from('{');
+    const invalidJsonDigest = digest(invalidJsonBytes);
+    if (invalidJson.request.action.kind !== 'search-list') throw new Error('Search request drifted.');
+    invalidJson.request.action.request.canonicalParameterSetArtifactRef = `sha256:${invalidJsonDigest}`;
+    await expect(executeResolvedSearch(
+      'offline-harness-resolver-invalid-json-',
+      invalidJson.request,
+      { artifactRef: `sha256:${invalidJsonDigest}`, contentSha256: invalidJsonDigest, bytes: invalidJsonBytes },
+    )).rejects.toThrow(/invalid JSON/u);
+
+    const parameterHash = resolvedSearchFixture();
+    const parameterSet = JSON.parse(Buffer.from(parameterHash.artifact.bytes).toString('utf8')) as
+      Record<string, unknown>;
+    parameterSet['parameterSetHash'] = `sha256:${'0'.repeat(64)}`;
+    const parameterHashBytes = Buffer.from(JSON.stringify(parameterSet));
+    const parameterHashDigest = digest(parameterHashBytes);
+    if (parameterHash.request.action.kind !== 'search-list') throw new Error('Search request drifted.');
+    parameterHash.request.action.request.canonicalParameterSetArtifactRef =
+      `sha256:${parameterHashDigest}`;
+    await expect(executeResolvedSearch(
+      'offline-harness-resolver-parameter-hash-',
+      parameterHash.request,
       {
-        name: 'stale-ref',
-        mutate: (_request, artifact) => ({
-          ...artifact,
-          artifactRef: `sha256:${'0'.repeat(64)}`,
-        }),
-        error: /stale|mismatched/u,
+        artifactRef: `sha256:${parameterHashDigest}`,
+        contentSha256: parameterHashDigest,
+        bytes: parameterHashBytes,
       },
-      {
-        name: 'content-hash',
-        mutate: (_request, artifact) => ({
-          ...artifact,
-          contentSha256: '0'.repeat(64),
-        }),
-        error: /corrupted|mismatched/u,
-      },
-      {
-        name: 'corrupt-bytes',
-        mutate: (_request, artifact) => ({
-          ...artifact,
-          bytes: Buffer.concat([Buffer.from(artifact.bytes), Buffer.from(' ')]),
-        }),
-        error: /corrupted|mismatched/u,
-      },
-      {
-        name: 'parameter-hash',
-        mutate: (request, artifact) => {
-          const parameterSet = JSON.parse(Buffer.from(artifact.bytes).toString('utf8')) as
-            Record<string, unknown>;
-          parameterSet['parameterSetHash'] = `sha256:${'0'.repeat(64)}`;
-          const bytes = Buffer.from(JSON.stringify(parameterSet));
-          const contentSha256 = digest(bytes);
-          if (request.action.kind !== 'search-list') throw new Error('Search request drifted.');
-          request.action.request.canonicalParameterSetArtifactRef = `sha256:${contentSha256}`;
-          return { artifactRef: `sha256:${contentSha256}`, contentSha256, bytes };
-        },
-        error: /SEARCH_PARAMETER_SET_HASH_MISMATCH|hash verification/u,
-      },
-    ];
-    for (const testCase of invalidCases) {
-      const fixture = resolvedSearchFixture();
-      const artifact = testCase.mutate(fixture.request, fixture.artifact);
-      await expect(executeResolvedSearch(
-        `offline-harness-resolver-${testCase.name}-`,
-        fixture.request,
-        async () => artifact,
-      )).rejects.toThrow(testCase.error);
-    }
+    )).rejects.toThrow(/SEARCH_PARAMETER_SET_HASH_MISMATCH|hash verification/u);
   });
 
   it('rejects every resolved Search request-to-artifact authority mismatch', async () => {
@@ -356,7 +322,7 @@ describe('runtime-derived PageAction fixtures', () => {
       await expect(executeResolvedSearch(
         `offline-harness-authority-${testCase.name}-`,
         fixture.request,
-        async () => fixture.artifact,
+        fixture.artifact,
       )).rejects.toThrow(/parameter-set authority mismatch/u);
     }
   });
@@ -655,7 +621,7 @@ async function tempRoot(prefix: string): Promise<string> {
 
 function resolvedSearchFixture(): {
   request: PageActionRequestV1;
-  artifact: RuntimeOfflineSearchParameterSetArtifact;
+  artifact: ResolvedSearchArtifact;
 } {
   const parameterSet = compileSearchParameterSetV1({
     keyword: 'runtime fixture drill',
@@ -702,19 +668,40 @@ function resolvedSearchFixture(): {
 async function executeResolvedSearch(
   prefix: string,
   request: PageActionRequestV1,
-  resolveSearchParameterSetArtifact?: (
-    artifactRef: string,
-  ) => Promise<RuntimeOfflineSearchParameterSetArtifact>,
+  artifact?: ResolvedSearchArtifact,
+  bytes = artifact?.bytes,
 ) {
   const root = await tempRoot(prefix);
+  if (artifact !== undefined && bytes !== undefined) {
+    await writeResolvedSearchArtifact(root, artifact, bytes);
+  }
   return createRuntimeOfflinePageActionExecutor({
     artifactDirectory: root,
     now: () => new Date('2026-08-02T00:00:00.000Z'),
     scenario: 'chain-coherent-available-v1',
-    ...(resolveSearchParameterSetArtifact === undefined
-      ? {}
-      : { resolveSearchParameterSetArtifact }),
   }).execute(request, harnessScope('search-list'));
+}
+
+interface ResolvedSearchArtifact {
+  artifactRef: string;
+  contentSha256: string;
+  bytes: Uint8Array;
+}
+
+async function writeResolvedSearchArtifact(
+  root: string,
+  artifact: ResolvedSearchArtifact,
+  bytes = artifact.bytes,
+): Promise<void> {
+  const destination = resolvedSearchArtifactPath(root, artifact);
+  await fs.mkdir(path.dirname(destination), { recursive: true, mode: 0o700 });
+  await fs.writeFile(destination, bytes, { mode: 0o600 });
+}
+
+function resolvedSearchArtifactPath(root: string, artifact: ResolvedSearchArtifact): string {
+  const digest = artifact.artifactRef.match(/^sha256:([0-9a-f]{64})$/u)?.[1];
+  if (digest === undefined) throw new Error('Resolved Search artifact ref drifted.');
+  return path.join(root, digest.slice(0, 2), digest);
 }
 
 async function fixtureCopy(prefix: string): Promise<string> {

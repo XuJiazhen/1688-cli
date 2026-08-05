@@ -14,7 +14,10 @@ import {
   type PageActionExecuteResponseV1,
   type PageActionRequestV1,
 } from '../src/collection/page-action-contracts.js';
-import { ProductionPageActionExecutor } from '../src/daemon/production-page-action-executor.js';
+import {
+  ProductionPageActionExecutor,
+  readContentAddressedArtifactV1,
+} from '../src/daemon/production-page-action-executor.js';
 import type {
   PageActionExecutionScope,
   PageActionExecutor,
@@ -39,7 +42,7 @@ import { SUPPLIER_QUALIFICATION_COMPONENT_KEY } from '../src/session/supplier-qu
 export const RUNTIME_PAGE_ACTION_FIXTURE_SCHEMA =
   'collector.runtime-derived-page-action-fixture-set.v1' as const;
 export const RUNTIME_PAGE_ACTION_FIXTURE_GENERATOR_REVISION =
-  'production-page-action-executor-offline-fake-v1@1' as const;
+  'production-page-action-executor-offline-fake-v1@2' as const;
 export const DEFAULT_RUNTIME_PAGE_ACTION_FIXTURE_ROOT = fileURLToPath(
   new URL('../tests/fixtures/page-actions-runtime-v1', import.meta.url),
 );
@@ -322,20 +325,10 @@ interface ActionManifest {
   readonly archiveFiles: readonly FileReceipt[];
 }
 
-export interface RuntimeOfflineSearchParameterSetArtifact {
-  readonly artifactRef: string;
-  /** Bare lowercase SHA-256 of the exact producer-owned bytes. */
-  readonly contentSha256: string;
-  readonly bytes: Uint8Array;
-}
-
 interface RuntimeOfflinePageActionExecutorInput {
   artifactDirectory: string;
   now: () => Date;
   scenario: RuntimeOfflinePageActionScenario;
-  resolveSearchParameterSetArtifact?: (
-    artifactRef: string,
-  ) => Promise<RuntimeOfflineSearchParameterSetArtifact>;
 }
 
 export function createRuntimeOfflinePageActionExecutor(
@@ -373,19 +366,6 @@ export function createRuntimeOfflinePageActionExecutor(
         // Preserve the production admission boundary without adding remote I/O.
         pace: transportTurn,
         random: () => 0,
-        ...(parameterSet === undefined
-          ? {}
-          : {
-              testOnlyResolveCanonicalSearchParameterSet: async (artifactRef: string) => {
-                if (
-                  request.action.kind !== 'search-list'
-                  || artifactRef !== request.action.request.canonicalParameterSetArtifactRef
-                ) {
-                  throw new TypeError('Offline Search parameter-set artifact ref drifted.');
-                }
-                return structuredClone(parameterSet);
-              },
-            }),
       });
       return withClock(input.now(), () => executor.execute(request, {
         ...scope,
@@ -412,32 +392,10 @@ async function resolveRuntimeOfflineSearchParameterSet(
   if (expectedContentSha256 === undefined) {
     throw new TypeError('Offline Search parameter-set artifact ref is invalid.');
   }
-  if (input.resolveSearchParameterSetArtifact === undefined) {
-    throw new TypeError(
-      'Non-static offline Search authority requires an explicit test-only resolver.',
-    );
-  }
-  const artifact = await input.resolveSearchParameterSetArtifact(artifactRef);
-  if (!(artifact.bytes instanceof Uint8Array)) {
-    throw new TypeError('Offline Search parameter-set resolver returned invalid bytes.');
-  }
-  const bytes = Buffer.from(artifact.bytes);
-  const actualContentSha256 = createHash('sha256').update(bytes).digest('hex');
-  if (
-    artifact.artifactRef !== artifactRef
-    || artifact.contentSha256 !== expectedContentSha256
-    || actualContentSha256 !== expectedContentSha256
-  ) {
-    throw new TypeError(
-      'Offline Search parameter-set artifact is missing, stale, corrupted, or mismatched.',
-    );
-  }
-  let value: unknown;
-  try {
-    value = JSON.parse(bytes.toString('utf8')) as unknown;
-  } catch {
-    throw new TypeError('Offline Search parameter-set artifact contains invalid JSON.');
-  }
+  const value = await readContentAddressedArtifactV1(
+    input.artifactDirectory,
+    artifactRef,
+  );
   if ((value as { schema?: unknown })?.schema !== 'canonical-search-parameter-set-v1') {
     throw new TypeError('Offline Search parameter-set artifact schema is invalid.');
   }

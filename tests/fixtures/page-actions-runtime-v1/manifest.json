@@ -6,9 +6,9 @@
   "transportMode": "offline-fake-page-capture-and-transport",
   "generatedAt": "2026-08-02T00:00:00.000Z",
   "generator": {
-    "revision": "production-page-action-executor-offline-fake-v1@1",
+    "revision": "production-page-action-executor-offline-fake-v1@2",
     "sourcePath": "scripts/generate_runtime_page_action_fixtures.ts",
-    "sourceSha256": "0b706a6f358583f173691fd5bbdc3856da8fa0b10589629d590935a0bacdecf5"
+    "sourceSha256": "b705f2cb35ed20e293eeada5012709ec98605f6288ff625676183908f076cfc4"
   },
   "security": {
     "recursiveSanitizationGate": true,

@@ -122,10 +122,6 @@ export interface ProductionPageActionExecutorOptions {
   pace?: (delayMs: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
   collectOfferOnPage?: typeof collectOfferOnPage;
-  /** Test-only bridge for content-addressed Search artifacts owned by another repository. */
-  testOnlyResolveCanonicalSearchParameterSet?: (
-    artifactRef: string,
-  ) => Promise<CanonicalSearchParameterSetV1>;
 }
 
 interface SearchParameterSourceArtifactV1 {
@@ -261,8 +257,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
       now: this.now,
       createId: (kind) => `${kind}-${this.idFactory()}`,
       resolveCanonicalSearchParameterSet: (artifactRef) =>
-        this.options.testOnlyResolveCanonicalSearchParameterSet?.(artifactRef)
-          ?? this.resolveSearchParameterSet(artifactRef),
+        this.resolveSearchParameterSet(artifactRef),
       runSearch: ({ parameterSet, signal }) =>
         this.runSearch(request, scope, remoteLedger, parameterSet, signal),
       runOffer: ({ offerId, memberId, signal }) =>
@@ -1285,68 +1280,8 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
   }
 
   private async readArtifact(reference: string): Promise<unknown> {
-    const contentAddress = reference.match(/^sha256:([0-9a-f]{64})$/u);
-    if (contentAddress?.[1]) {
-      const digest = contentAddress[1];
-      const root = path.resolve(this.options.artifactDirectory);
-      const resolved = path.resolve(root, digest.slice(0, 2), digest);
-      const relative = path.relative(root, resolved);
-      if (relative.startsWith('..') || path.isAbsolute(relative)) {
-        throw new CliError(
-          9,
-          'COLLECTOR_ARTIFACT_REFERENCE_INVALID',
-          'Collector content-addressed artifact escapes its configured root.',
-          {
-            category: 'contract',
-            retryable: false,
-            recoveryAction: 'restore-artifact-from-content-addressed-store',
-          },
-        );
-      }
-      let bytes: Buffer;
-      try {
-        bytes = await fs.readFile(resolved);
-      } catch (error) {
-        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-          throw new CliError(
-            9,
-            'COLLECTOR_ARTIFACT_NOT_FOUND',
-            'Collector content-addressed artifact bytes are missing.',
-            {
-              category: 'contract',
-              retryable: false,
-              recoveryAction: 'restore-artifact-from-content-addressed-store',
-            },
-          );
-        }
-        throw error;
-      }
-      if (createHash('sha256').update(bytes).digest('hex') !== digest) {
-        throw new CliError(
-          9,
-          'COLLECTOR_ARTIFACT_HASH_MISMATCH',
-          'Collector content-addressed artifact bytes do not match the signed digest.',
-          {
-            category: 'contract',
-            retryable: false,
-            recoveryAction: 'restore-artifact-from-content-addressed-store',
-          },
-        );
-      }
-      try {
-        return JSON.parse(bytes.toString('utf8')) as unknown;
-      } catch {
-        throw new CliError(
-          9,
-          'COLLECTOR_ARTIFACT_INVALID_JSON',
-          'Collector content-addressed artifact contains invalid JSON.',
-          {
-            category: 'contract',
-            retryable: false,
-            recoveryAction: 'restore-artifact-from-content-addressed-store',
-          },
-        );
-      }
+    if (/^sha256:[0-9a-f]{64}$/u.test(reference)) {
+      return readContentAddressedArtifactV1(this.options.artifactDirectory, reference);
     }
     const match = reference.match(/^artifact:([A-Za-z0-9._-]+)$/u);
     if (!match?.[1]) throw new Error('Collector artifact reference is invalid.');
@@ -1378,6 +1313,90 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
         payload: input.payload,
       }),
     });
+  }
+}
+
+/**
+ * Reads a producer-owned SHA-256 artifact from the shared CAS. This is kept
+ * outside the executor so deterministic offline harnesses cannot substitute
+ * in-memory bytes for the production artifact path.
+ */
+export async function readContentAddressedArtifactV1(
+  artifactDirectory: string,
+  reference: string,
+): Promise<unknown> {
+  const contentAddress = reference.match(/^sha256:([0-9a-f]{64})$/u);
+  if (!path.isAbsolute(artifactDirectory) || !contentAddress?.[1]) {
+    throw new CliError(
+      9,
+      'COLLECTOR_ARTIFACT_REFERENCE_INVALID',
+      'Collector content-addressed artifact reference is invalid.',
+      {
+        category: 'contract',
+        retryable: false,
+        recoveryAction: 'restore-artifact-from-content-addressed-store',
+      },
+    );
+  }
+  const digest = contentAddress[1];
+  const root = path.resolve(artifactDirectory);
+  const resolved = path.resolve(root, digest.slice(0, 2), digest);
+  const relative = path.relative(root, resolved);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) {
+    throw new CliError(
+      9,
+      'COLLECTOR_ARTIFACT_REFERENCE_INVALID',
+      'Collector content-addressed artifact escapes its configured root.',
+      {
+        category: 'contract',
+        retryable: false,
+        recoveryAction: 'restore-artifact-from-content-addressed-store',
+      },
+    );
+  }
+  let bytes: Buffer;
+  try {
+    bytes = await fs.readFile(resolved);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      throw new CliError(
+        9,
+        'COLLECTOR_ARTIFACT_NOT_FOUND',
+        'Collector content-addressed artifact bytes are missing.',
+        {
+          category: 'contract',
+          retryable: false,
+          recoveryAction: 'restore-artifact-from-content-addressed-store',
+        },
+      );
+    }
+    throw error;
+  }
+  if (createHash('sha256').update(bytes).digest('hex') !== digest) {
+    throw new CliError(
+      9,
+      'COLLECTOR_ARTIFACT_HASH_MISMATCH',
+      'Collector content-addressed artifact bytes do not match the signed digest.',
+      {
+        category: 'contract',
+        retryable: false,
+        recoveryAction: 'restore-artifact-from-content-addressed-store',
+      },
+    );
+  }
+  try {
+    return JSON.parse(bytes.toString('utf8')) as unknown;
+  } catch {
+    throw new CliError(
+      9,
+      'COLLECTOR_ARTIFACT_INVALID_JSON',
+      'Collector content-addressed artifact contains invalid JSON.',
+      {
+        category: 'contract',
+        retryable: false,
+        recoveryAction: 'restore-artifact-from-content-addressed-store',
+      },
+    );
   }
 }
 

@@ -1,7 +1,7 @@
 {
   "schema": "collector.runtime-derived-page-action-file-receipt.v1",
   "fixtureSetSchema": "collector.runtime-derived-page-action-fixture-set.v1",
-  "generatorRevision": "production-page-action-executor-offline-fake-v1@1",
+  "generatorRevision": "production-page-action-executor-offline-fake-v1@2",
   "files": [
     {
       "path": "archives/offer-detail/collector-raw-offer-consignment-d275f024d468ae37d580f02ae731de523c84873a5380f639e7ba1b6cd837bd2a.json",
@@ -181,7 +181,7 @@
     {
       "path": "manifest.json",
       "bytes": 12003,
-      "sha256": "f75b8bd3581ccd7bc823886a9f21a0b768697078b470e1b0c8830cfbbf14b954"
+      "sha256": "cd5d799995dedb9d6c6ded4af749f180252f618cadf60ef9829244adb7043ca0"
     },
     {
       "path": "responses/offer-detail.wire-response.json",
