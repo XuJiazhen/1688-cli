@@ -1089,6 +1089,7 @@ describe('ProfileDaemonRuntime', () => {
         },
         response: null,
       });
+
   });
 
   it('rejects an admission receipt authority mismatch before the executor network boundary', async () => {
@@ -1232,7 +1233,219 @@ describe('ProfileDaemonRuntime', () => {
       .resolves.toMatchObject({
         acceptance: { remoteAttemptStartedAt: null, remoteAttemptAdmissions: [] },
         response: null,
+    });
+  });
+
+  it('allows the Store Qualification navigation discovery before its single-target request', async () => {
+    const repository = new InMemoryPageActionAcceptanceRepository();
+    const request = signedExecuteRequest(1, { actionKind: 'store-qualification' });
+    const admitted: Array<{ ordinal: number; purpose: string }> = [];
+    const runtime = makeRuntime(
+      new FakeHost(),
+      {
+        async execute(_pageAction, scope) {
+          for (const [ordinal, purpose] of [[1, 'discovery'], [2, 'single-target']] as const) {
+            await scope.admitRemoteAttempt({
+              remoteRequestAttemptId:
+                `remote-${_pageAction.pageActionExecutionAttemptId}-${ordinal}`,
+              ordinal,
+              purpose,
+              requestBusinessHash: canonicalCollectorSha256V1(
+                `qualification-remote-request-${ordinal}`,
+              ),
+            });
+          }
+          throw new Error('simulated crash after qualification admissions');
+        },
+      },
+      { acceptanceRepository: repository },
+    );
+    await runtime.ensureWarm();
+
+    await expect(runtime.handle(request, {
+      remoteAttemptAdmission: {
+        ...boundAdmissionChannel(request),
+        authorize: async (input) => {
+          admitted.push({ ordinal: input.ordinal, purpose: input.purpose });
+          return {
+            remoteActionStartId: `remote-action-start-${input.ordinal}`,
+            admittedAt: now.toISOString(),
+            transportAuthority,
+            parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+          };
+        },
+      },
+    })).resolves.toMatchObject({ ok: false });
+    expect(admitted).toEqual([
+      { ordinal: 1, purpose: 'discovery' },
+      { ordinal: 2, purpose: 'single-target' },
+    ]);
+    await expect(repository.inspect(signedLookupRequest(request).payload))
+      .resolves.toMatchObject({
+        acceptance: {
+          remoteAttemptAdmissions: [
+            { request: { ordinal: 1, purpose: 'discovery' } },
+            { request: { ordinal: 2, purpose: 'single-target' } },
+          ],
+        },
+        response: null,
       });
+
+    const singleTargetFirst = signedExecuteRequest(2, {
+      actionKind: 'store-qualification',
+    });
+    let singleTargetFirstAdmissions = 0;
+    const singleTargetFirstRuntime = makeRuntime(new FakeHost(), {
+      async execute(_pageAction, scope) {
+        await scope.admitRemoteAttempt({
+          remoteRequestAttemptId:
+            `remote-${_pageAction.pageActionExecutionAttemptId}-1`,
+          ordinal: 1,
+          purpose: 'single-target',
+          requestBusinessHash: canonicalCollectorSha256V1(
+            'qualification-single-target-first',
+          ),
+        });
+        throw new Error('unreachable network side effect');
+      },
+    });
+    await singleTargetFirstRuntime.ensureWarm();
+    await expect(singleTargetFirstRuntime.handle(singleTargetFirst, {
+      remoteAttemptAdmission: {
+        ...boundAdmissionChannel(singleTargetFirst),
+        authorize: async () => {
+          singleTargetFirstAdmissions += 1;
+          return {
+            remoteActionStartId: 'remote-action-start-single-target-first',
+            admittedAt: now.toISOString(),
+            transportAuthority,
+            parentCanonicalRequestHash: canonicalRpcPayloadHash(singleTargetFirst),
+          };
+        },
+      },
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'REMOTE_ATTEMPT_ADMISSION_INVALID' },
+    });
+    expect(singleTargetFirstAdmissions).toBe(0);
+  });
+
+  it('keeps Offer Detail remote admissions single-target only', async () => {
+    const request = signedExecuteRequest(1);
+    let admissionCalls = 0;
+    const runtime = makeRuntime(new FakeHost(), {
+      async execute(_pageAction, scope) {
+        await scope.admitRemoteAttempt({
+          remoteRequestAttemptId:
+            `remote-${_pageAction.pageActionExecutionAttemptId}-1`,
+          ordinal: 1,
+          purpose: 'discovery',
+          requestBusinessHash: canonicalCollectorSha256V1('offer-navigation-request'),
+        });
+        throw new Error('unreachable network side effect');
+      },
+    });
+    await runtime.ensureWarm();
+
+    await expect(runtime.handle(request, {
+      remoteAttemptAdmission: {
+        ...boundAdmissionChannel(request),
+        authorize: async () => {
+          admissionCalls += 1;
+          return {
+            remoteActionStartId: 'remote-action-start-offer',
+            admittedAt: now.toISOString(),
+            transportAuthority,
+            parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+          };
+        },
+      },
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'REMOTE_ATTEMPT_ADMISSION_INVALID' },
+    });
+    expect(admissionCalls).toBe(0);
+  });
+
+  it('allows Store Sample discovery before forward requests and rejects forward-first', async () => {
+    const request = signedExecuteRequest(1, { actionKind: 'store-sample' });
+    const admitted: Array<{ ordinal: number; purpose: string; logicalPage?: number }> = [];
+    const runtime = makeRuntime(new FakeHost(), {
+      async execute(_pageAction, scope) {
+        for (const [ordinal, purpose] of [[1, 'discovery'], [2, 'forward']] as const) {
+          await scope.admitRemoteAttempt({
+            remoteRequestAttemptId:
+              `remote-${_pageAction.pageActionExecutionAttemptId}-${ordinal}`,
+            ordinal,
+            logicalPage: 1,
+            purpose,
+            requestBusinessHash: canonicalCollectorSha256V1(
+              `store-sample-remote-request-${ordinal}`,
+            ),
+          });
+        }
+        throw new Error('simulated crash after Store Sample admissions');
+      },
+    });
+    await runtime.ensureWarm();
+
+    await expect(runtime.handle(request, {
+      remoteAttemptAdmission: {
+        ...boundAdmissionChannel(request),
+        authorize: async (input) => {
+          admitted.push({
+            ordinal: input.ordinal,
+            purpose: input.purpose,
+            ...(input.logicalPage === undefined ? {} : { logicalPage: input.logicalPage }),
+          });
+          return {
+            remoteActionStartId: `remote-action-start-${input.ordinal}`,
+            admittedAt: now.toISOString(),
+            transportAuthority,
+            parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
+          };
+        },
+      },
+    })).resolves.toMatchObject({ ok: false });
+    expect(admitted).toEqual([
+      { ordinal: 1, purpose: 'discovery', logicalPage: 1 },
+      { ordinal: 2, purpose: 'forward', logicalPage: 1 },
+    ]);
+
+    const forwardFirst = signedExecuteRequest(2, { actionKind: 'store-sample' });
+    let forwardFirstAdmissions = 0;
+    const forwardFirstRuntime = makeRuntime(new FakeHost(), {
+      async execute(_pageAction, scope) {
+        await scope.admitRemoteAttempt({
+          remoteRequestAttemptId:
+            `remote-${_pageAction.pageActionExecutionAttemptId}-1`,
+          ordinal: 1,
+          logicalPage: 1,
+          purpose: 'forward',
+          requestBusinessHash: canonicalCollectorSha256V1('store-sample-forward-first'),
+        });
+        throw new Error('unreachable network side effect');
+      },
+    });
+    await forwardFirstRuntime.ensureWarm();
+    await expect(forwardFirstRuntime.handle(forwardFirst, {
+      remoteAttemptAdmission: {
+        ...boundAdmissionChannel(forwardFirst),
+        authorize: async () => {
+          forwardFirstAdmissions += 1;
+          return {
+            remoteActionStartId: 'remote-action-start-forward-first',
+            admittedAt: now.toISOString(),
+            transportAuthority,
+            parentCanonicalRequestHash: canonicalRpcPayloadHash(forwardFirst),
+          };
+        },
+      },
+    })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'REMOTE_ATTEMPT_ADMISSION_INVALID' },
+    });
+    expect(forwardFirstAdmissions).toBe(0);
   });
 
   it('rejects non-canonical remote identity and bare hash before the DB callback', async () => {
@@ -1348,27 +1561,74 @@ function handleExecute(
 
 function signedExecuteRequest(
   ordinal: number,
-  credentialOverrides: { credentialExpiresAt?: string } = {},
+  credentialOverrides: {
+    credentialExpiresAt?: string;
+    actionKind?: 'offer-detail' | 'store-qualification' | 'store-sample';
+  } = {},
 ): ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' } {
   const requestId = `request-${ordinal}`;
   const workUnitId = `work-${ordinal}`;
-  const pageActionBusinessHash = canonicalCollectorSha256V1(`offer-${ordinal}`);
-  const logicalLineage = {
-    schema: 'collector.logical-page-action-lineage.v1' as const,
-    logicalLineageId: `logical-${ordinal}`,
-    collectionTaskId: 'collection-task-1',
-    workUnitId,
-    pageActionId: `page-action-${ordinal}`,
-    pageActionBusinessHash,
-    actionKind: 'offer-detail' as const,
-    businessSubject: {
-      kind: 'offer-detail' as const,
-      offerId: `${1000 + ordinal}`,
-      memberId: 'member-1',
-      searchOriginReceiptId: 'search-origin-receipt-1',
-      searchOriginReceiptHash: canonicalCollectorSha256V1('search-origin-receipt-1'),
-    },
-  };
+  const actionKind = credentialOverrides.actionKind ?? 'offer-detail';
+  const pageActionBusinessHash = canonicalCollectorSha256V1(
+    `${actionKind}-${ordinal}`,
+  );
+  const logicalLineage = actionKind === 'store-qualification'
+    ? {
+        schema: 'collector.logical-page-action-lineage.v1' as const,
+        logicalLineageId: `logical-${ordinal}`,
+        collectionTaskId: 'collection-task-1',
+        workUnitId,
+        pageActionId: `page-action-${ordinal}`,
+        pageActionBusinessHash,
+        actionKind,
+        businessSubject: {
+          kind: actionKind,
+          memberId: 'member-1',
+          canonicalStoreId: 'store-1',
+          canonicalShopUrl: 'https://fixture.1688.com/',
+          canonicalStoreIdentityReceiptId: 'identity-qualification-1',
+          canonicalStoreIdentityReceiptHash: canonicalCollectorSha256V1(
+            'identity-qualification-1',
+          ),
+        },
+      }
+    : actionKind === 'store-sample'
+      ? {
+          schema: 'collector.logical-page-action-lineage.v1' as const,
+          logicalLineageId: `logical-${ordinal}`,
+          collectionTaskId: 'collection-task-1',
+          workUnitId,
+          pageActionId: `page-action-${ordinal}`,
+          pageActionBusinessHash,
+          actionKind,
+          businessSubject: {
+            kind: actionKind,
+            memberId: 'member-1',
+            canonicalStoreId: '60000000-0000-4000-8000-000000000010',
+            canonicalShopUrl: 'https://fixture.1688.com/',
+            canonicalShopIdentityReceiptId: 'identity-store-sample-1',
+            canonicalShopIdentityReceiptHash: canonicalCollectorSha256V1(
+              'identity-store-sample-1',
+            ),
+            pageScopeBusinessHash: canonicalCollectorSha256V1('pages-1-3'),
+          },
+        }
+      : {
+        schema: 'collector.logical-page-action-lineage.v1' as const,
+        logicalLineageId: `logical-${ordinal}`,
+        collectionTaskId: 'collection-task-1',
+        workUnitId,
+        pageActionId: `page-action-${ordinal}`,
+        pageActionBusinessHash,
+        actionKind,
+        businessSubject: {
+          kind: actionKind,
+          offerId: `${1000 + ordinal}`,
+          memberId: 'member-1',
+          searchOriginReceiptId: 'search-origin-receipt-1',
+          searchOriginReceiptHash: canonicalCollectorSha256V1('search-origin-receipt-1'),
+        },
+      };
   const logicalLineageHash = computeLogicalLineageHashV1(logicalLineage);
   const executionLineage = {
     schema: 'collector.page-action-execution-lineage.v1' as const,
@@ -1400,7 +1660,7 @@ function signedExecuteRequest(
     pageActionExecutionAttemptId: `attempt-${ordinal}`,
     executionAttemptOrdinal: ordinal,
     pageActionBusinessHash,
-    actionKind: 'offer-detail',
+    actionKind,
     startNotBefore: now.toISOString(),
     deadlineAt: '2026-07-31T08:07:00.000Z',
     leaseNotAfter: '2026-07-31T08:08:00.000Z',

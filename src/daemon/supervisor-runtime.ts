@@ -381,6 +381,7 @@ interface ActiveExecution {
   interventionTimer: ReturnType<typeof setTimeout> | null;
   remoteAttemptAdmission: RemoteAttemptAdmissionAuthorizerV2;
   lastRemoteAttemptOrdinal: number;
+  lastRemoteAttemptPurpose: RemoteAttemptAdmissionRequestV2['purpose'] | null;
 }
 
 interface ActiveIntervention {
@@ -658,6 +659,7 @@ export class ProfileDaemonRuntime {
         interventionTimer: null,
         remoteAttemptAdmission,
         lastRemoteAttemptOrdinal: 0,
+        lastRemoteAttemptPurpose: null,
       };
       const promise = this.runAcceptedExecution(acceptance, pageAction, active);
       active.promise = promise;
@@ -1190,7 +1192,12 @@ export class ProfileDaemonRuntime {
         },
         admitRemoteAttempt: async (input) => {
           await this.assertStillAuthorized(active.authorizedRequest, 'execute');
-          assertRemoteAttemptAdmissionInput(request, input, active.lastRemoteAttemptOrdinal);
+          assertRemoteAttemptAdmissionInput(
+            request,
+            input,
+            active.lastRemoteAttemptOrdinal,
+            active.lastRemoteAttemptPurpose,
+          );
           const receipt = await active.remoteAttemptAdmission.authorize({
             ...input,
             pageActionId: request.pageActionId,
@@ -1231,6 +1238,7 @@ export class ProfileDaemonRuntime {
             );
           }
           active.lastRemoteAttemptOrdinal = input.ordinal;
+          active.lastRemoteAttemptPurpose = input.purpose;
           return receipt;
         },
         classifyUrl: async (urlClass) => {
@@ -2324,6 +2332,7 @@ function assertRemoteAttemptAdmissionInput(
   request: PageActionRequestV1,
   input: Omit<RemoteAttemptAdmissionRequestV2, 'pageActionId' | 'pageActionExecutionAttemptId'>,
   lastOrdinal: number,
+  lastPurpose: RemoteAttemptAdmissionRequestV2['purpose'] | null = null,
 ): void {
   const expectedOrdinal = lastOrdinal + 1;
   const expectedId = `remote-${request.pageActionExecutionAttemptId}-${input.ordinal}`;
@@ -2332,8 +2341,24 @@ function assertRemoteAttemptAdmissionInput(
   const allowedPurposes = request.actionKind === 'search-list'
     ? ['forward', 'replay']
     : request.actionKind === 'store-sample'
-      ? ['forward']
+      ? ['discovery', 'forward']
+      : request.actionKind === 'store-qualification'
+        ? ['discovery', 'single-target']
       : ['single-target'];
+  const requiresDiscoveryPhase = request.actionKind === 'store-qualification'
+    || request.actionKind === 'store-sample';
+  const terminalPurpose = request.actionKind === 'store-qualification'
+    ? 'single-target'
+    : request.actionKind === 'store-sample'
+      ? 'forward'
+      : null;
+  const phaseValid = !requiresDiscoveryPhase
+    || (
+      input.purpose === 'discovery'
+        ? lastPurpose === null || lastPurpose === 'discovery'
+        : input.purpose === terminalPurpose
+          && (lastPurpose === 'discovery' || lastPurpose === terminalPurpose)
+    );
   if (
     input.ordinal !== expectedOrdinal
     || input.remoteRequestAttemptId !== expectedId
@@ -2342,6 +2367,7 @@ function assertRemoteAttemptAdmissionInput(
     || (logicalPageRequired
       ? !Number.isSafeInteger(input.logicalPage) || Number(input.logicalPage) <= 0
       : input.logicalPage !== undefined)
+    || !phaseValid
   ) {
     throw new SupervisorRuntimeError(
       'REMOTE_ATTEMPT_ADMISSION_INVALID',
@@ -2546,8 +2572,15 @@ function durableAdmissionsForRestart(
     );
   }
   const remoteActionStartIds = new Set<string>();
+  let priorPurpose: RemoteAttemptAdmissionRequestV2['purpose'] | null = null;
   admissions.forEach((admission, index) => {
-    assertRemoteAttemptAdmissionInput(request, admission.request, index);
+    assertRemoteAttemptAdmissionInput(
+      request,
+      admission.request,
+      index,
+      priorPurpose,
+    );
+    priorPurpose = admission.request.purpose;
     if (
       admission.receipt.remoteActionStartId.trim().length === 0
       || !Number.isFinite(Date.parse(admission.receipt.admittedAt))
