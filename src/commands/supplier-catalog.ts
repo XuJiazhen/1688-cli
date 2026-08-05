@@ -1276,6 +1276,18 @@ function canonicalShopUrl(raw: string): string {
 }
 
 function isShopHost(hostname: string): boolean {
+  if (hostname.length > 253 || !/^[\x00-\x7f]+$/.test(hostname)) return false;
+  const labels = hostname.split('.');
+  if (
+    labels.length < 3
+    || labels.at(-2)?.toLowerCase() !== '1688'
+    || labels.at(-1)?.toLowerCase() !== 'com'
+    || !labels.every((label) =>
+      label.length <= 63
+      && /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?$/.test(label))
+  ) {
+    return false;
+  }
   return !/^(?:www|s|detail|login|passport|h5api|trade|order|cart|factory)\.1688\.com$/i.test(hostname);
 }
 

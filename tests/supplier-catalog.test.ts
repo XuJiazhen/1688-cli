@@ -277,6 +277,14 @@ describe('supplier catalog command helpers', () => {
       memberId: null,
       shopUrl: 'https://shop-example.1688.com/',
     });
+    for (const malformedShopUrl of [
+      'https://1688.com/',
+      'https://.1688.com/',
+      'https://shop..1688.com/',
+    ]) {
+      expect(() => normalizeCatalogTarget(malformedShopUrl))
+        .toThrow(/offerId.*memberId.*shop URL/i);
+    }
     expect(() => normalizeCatalogTarget('seller-login-id')).toThrow(/offerId.*memberId.*shop URL/i);
   });
 
