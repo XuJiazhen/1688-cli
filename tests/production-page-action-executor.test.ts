@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -599,6 +600,91 @@ describe('Production PageAction bridge', () => {
       pageLifecycle: { remainingOwnedPages: 0 },
       error: { code: 'PAGE_ACTION_EXECUTION_FAILED' },
     });
+  });
+
+  it('resolves shared content-addressed Search artifacts and fails closed when bytes are missing or tampered', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-cas-'));
+    const parameterSet = compileSearchParameterSetV1({
+      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
+      serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
+      filterParams: {}, selectedOptions: [], maxPages: 1, maxOffers: 60,
+      advertisementPolicy: 'exclude-p4p',
+    });
+    const bytes = Buffer.from(JSON.stringify(parameterSet));
+    const digest = createHash('sha256').update(bytes).digest('hex');
+    const artifactRef = `sha256:${digest}`;
+    const artifactPath = path.join(artifactDirectory, digest.slice(0, 2), digest);
+    const compiled = compileSearchPageRequestV1({
+      parameterSet, page: 1, pageSessionId: 'content-addressed-page-session-1',
+    });
+    const executor = new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now, idFactory: () => 'content-addressed-artifact',
+      pace: async () => {},
+    });
+    const execute = async () => {
+      const page = new FakeSearchPage(compiled.outerDataJson);
+      let remoteCalls = 0;
+      const response = await executor.execute(
+        executableSearchRequest(now, parameterSet, artifactRef),
+        {
+          page: page as never,
+          pageSessionId: 'content-addressed-page-session-1',
+          signal: new AbortController().signal,
+          assertAuthorized: async () => {},
+          admitRemoteAttempt: async () => {
+            remoteCalls++;
+            return {
+              remoteActionStartId: `content-addressed-start-${remoteCalls}`,
+              admittedAt: now.toISOString(),
+            };
+          },
+          classifyUrl: async () => {},
+          closeOwnedPage: async () => {},
+        },
+      );
+      return { page, remoteCalls, response };
+    };
+
+    try {
+      await fs.mkdir(path.dirname(artifactPath), { recursive: true });
+      await fs.writeFile(artifactPath, bytes, { mode: 0o600 });
+      await expect(execute()).resolves.toMatchObject({
+        remoteCalls: 1,
+        response: {
+          executionAttemptReceipt: { outcome: 'completed' },
+        },
+      });
+
+      await fs.rm(artifactPath);
+      const missing = await execute();
+      expect(missing.remoteCalls).toBe(0);
+      expect(missing.page.navigationCalls).toEqual([]);
+      expect(missing.response.executionAttemptReceipt).toMatchObject({
+        outcome: 'failed',
+        error: {
+          code: 'COLLECTOR_ARTIFACT_NOT_FOUND',
+          category: 'contract',
+          retryable: false,
+        },
+      });
+
+      await fs.writeFile(artifactPath, '{"tampered":true}', { mode: 0o600 });
+      const tampered = await execute();
+      expect(tampered.remoteCalls).toBe(0);
+      expect(tampered.page.navigationCalls).toEqual([]);
+      expect(tampered.response.executionAttemptReceipt).toMatchObject({
+        outcome: 'failed',
+        error: {
+          code: 'COLLECTOR_ARTIFACT_HASH_MISMATCH',
+          category: 'contract',
+          retryable: false,
+        },
+      });
+    } finally {
+      await fs.rm(artifactDirectory, { recursive: true, force: true });
+    }
   });
 
   it('preserves exact admitted Search evidence and its committed page batch when pacing fails', async () => {
@@ -1782,6 +1868,7 @@ class FakeQualificationPage extends EventEmitter {
 function executableSearchRequest(
   now: Date,
   parameterSet: ReturnType<typeof compileSearchParameterSetV1>,
+  canonicalParameterSetArtifactRef = 'artifact:parameter-set',
 ): PageActionRequestV1 {
   const request = failingSearchRequest(now);
   const subject = request.logicalLineage.businessSubject;
@@ -1804,7 +1891,7 @@ function executableSearchRequest(
         serializerCapabilitySnapshotId: parameterSet.serializerCapabilitySnapshotId,
         serializerCapabilitySnapshotHash: parameterSet.serializerCapabilitySnapshotHash,
         sort: parameterSet.sort,
-        canonicalParameterSetArtifactRef: 'artifact:parameter-set',
+        canonicalParameterSetArtifactRef,
         canonicalParameterSetHash: parameterSet.parameterSetHash,
         requestedStartPage: 1,
         requestedEndPage: parameterSet.maxPages,
