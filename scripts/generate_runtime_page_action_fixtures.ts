@@ -1219,21 +1219,32 @@ function assertRuntimeOfflineScenarioRequest(
   } else if (request.action.kind === 'offer-detail') {
     const expectedOfferId = scenario === 'chain-coherent-technical-failure-v1'
       ? '700000000102'
-      : OFFER_INPUT.offerId;
+      : request.action.offerId;
+    const availableOffer = request.action.offerId === OFFER_INPUT.offerId
+      || request.action.offerId === '700000000201';
     if (
       subject.kind !== 'offer-detail'
       || request.action.offerId !== expectedOfferId
-      || request.action.memberId !== OFFER_INPUT.memberId
+      || (scenario === 'chain-coherent-available-v1' && !availableOffer)
+      || request.action.memberId !== subject.memberId
       || subject.offerId !== expectedOfferId
-      || subject.memberId !== OFFER_INPUT.memberId
+      || (
+        request.action.offerId === '700000000201'
+        && request.action.memberId !== 'fixture-chain-member-2'
+      )
+      || (
+        request.action.offerId !== '700000000201'
+        && request.action.memberId !== OFFER_INPUT.memberId
+      )
     ) {
       throw new TypeError('Offline Offer request is inconsistent with its SearchHit subject.');
     }
   } else if (request.action.kind === 'store-qualification') {
     if (
       subject.kind !== 'store-qualification'
-      || request.action.memberId !== QUALIFICATION_INPUT.memberId
-      || subject.memberId !== QUALIFICATION_INPUT.memberId
+      || request.action.memberId !== subject.memberId
+      || ![QUALIFICATION_INPUT.memberId, 'fixture-chain-member-2']
+        .includes(request.action.memberId)
     ) {
       throw new TypeError('Offline Qualification request is inconsistent with the chain member.');
     }
@@ -1308,9 +1319,20 @@ function fakePage(
     case 'offer-detail':
       return scenario === 'chain-coherent-technical-failure-v1'
         ? new RuntimeOfferTechnicalFailurePage()
-        : new RuntimeOfferPage();
+        : new RuntimeOfferPage(
+            request.action.kind === 'offer-detail'
+              ? request.action.offerId
+              : OFFER_INPUT.offerId,
+            request.action.kind === 'offer-detail'
+              ? request.action.memberId
+              : OFFER_INPUT.memberId,
+          );
     case 'store-qualification':
-      return new RuntimeQualificationPage();
+      return new RuntimeQualificationPage(
+        request.action.kind === 'store-qualification'
+          ? request.action.memberId
+          : QUALIFICATION_INPUT.memberId,
+      );
     case 'store-sample': {
       if (request.action.kind !== 'store-sample') {
         throw new TypeError('Store Sample request drifted.');
@@ -1346,30 +1368,35 @@ class RuntimeSearchPage extends EventEmitter {
 class RuntimeOfferPage extends EventEmitter {
   private currentUrl = 'about:blank';
 
+  constructor(
+    private readonly offerId: string,
+    private readonly memberId: string,
+  ) { super(); }
+
   async goto(url: string): Promise<null> {
     this.currentUrl = url;
     const correlation = encodeURIComponent(JSON.stringify({
-      offerId: OFFER_INPUT.offerId,
-      memberId: OFFER_INPUT.memberId,
+      offerId: this.offerId,
+      memberId: this.memberId,
     }));
     const consignmentScope = encodeURIComponent(JSON.stringify({
-      offerId: OFFER_INPUT.offerId,
-      memberId: OFFER_INPUT.memberId,
+      offerId: this.offerId,
+      memberId: this.memberId,
       mmgaRequest: { serviceName: 'offerPCConsignInfoService' },
     }));
     this.emit('response', response(
       'https://h5api.m.1688.com/h5/mtop.1688.wosc.queryofferskuselectormodel/1.0/',
-      JSON.stringify(OFFER_INPUT.skuResponse),
+      offerFixtureJson(OFFER_INPUT.skuResponse, this.offerId, this.memberId),
     ));
     await transportTurn();
     this.emit('response', response(
       `https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/?data=${correlation}`,
-      JSON.stringify(OFFER_INPUT.shopCardResponse),
+      offerFixtureJson(OFFER_INPUT.shopCardResponse, this.offerId, this.memberId),
     ));
     await transportTurn();
     this.emit('response', response(
       `https://h5api.m.1688.com/h5/mtop.1688.mmga.offerdetail.service/1.0/?data=${consignmentScope}`,
-      JSON.stringify(OFFER_INPUT.consignmentResponse),
+      offerFixtureJson(OFFER_INPUT.consignmentResponse, this.offerId, this.memberId),
     ));
     await transportTurn();
     this.emit('response', response(
@@ -1404,6 +1431,8 @@ class RuntimeOfferPage extends EventEmitter {
 class RuntimeQualificationPage extends EventEmitter {
   private currentUrl = 'about:blank';
 
+  constructor(private readonly memberId: string) { super(); }
+
   async goto(url: string): Promise<null> {
     this.currentUrl = url;
     return null;
@@ -1417,11 +1446,14 @@ class RuntimeQualificationPage extends EventEmitter {
     if (arg === undefined) return String(fn).includes('document.body') ? '' : null;
     const data = encodeURIComponent(JSON.stringify({
       componentKey: SUPPLIER_QUALIFICATION_COMPONENT_KEY,
-      params: JSON.stringify({ memberId: QUALIFICATION_INPUT.memberId }),
+      params: JSON.stringify({ memberId: this.memberId }),
     }));
     this.emit('response', response(
       `https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/?data=${data}`,
-      JSON.stringify(QUALIFICATION_INPUT.response),
+      JSON.stringify(QUALIFICATION_INPUT.response).replaceAll(
+        QUALIFICATION_INPUT.memberId,
+        this.memberId,
+      ),
     ));
     return null;
   }
@@ -1466,6 +1498,16 @@ class RuntimeStorePage extends EventEmitter {
     if (!page) throw new Error('Unknown runtime fixture Store page.');
     return structuredClone(page.response);
   }
+}
+
+function offerFixtureJson(
+  value: unknown,
+  offerId: string,
+  memberId: string,
+): string {
+  return JSON.stringify(value)
+    .replaceAll(OFFER_INPUT.offerId, offerId)
+    .replaceAll(OFFER_INPUT.memberId, memberId);
 }
 
 function response(
