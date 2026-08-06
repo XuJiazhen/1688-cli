@@ -1420,7 +1420,7 @@ class RuntimeOfferPage extends EventEmitter {
       return {
         sourcePayload: { fixture: 'runtime-offer-core' },
         skuContext: {},
-        ...OFFER_INPUT.pageInfo,
+        ...offerFixtureValue(OFFER_INPUT.pageInfo, this.offerId, this.memberId),
       };
     }
     if (source.includes('document.body')) return '';
@@ -1508,6 +1508,14 @@ function offerFixtureJson(
   return JSON.stringify(value)
     .replaceAll(OFFER_INPUT.offerId, offerId)
     .replaceAll(OFFER_INPUT.memberId, memberId);
+}
+
+function offerFixtureValue<T>(
+  value: T,
+  offerId: string,
+  memberId: string,
+): T {
+  return JSON.parse(offerFixtureJson(value, offerId, memberId)) as T;
 }
 
 function response(
