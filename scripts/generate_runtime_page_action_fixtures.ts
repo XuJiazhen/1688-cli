@@ -1497,9 +1497,13 @@ class RuntimeStorePage extends EventEmitter {
       (candidate) => candidate.pageNumber === params.appdata?.pageNum,
     );
     if (!page) throw new Error('Unknown runtime fixture Store page.');
+    const catalogOfferPrefix = this.memberId === STORE_INPUT.memberId
+      ? '7000000002'
+      : '7000000003';
     return JSON.parse(JSON.stringify(page.response)
       .replaceAll(STORE_INPUT.memberId, this.memberId)
-      .replaceAll(STORE_INPUT.canonicalShopUrl, this.canonicalShopUrl));
+      .replaceAll(STORE_INPUT.canonicalShopUrl, this.canonicalShopUrl)
+      .replaceAll('7000000002', catalogOfferPrefix));
   }
 }
 
