@@ -1,7 +1,7 @@
 {
   "schema": "collector.page-action.completion-receipt.v1",
   "completionReceiptId": "completion-receipt-store-qualification-fixture-003",
-  "completionReceiptHash": "sha256:3e4cb127be3ab96f15405577cc4d2217106e088129bb54ad74905f7a3f9c2a16",
+  "completionReceiptHash": "sha256:508c500fe2ec8ffc32a0cf85f19ae000a09607abce96ab5387ac88a7f99cf217",
   "pageActionId": "runtime-page-action-store-qualification",
   "pageActionBusinessHash": "sha256:8341339c6ccebbe14185b88f6f117d7b7cb91874d912e725c3579c93b390ecfa",
   "logicalLineage": {
@@ -435,5 +435,5 @@
       }
     }
   ],
-  "completedAt": "2026-08-02T00:00:00.000Z"
+  "completedAt": "2026-08-02T00:00:00.001Z"
 }

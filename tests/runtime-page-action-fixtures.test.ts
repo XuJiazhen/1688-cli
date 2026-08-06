@@ -232,6 +232,28 @@ describe('runtime-derived PageAction fixtures', () => {
     });
     expect(failure.completionReceipt).toBeUndefined();
   });
+  it('keeps the legacy Search scenario single-candidate beside the multi-store cohort scenario', async () => {
+    const request = createRuntimeOfflineScenarioRequestForTest('search-list');
+    const execute = async (
+      scenario: 'chain-coherent-available-v1' | 'multi-store-cohort-v1',
+    ) => createRuntimeOfflinePageActionExecutor({
+      artifactDirectory: await tempRoot(`offline-${scenario}-`),
+      now: () => new Date('2026-08-02T00:00:00.000Z'),
+      scenario,
+    }).execute(structuredClone(request), harnessScope('search-list'));
+    const eligibleOfferIds = (response: Awaited<ReturnType<typeof execute>>) =>
+      response.completionReceipt?.batches
+        .flatMap((batch) => batch.observations)
+        .filter((observation) =>
+          observation.candidateSelectionState === 'selected'
+        )
+        .map((observation) => String(observation.offerId)) ?? [];
+
+    expect(eligibleOfferIds(await execute('chain-coherent-available-v1')))
+      .toEqual(['700000000101']);
+    expect(eligibleOfferIds(await execute('multi-store-cohort-v1')))
+      .toEqual(['700000000101', '700000000102', '700000000201']);
+  });
 
   it('resolves non-static Search authority without replacing its producer artifact', async () => {
     const root = await tempRoot('offline-harness-resolved-search-');

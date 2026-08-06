@@ -1,7 +1,7 @@
 {
   "schema": "collector.page-action.completion-receipt.v1",
   "completionReceiptId": "completion-receipt-offer-detail-fixture-004",
-  "completionReceiptHash": "sha256:6c005d5bbe9989d34011e066c7c984126116fecba98981628056e79c11668cc3",
+  "completionReceiptHash": "sha256:edaff40bcd30967dd45ad4682c4393cd0909fdd5fdcbbd414871282e2cc1a5d0",
   "pageActionId": "runtime-page-action-offer-detail",
   "pageActionBusinessHash": "sha256:f74cfbe892514eda0ef0aea062ed0ef7f2519a470e6ae8fa715700e97e646f5d",
   "logicalLineage": {
@@ -1699,5 +1699,5 @@
       }
     }
   ],
-  "completedAt": "2026-08-02T00:00:00.000Z"
+  "completedAt": "2026-08-02T00:00:00.001Z"
 }

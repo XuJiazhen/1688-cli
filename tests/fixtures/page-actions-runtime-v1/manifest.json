@@ -8,7 +8,7 @@
   "generator": {
     "revision": "production-page-action-executor-offline-fake-v1@2",
     "sourcePath": "scripts/generate_runtime_page_action_fixtures.ts",
-    "sourceSha256": "b705f2cb35ed20e293eeada5012709ec98605f6288ff625676183908f076cfc4"
+    "sourceSha256": "d59e0e12cb0dc47a297e4686ef7469ea70983b406eba86969a66bfa044cdab36"
   },
   "security": {
     "recursiveSanitizationGate": true,
@@ -87,11 +87,11 @@
       "transportInputPath": "inputs/offer-detail.transport.json",
       "transportInputSha256": "3d67c0afa3f2cdf502e85d5cce4ee64028f7d0f758640fbc512dd425bfb50cd9",
       "responsePath": "responses/offer-detail.wire-response.json",
-      "responseSha256": "a65c8483d60c048cc3104c07a373989e0aa9f028a35e44f90cb834eff2c144a8",
+      "responseSha256": "6ae9a56309cee7fa23bd52b579de6be8b8c1636c683d1232330ad8e934308495",
       "executionEnvelopePath": "envelopes/offer-detail.execution-attempt-receipt.json",
       "executionEnvelopeSha256": "9e717e7bda82e1124bfcc7ee30724a2857a76a964bc5febbd1f6b4c54bb4f2d1",
       "completionEnvelopePath": "envelopes/offer-detail.completion-receipt.json",
-      "completionEnvelopeSha256": "1a02896c5f18903a060e43686396ddda89cf25465e4e74eaf90cd68cda835923",
+      "completionEnvelopeSha256": "2652202f5c84d4608a8f1c153caa3211432ff6e1b82f52fb5a6c188fb640fc6f",
       "batchFiles": [
         {
           "path": "batches/offer-detail/00-offer-detail.json",
@@ -165,11 +165,11 @@
       "transportInputPath": "inputs/store-qualification.transport.json",
       "transportInputSha256": "c6ff81ae51c220cb073090c0e85d4bca068fe161060e7c4a4da5413c8f8db81a",
       "responsePath": "responses/store-qualification.wire-response.json",
-      "responseSha256": "e306e4cb9ae6581e76c7852dd759cf6bfa04bebc577b0198fe3ef39d21d2f8d0",
+      "responseSha256": "e59b484cee07b2ca036e0785f6614d7953f1069cfbeebd260a2223ebb99846e1",
       "executionEnvelopePath": "envelopes/store-qualification.execution-attempt-receipt.json",
       "executionEnvelopeSha256": "532ea4e7518bdbe7b7541c39f1cb62c85ac913d97f24724a38663c61777a9fa2",
       "completionEnvelopePath": "envelopes/store-qualification.completion-receipt.json",
-      "completionEnvelopeSha256": "b3027e57b554adc4e9981e55eac60a64d6c2fc7c56b7c35cda615ff7bc25e49b",
+      "completionEnvelopeSha256": "5758f05cfab4f4d07d1152c6059b94e118ea2a09c648007df105b83d32f66618",
       "batchFiles": [
         {
           "path": "batches/store-qualification/00-store-qualification.json",

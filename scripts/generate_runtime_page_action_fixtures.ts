@@ -59,6 +59,7 @@ type ActionKind = RuntimeOfflinePageActionKind;
 
 export const RUNTIME_OFFLINE_PAGE_ACTION_SCENARIOS = [
   'chain-coherent-available-v1',
+  'multi-store-cohort-v1',
   'chain-coherent-technical-failure-v1',
 ] as const;
 export type RuntimeOfflinePageActionScenario =
@@ -94,7 +95,7 @@ const EXPECTED_COMPONENTS = Object.freeze({
   completenessProfile: string;
 }[]>>);
 
-const SEARCH_INPUT = Object.freeze({
+const MULTI_STORE_SEARCH_INPUT = Object.freeze({
   keyword: 'runtime fixture drill',
   offerId: '700000000101',
     memberId: 'fixture-chain-member-1',
@@ -155,6 +156,15 @@ const SEARCH_INPUT = Object.freeze({
     },
   },
 });
+
+const SEARCH_INPUT = Object.freeze((() => {
+  const input = structuredClone(MULTI_STORE_SEARCH_INPUT);
+  input.response.data.data.OFFER.items = [
+    input.response.data.data.OFFER.items[0]!,
+  ];
+  input.response.data.data.OFFER.found = 1;
+  return input;
+})());
 
 const OFFER_INPUT = Object.freeze({
   offerId: '700000000101',
@@ -1221,16 +1231,22 @@ function assertRuntimeOfflineScenarioRequest(
       ? '700000000102'
       : request.action.offerId;
     const availableOffer = request.action.offerId === OFFER_INPUT.offerId
-      || request.action.offerId === '700000000201';
+      || (
+        scenario === 'multi-store-cohort-v1'
+        && request.action.offerId === '700000000201'
+      );
     if (
       subject.kind !== 'offer-detail'
       || request.action.offerId !== expectedOfferId
-      || (scenario === 'chain-coherent-available-v1' && !availableOffer)
+      || (scenario !== 'chain-coherent-technical-failure-v1' && !availableOffer)
       || request.action.memberId !== subject.memberId
       || subject.offerId !== expectedOfferId
       || (
         request.action.offerId === '700000000201'
-        && request.action.memberId !== 'fixture-chain-member-2'
+        && (
+          scenario !== 'multi-store-cohort-v1'
+          || request.action.memberId !== 'fixture-chain-member-2'
+        )
       )
       || (
         request.action.offerId !== '700000000201'
@@ -1243,16 +1259,26 @@ function assertRuntimeOfflineScenarioRequest(
     if (
       subject.kind !== 'store-qualification'
       || request.action.memberId !== subject.memberId
-      || ![QUALIFICATION_INPUT.memberId, 'fixture-chain-member-2']
-        .includes(request.action.memberId)
+      || !(
+        request.action.memberId === QUALIFICATION_INPUT.memberId
+        || (
+          scenario === 'multi-store-cohort-v1'
+          && request.action.memberId === 'fixture-chain-member-2'
+        )
+      )
     ) {
       throw new TypeError('Offline Qualification request is inconsistent with the chain member.');
     }
   } else if (
     subject.kind !== 'store-sample'
     || request.action.memberId !== subject.memberId
-    || ![STORE_INPUT.memberId, 'fixture-chain-member-2']
-      .includes(request.action.memberId)
+    || !(
+      request.action.memberId === STORE_INPUT.memberId
+      || (
+        scenario === 'multi-store-cohort-v1'
+        && request.action.memberId === 'fixture-chain-member-2'
+      )
+    )
     || request.action.mode !== 'phase-1-bounded'
     || request.action.pageScope.firstPage !== 1
     || request.action.pageScope.lastPageInclusive !== 3
@@ -1315,7 +1341,12 @@ function fakePage(
         page: request.action.request.page,
         pageSessionId,
       });
-      return new RuntimeSearchPage(compiled.outerDataJson);
+      return new RuntimeSearchPage(
+        compiled.outerDataJson,
+        scenario === 'multi-store-cohort-v1'
+          ? MULTI_STORE_SEARCH_INPUT.response
+          : SEARCH_INPUT.response,
+      );
     }
     case 'offer-detail':
       return scenario === 'chain-coherent-technical-failure-v1'
@@ -1355,13 +1386,16 @@ class RuntimeOfferTechnicalFailurePage extends EventEmitter {
 }
 
 class RuntimeSearchPage extends EventEmitter {
-  constructor(private readonly outerDataJson: string) { super(); }
+  constructor(
+    private readonly outerDataJson: string,
+    private readonly searchResponse: unknown,
+  ) { super(); }
 
   async goto(): Promise<null> {
     const url = `https://h5api.m.1688.com/h5/${SEARCH_MTOP_API}/1.0/?data=${
       encodeURIComponent(this.outerDataJson)
     }`;
-    this.emit('response', response(url, JSON.stringify(SEARCH_INPUT.response)));
+    this.emit('response', response(url, JSON.stringify(this.searchResponse)));
     return null;
   }
 }
