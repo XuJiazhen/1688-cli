@@ -211,9 +211,16 @@ describe('managed daemon bootstrap', () => {
                 { logicalPage: 2, purpose: 'forward' as const },
               ]
             : request.actionKind === 'store-sample'
-              ? [1, 2, 3].map((logicalPage) => ({
-                  logicalPage, purpose: 'forward' as const,
-                }))
+              ? [
+                  { logicalPage: 1, purpose: 'discovery' as const },
+                  { logicalPage: 2, purpose: 'forward' as const },
+                  { logicalPage: 3, purpose: 'forward' as const },
+                ]
+              : request.actionKind === 'store-qualification'
+                ? [
+                    { purpose: 'discovery' as const },
+                    { purpose: 'single-target' as const },
+                  ]
               : [{ purpose: 'single-target' as const }];
           for (const [index, remote] of remoteAttempts.entries()) {
             const ordinal = index + 1;
@@ -272,7 +279,7 @@ describe('managed daemon bootstrap', () => {
       expect(reached).toEqual([
         'search-list', 'offer-detail', 'store-qualification', 'store-sample',
       ]);
-      expect(admitted).toHaveLength(8);
+      expect(admitted).toHaveLength(9);
       const searchAdmissions = admitted.filter((entry) =>
         entry['pageActionExecutionAttemptId'] === pageActions[0]!.pageActionExecutionAttemptId);
       expect(searchAdmissions.map((entry) => ({

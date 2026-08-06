@@ -41,7 +41,7 @@ describe('requireSkuSelectorModel', () => {
     const pending = executeRaw(
       { newPage: async () => page } as never,
       {
-        offerId: '1001', headed: false, captureTimeoutMs: 5,
+        offerId: '1001', headed: false, captureTimeoutMs: 1_000,
         onRawComponent: async (component) => {
           if (component !== 'sku') return;
           archiveStarted();

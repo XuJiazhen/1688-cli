@@ -14,7 +14,12 @@ import {
   generateRuntimeDerivedPageActionFixtures,
   verifyRuntimeDerivedPageActionFixtureSet,
 } from '../scripts/generate_runtime_page_action_fixtures.js';
-import type { PageActionRequestV1 } from '../src/collection/page-action-contracts.js';
+import {
+  canonicalCollectorSha256V1,
+  computeExecutionLineageHashV1,
+  computeLogicalLineageHashV1,
+  type PageActionRequestV1,
+} from '../src/collection/page-action-contracts.js';
 import type { PageActionExecutionScope } from '../src/daemon/supervisor-runtime.js';
 import { SUPERVISOR_PROTOCOL_SHA256_V2 } from '../src/daemon/supervisor-rpc.js';
 import { compileSearchParameterSetV1 } from '../src/session/search-compiler.js';
@@ -220,6 +225,23 @@ describe('runtime-derived PageAction fixtures', () => {
 
     const failureRoot = await tempRoot('offline-harness-technical-failure-');
     const failureRequest = createRuntimeOfflineScenarioRequestForTest('offer-detail');
+    if (
+      failureRequest.action.kind !== 'offer-detail'
+      || failureRequest.logicalLineage.businessSubject.kind !== 'offer-detail'
+    ) throw new Error('Offer fixture drifted.');
+    failureRequest.action.offerId = '700000000102';
+    failureRequest.logicalLineage.businessSubject.offerId = '700000000102';
+    failureRequest.pageActionBusinessHash = canonicalCollectorSha256V1({
+      actionKind: failureRequest.actionKind,
+      businessSubject: failureRequest.logicalLineage.businessSubject,
+    });
+    failureRequest.logicalLineage.pageActionBusinessHash =
+      failureRequest.pageActionBusinessHash;
+    failureRequest.logicalLineageHash =
+      computeLogicalLineageHashV1(failureRequest.logicalLineage);
+    failureRequest.executionLineage.logicalLineageHash = failureRequest.logicalLineageHash;
+    failureRequest.executionLineageHash =
+      computeExecutionLineageHashV1(failureRequest.executionLineage);
     const failure = await createRuntimeOfflinePageActionExecutor({
       artifactDirectory: failureRoot,
       now: () => new Date('2026-08-02T00:00:00.000Z'),
