@@ -1250,8 +1250,9 @@ function assertRuntimeOfflineScenarioRequest(
     }
   } else if (
     subject.kind !== 'store-sample'
-    || request.action.memberId !== STORE_INPUT.memberId
-    || subject.memberId !== STORE_INPUT.memberId
+    || request.action.memberId !== subject.memberId
+    || ![STORE_INPUT.memberId, 'fixture-chain-member-2']
+      .includes(request.action.memberId)
     || request.action.mode !== 'phase-1-bounded'
     || request.action.pageScope.firstPage !== 1
     || request.action.pageScope.lastPageInclusive !== 3
