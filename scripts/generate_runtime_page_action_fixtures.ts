@@ -1217,11 +1217,14 @@ function assertRuntimeOfflineScenarioRequest(
       assertResolvedSearchAuthority(request.action.request, resolvedSearchParameterSet);
     }
   } else if (request.action.kind === 'offer-detail') {
+    const expectedOfferId = scenario === 'chain-coherent-technical-failure-v1'
+      ? '700000000102'
+      : OFFER_INPUT.offerId;
     if (
       subject.kind !== 'offer-detail'
-      || request.action.offerId !== OFFER_INPUT.offerId
+      || request.action.offerId !== expectedOfferId
       || request.action.memberId !== OFFER_INPUT.memberId
-      || subject.offerId !== OFFER_INPUT.offerId
+      || subject.offerId !== expectedOfferId
       || subject.memberId !== OFFER_INPUT.memberId
     ) {
       throw new TypeError('Offline Offer request is inconsistent with its SearchHit subject.');
