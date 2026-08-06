@@ -1497,7 +1497,9 @@ class RuntimeStorePage extends EventEmitter {
       (candidate) => candidate.pageNumber === params.appdata?.pageNum,
     );
     if (!page) throw new Error('Unknown runtime fixture Store page.');
-    return structuredClone(page.response);
+    return JSON.parse(JSON.stringify(page.response)
+      .replaceAll(STORE_INPUT.memberId, this.memberId)
+      .replaceAll(STORE_INPUT.canonicalShopUrl, this.canonicalShopUrl));
   }
 }
 
