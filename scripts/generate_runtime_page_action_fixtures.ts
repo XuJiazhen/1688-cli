@@ -119,9 +119,37 @@ const SEARCH_INPUT = Object.freeze({
                 shopLinkUrl: 'https://fixture-search-store.1688.com/',
               },
             },
+          }, {
+            data: {
+              offerId: '700000000102',
+              title: 'Runtime Fixture Drill Sibling',
+              priceInfo: { price: '13.50' },
+              memberId: 'fixture-chain-member-1',
+              loginId: 'fixture-search-login-1',
+              isP4P: 'false',
+              winPortUrl: 'https://fixture-search-store.1688.com/',
+              shop: { text: 'Runtime Fixture Store', tpYear: '3' },
+              shopAddition: {
+                shopLinkUrl: 'https://fixture-search-store.1688.com/',
+              },
+            },
+          }, {
+            data: {
+              offerId: '700000000201',
+              title: 'Runtime Fixture Other Store Drill',
+              priceInfo: { price: '14.50' },
+              memberId: 'fixture-chain-member-2',
+              loginId: 'fixture-search-login-2',
+              isP4P: 'false',
+              winPortUrl: 'https://fixture-other-store.1688.com/',
+              shop: { text: 'Runtime Fixture Other Store', tpYear: '2' },
+              shopAddition: {
+                shopLinkUrl: 'https://fixture-other-store.1688.com/',
+              },
+            },
           }],
           hasMore: false,
-          found: 1,
+          found: 3,
         },
       },
     },
