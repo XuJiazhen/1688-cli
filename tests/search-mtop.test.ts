@@ -64,6 +64,18 @@ describe('strict Search MTOP V1 envelope', () => {
     expect(parsed.responseBusinessHash).toMatch(/^sha256:[0-9a-f]{64}$/);
   });
 
+  it('accepts the live MTOP string success flag with a string status code', () => {
+    const parsed = parseSearchMtopPageV1(JSON.stringify({
+      ret: ['SUCCESS::调用成功'],
+      data: {
+        code: '200', success: 'true',
+        data: { OFFER: { items: [], hasMore: 'false', found: 0 } },
+      },
+    }));
+
+    expect(parsed).toMatchObject({ hasMore: false, found: 0, offers: [] });
+  });
+
   it.each([
     [{ ret: ['FAIL'], data: { code: 200, success: true, data: { OFFER: { items: [], hasMore: 'false' } } } }, 'ret'],
     [{ ret: ['SUCCESS'], data: { code: 500, success: false, data: { OFFER: { items: [], hasMore: 'false' } } } }, 'code/success'],

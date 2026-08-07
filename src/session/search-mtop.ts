@@ -434,7 +434,7 @@ export function parseSearchMtopPageV1(text: string): SearchMtopPageV1 {
   }
   const data = json?.data;
   if (
-    data?.success !== true ||
+    !(data?.success === true || data?.success === 'true') ||
     !(data.code === 200 || data.code === '200' || data.code === 'SUCCESS')
   ) {
     searchProtocolError('SEARCH_RESPONSE_STATUS_NOT_SUCCESS', 'Search response code/success contract failed.');
