@@ -49,11 +49,9 @@ const SUPERVISOR_LEASE_ID = '60000000-0000-4000-8000-000000000003';
 const RESERVATION_LEASE_ID = '60000000-0000-4000-8000-000000000004';
 const WORK_LEASE_ID = '60000000-0000-4000-8000-000000000005';
 const transportAuthority = {
-  mode: 'scripted_offline' as const,
-  executionAuthorityDocumentId: '60000000-0000-4000-8000-000000000006',
-  executionAuthorityDocumentSha256: 'a'.repeat(64),
-  executionSubjectDocumentId: '60000000-0000-4000-8000-000000000007',
-  executionSubjectDocumentSha256: 'b'.repeat(64),
+  mode: 'live_remote' as const,
+  liveAuthorizationId: '60000000-0000-4000-8000-000000000006',
+  liveAuthorizationSha256: 'a'.repeat(64),
   cohortId: '60000000-0000-4000-8000-000000000008',
   runId: '60000000-0000-4000-8000-000000000009',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
@@ -1156,15 +1154,11 @@ describe('ProfileDaemonRuntime', () => {
   });
 
   it.each([
-    ['mode', { mode: 'live_remote' }],
+    ['mode', { mode: 'offline' }],
     ['authority document id', {
-      executionAuthorityDocumentId: '60000000-0000-4000-8000-000000000099',
+      liveAuthorizationId: '60000000-0000-4000-8000-000000000099',
     }],
-    ['authority document hash', { executionAuthorityDocumentSha256: 'c'.repeat(64) }],
-    ['subject document id', {
-      executionSubjectDocumentId: '60000000-0000-4000-8000-000000000098',
-    }],
-    ['subject document hash', { executionSubjectDocumentSha256: 'd'.repeat(64) }],
+    ['live authorization hash', { liveAuthorizationSha256: 'c'.repeat(64) }],
     ['cohort', { cohortId: '60000000-0000-4000-8000-000000000097' }],
     ['Run', { runId: '60000000-0000-4000-8000-000000000096' }],
     ['protocol', { protocolSha256: 'e'.repeat(64) }],

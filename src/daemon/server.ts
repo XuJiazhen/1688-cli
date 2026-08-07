@@ -13,15 +13,9 @@ import {
   ensureProfileRuntimeDir,
 } from '../session/paths.js';
 import {
-  getSharedContext,
-  getSharedContextStatus,
   releaseSharedContext,
-  runOnSharedCtx,
 } from '../session/shared.js';
-import { loadExecutor } from '../session/dispatch.js';
 import { CliError } from '../io/errors.js';
-import { throttle } from './throttle.js';
-import type { Request, Response } from './protocol.js';
 import {
   SUPERVISOR_RPC_MAX_FRAME_BYTES,
   SUPERVISOR_RPC_SCHEMA,
@@ -29,8 +23,6 @@ import {
   SUPERVISOR_EXECUTION_RENEWAL_SCHEMA,
   SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_SCHEMA,
   SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA,
-  LEGACY_SUPERVISOR_RPC_SCHEMA,
-  LEGACY_SUPERVISOR_EXECUTION_RENEWAL_SCHEMA,
   SupervisorRpcError,
   canonicalAuthorizedRequestHashV2,
   parseExecutionRenewalFrame,
@@ -51,9 +43,8 @@ export interface ServerOpts {
   idleTimeoutMs?: number;
   prewarm?: boolean;
   headful?: boolean;
-  supervisorRuntime?: ProfileDaemonRuntime;
+  supervisorRuntime: ProfileDaemonRuntime;
   pageActionVerification?: PageActionVerificationConfigV1;
-  legacyRollback?: true;
 }
 
 interface DaemonHealth {
@@ -98,8 +89,6 @@ const stats: ServerStats = {
   },
 };
 
-const DAEMON_BLOCKED_COMMANDS = new Set(['checkout-confirm']);
-
 let activeClients = 0;
 let lastActivityMs = Date.now();
 let server: net.Server | null = null;
@@ -107,18 +96,12 @@ let shuttingDown = false;
 let activeManagedRuntime: ProfileDaemonRuntime | null = null;
 const signalHandlers = new Map<NodeJS.Signals, () => void>();
 
-export async function start(opts: ServerOpts = {}): Promise<void> {
-  if ((opts.supervisorRuntime === undefined) === (opts.legacyRollback !== true)) {
-    throw new Error(
-      'Daemon startup requires exactly one managed Supervisor runtime or legacyRollback=true.',
-    );
-  }
+export async function start(opts: ServerOpts): Promise<void> {
   const profile = defaultProfileName(opts.profile);
-  const idleMs = opts.idleTimeoutMs ?? 30 * 60 * 1000;
   await ensureRoot();
   await ensureProfileRuntimeDir(profile);
   stats.profile = profile;
-  activeManagedRuntime = opts.supervisorRuntime ?? null;
+  activeManagedRuntime = opts.supervisorRuntime;
 
   // Clean any stale socket. If pidfile points to a live process, refuse.
   await refuseIfAlive(profile);
@@ -142,12 +125,11 @@ export async function start(opts: ServerOpts = {}): Promise<void> {
 
   log(`profile ${profile}, pid ${process.pid}, socket ${socketPath(profile)}`);
 
-  if (opts.supervisorRuntime !== undefined) {
-    log('warming Supervisor-managed headful Chromium...');
-    const managedStatus = await opts.supervisorRuntime.ensureWarm();
-    await fs.writeFile(
-      managedOwnerFile(profile),
-      JSON.stringify({
+  log('warming Supervisor-managed headful Chromium...');
+  const managedStatus = await opts.supervisorRuntime.ensureWarm();
+  await fs.writeFile(
+    managedOwnerFile(profile),
+    JSON.stringify({
         profileId: managedStatus.profileId,
         profileName: managedStatus.profileName,
         daemonInstanceId: managedStatus.daemonInstanceId,
@@ -162,15 +144,10 @@ export async function start(opts: ServerOpts = {}): Promise<void> {
           : await processStartIdentity(managedStatus.chromiumPid),
         headful: managedStatus.headful,
         writtenAt: new Date().toISOString(),
-      }),
-      { mode: 0o600 },
-    );
-    log('Supervisor-managed Chromium ready');
-  } else if (opts.prewarm) {
-    log('prewarming Chromium...');
-    await getSharedContext(profile, { headful: opts.headful === true });
-    log('Chromium ready');
-  }
+    }),
+    { mode: 0o600 },
+  );
+  log('Supervisor-managed Chromium ready');
 
   server = net.createServer((sock) => handleClient(sock, opts));
   const previousUmask = process.platform === 'win32' ? null : process.umask(0o177);
@@ -187,19 +164,6 @@ export async function start(opts: ServerOpts = {}): Promise<void> {
     });
   });
   log('listening');
-
-  const idleTimer = setInterval(() => {
-    if (
-      opts.supervisorRuntime === undefined &&
-      !shuttingDown &&
-      activeClients === 0 &&
-      Date.now() - lastActivityMs > idleMs
-    ) {
-      log(`idle for ${Math.round(idleMs / 60000)}min — shutting down`);
-      void shutdown(profile);
-    }
-  }, 10_000);
-  idleTimer.unref();
 
   for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     const handler = () => {
@@ -242,8 +206,7 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
       const line = buf.slice(0, nl).trim();
       buf = buf.slice(nl + 1);
       if (!line) continue;
-      let req: Request | ParsedSupervisorRpcRequestV2;
-      let supervisorRequest = false;
+      let req: ParsedSupervisorRpcRequestV2;
       let candidateRpcId = '?';
       let candidateCanonicalRequestHash = '0'.repeat(64);
       try {
@@ -261,13 +224,6 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
           && (parsed as Record<string, unknown>)['schema']
             === SUPERVISOR_REMOTE_ATTEMPT_ADMISSION_RESPONSE_SCHEMA
         ) {
-          if (opts.supervisorRuntime === undefined) {
-            throw new SupervisorRpcError(
-              'SUPERVISOR_RUNTIME_DISABLED',
-              'Legacy rollback daemons accept no Supervisor protocol frames.',
-              false,
-            );
-          }
           const response = parseRemoteAttemptAdmissionResponseFrame(parsed);
           const pending = pendingAdmissions.get(response.admissionId);
           if (pending === undefined || pending.rpcId !== response.rpcId) {
@@ -312,8 +268,7 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
             === SUPERVISOR_EXECUTION_RENEWAL_SCHEMA
         ) {
           if (
-            opts.supervisorRuntime === undefined
-            || opts.pageActionVerification === undefined
+            opts.pageActionVerification === undefined
           ) {
             throw new SupervisorRpcError(
               'SUPERVISOR_RUNTIME_DISABLED',
@@ -348,22 +303,6 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
           parsed !== null
           && typeof parsed === 'object'
           && !Array.isArray(parsed)
-          && ((parsed as Record<string, unknown>)['schema'] === LEGACY_SUPERVISOR_RPC_SCHEMA
-            || (parsed as Record<string, unknown>)['schema']
-              === LEGACY_SUPERVISOR_EXECUTION_RENEWAL_SCHEMA)
-        ) {
-          throw new SupervisorRpcError(
-            'RPC_VERSION_UNSUPPORTED',
-            opts.supervisorRuntime === undefined
-              ? 'Legacy rollback daemons accept no Supervisor protocol frames.'
-              : 'Supervisor-managed daemons accept only Supervisor protocol v2.',
-            false,
-          );
-        }
-        if (
-          parsed !== null
-          && typeof parsed === 'object'
-          && !Array.isArray(parsed)
           && typeof (parsed as Record<string, unknown>)['rpcId'] === 'string'
         ) {
           candidateRpcId = (parsed as Record<string, unknown>)['rpcId'] as string;
@@ -376,8 +315,7 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
             === SUPERVISOR_RPC_SCHEMA
         ) {
           if (
-            opts.supervisorRuntime === undefined
-            || opts.pageActionVerification === undefined
+            opts.pageActionVerification === undefined
           ) {
             throw new SupervisorRpcError(
               'SUPERVISOR_RUNTIME_DISABLED',
@@ -389,26 +327,12 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
             verification: opts.pageActionVerification,
           });
           candidateCanonicalRequestHash = canonicalAuthorizedRequestHashV2(req);
-          supervisorRequest = true;
         } else {
-          if (opts.supervisorRuntime !== undefined) {
-            throw new SupervisorRpcError(
-              'SUPERVISOR_RPC_REQUIRED',
-              'Supervisor-managed daemons accept only Supervisor protocol v2.',
-              false,
-            );
-          }
-          const schema = parsed !== null && typeof parsed === 'object' && !Array.isArray(parsed)
-            ? (parsed as Record<string, unknown>)['schema']
-            : undefined;
-          if (typeof schema === 'string' && schema.startsWith('profile-supervisor.')) {
-            throw new SupervisorRpcError(
-              'SUPERVISOR_RUNTIME_DISABLED',
-              'Legacy rollback daemons accept no Supervisor protocol frames.',
-              false,
-            );
-          }
-          req = parseLegacyRequest(parsed);
+          throw new SupervisorRpcError(
+            'SUPERVISOR_RPC_REQUIRED',
+            'Managed daemons accept only fenced Supervisor protocol v2.',
+            false,
+          );
         }
       } catch (error) {
         if (error instanceof SupervisorRpcError) {
@@ -430,34 +354,32 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
         );
         continue;
       }
-      const response = supervisorRequest
-        ? handleSupervisorRequest(
-            opts.supervisorRuntime!,
-            req as ParsedSupervisorRpcRequestV2,
+      const response = handleSupervisorRequest(
+            opts.supervisorRuntime,
+            req,
             opts.profile,
-            (req as ParsedSupervisorRpcRequestV2).method === 'collector.pageAction.execute'
+            req.method === 'collector.pageAction.execute'
               ? {
                   transportAuthority:
-                    (req as ParsedSupervisorRpcRequestV2).binding.transportAuthority,
+                    req.binding.transportAuthority,
                   parentCanonicalRequestHash: canonicalAuthorizedRequestHashV2(
-                    req as ParsedSupervisorRpcRequestV2,
+                    req,
                   ),
                   authorize: (input) => requestRemoteAttemptAdmission({
                     sock,
                     pendingAdmissions,
-                    rpcId: (req as ParsedSupervisorRpcRequestV2).rpcId,
-                    deadlineAt: (req as ParsedSupervisorRpcRequestV2).deadlineAt,
+                    rpcId: req.rpcId,
+                    deadlineAt: req.deadlineAt,
                     transportAuthority:
-                      (req as ParsedSupervisorRpcRequestV2).binding.transportAuthority,
+                      req.binding.transportAuthority,
                     parentCanonicalRequestHash: canonicalAuthorizedRequestHashV2(
-                      req as ParsedSupervisorRpcRequestV2,
+                      req,
                     ),
                     input,
                   }),
                 }
               : undefined,
-          )
-        : handleRequest(req as Request, opts.supervisorRuntime !== undefined);
+          );
       void response.then((resp) => {
         if (!sock.writable) return;
         sock.write(JSON.stringify(resp) + '\n');
@@ -597,92 +519,6 @@ async function persistManagedOwner(
   );
 }
 
-function parseLegacyRequest(value: unknown): Request {
-  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
-    throw new TypeError('Legacy daemon request must be an object.');
-  }
-  const record = value as Record<string, unknown>;
-  if (
-    typeof record['id'] !== 'string'
-    || record['id'].length === 0
-    || typeof record['cmd'] !== 'string'
-    || record['cmd'].length === 0
-    || !Object.hasOwn(record, 'args')
-  ) {
-    throw new TypeError('Legacy daemon request requires id, cmd, and args.');
-  }
-  return { id: record['id'], cmd: record['cmd'], args: record['args'] };
-}
-
-async function handleRequest(req: Request, supervisorManaged: boolean): Promise<Response> {
-  lastActivityMs = Date.now();
-  stats.lastRequestAt = new Date().toISOString();
-  stats.commandCount++;
-  try {
-    if (supervisorManaged) {
-      throw new CliError(
-        20,
-        'SUPERVISOR_RPC_REQUIRED',
-        'Supervisor-managed daemons reject legacy command dispatch.',
-      );
-    }
-    if (req.cmd === 'status') {
-      const browser = await getSharedContextStatus();
-      return {
-        id: req.id,
-        ok: true,
-        data: {
-          ...stats,
-          uptimeMs: Date.now() - new Date(stats.startedAt).getTime(),
-          activeClients,
-          browser,
-        },
-      };
-    }
-    if (req.cmd === 'shutdown') {
-      setTimeout(() => void shutdown(stats.profile), 50);
-      return { id: req.id, ok: true, data: { stopping: true } };
-    }
-    if (DAEMON_BLOCKED_COMMANDS.has(req.cmd)) {
-      throw new CliError(
-        20,
-        'DAEMON_COMMAND_DISABLED',
-        `${req.cmd} must run through the CLI confirmation path, not the daemon socket.`,
-      );
-    }
-    await enforceHealthPause();
-    await throttle(req.cmd);
-    const fn = await loadExecutor<unknown, unknown>(req.cmd);
-    const data = await runOnSharedCtx((ctx) => fn(ctx, req.args), {
-      requestId: req.id,
-      cmd: req.cmd,
-      args: req.args,
-    }, stats.profile);
-    recordSuccess();
-    return { id: req.id, ok: true, data };
-  } catch (e) {
-    stats.lastError = (e as Error).message ?? String(e);
-    recordFailure(e);
-    if (e instanceof CliError) {
-      return {
-        id: req.id,
-        ok: false,
-        exitCode: e.exitCode,
-        code: e.code,
-        message: e.message,
-        details: e.details,
-      };
-    }
-    return {
-      id: req.id,
-      ok: false,
-      exitCode: 1,
-      code: 'INTERNAL',
-      message: (e as Error).message ?? String(e),
-    };
-  }
-}
-
 function supervisorFailure(
   rpcId: string,
   canonicalRequestHash: string,
@@ -704,69 +540,6 @@ function supervisorFailure(
 
 function canonicalAuthority(authority: TransportAuthorityV2): string {
   return JSON.stringify(authority);
-}
-
-async function enforceHealthPause(): Promise<void> {
-  const pausedUntil = stats.health.pausedUntil;
-  if (!pausedUntil) return;
-  const until = new Date(pausedUntil).getTime();
-  if (!Number.isFinite(until) || Date.now() >= until) {
-    stats.health.pausedUntil = null;
-    return;
-  }
-  throw new CliError(
-    9,
-    'DAEMON_PAUSED',
-    `Daemon for profile "${stats.profile}" is paused until ${pausedUntil} after repeated 1688 failures.`,
-    {
-      category: 'daemon_health',
-      recoverHint: `Wait for the pause to expire, or run \`1688 daemon reload --profile ${stats.profile}\` after manually resolving login/risk-control issues.`,
-      retryable: true,
-      pausedUntil,
-      failureKind: stats.health.lastFailureKind,
-      recoveryAction: stats.health.lastRecoveryAction,
-    },
-  );
-}
-
-function recordSuccess(): void {
-  stats.health.consecutiveFailures = 0;
-  stats.health.consecutiveRateLimits = 0;
-  stats.health.lastSuccessfulActionAt = new Date().toISOString();
-  stats.health.pausedUntil = null;
-}
-
-function detailString(e: unknown, key: string): string | null {
-  if (!(e instanceof CliError)) return null;
-  const v = e.details[key];
-  return typeof v === 'string' ? v : null;
-}
-
-function recordFailure(e: unknown): void {
-  if (e instanceof CliError && e.code === 'DAEMON_PAUSED') return;
-
-  stats.health.consecutiveFailures++;
-  const pageState = detailString(e, 'pageState');
-  const failureKind = detailString(e, 'failureKind');
-  const recoveryAction = detailString(e, 'recoveryAction');
-  if (pageState) stats.health.lastPageState = pageState;
-  if (failureKind) stats.health.lastFailureKind = failureKind;
-  if (recoveryAction) stats.health.lastRecoveryAction = recoveryAction;
-
-  if (failureKind === 'rate_limited' || (e instanceof CliError && e.code === 'RATE_LIMITED')) {
-    stats.health.consecutiveRateLimits++;
-  } else if (failureKind && failureKind !== 'rate_limited') {
-    stats.health.consecutiveRateLimits = 0;
-  }
-
-  const now = Date.now();
-  if (failureKind === 'rate_limited' && stats.health.consecutiveRateLimits >= 2) {
-    stats.health.pausedUntil = new Date(now + 5 * 60_000).toISOString();
-  } else if (failureKind === 'risk_challenge' || failureKind === 'not_logged_in') {
-    stats.health.pausedUntil = new Date(now + 10 * 60_000).toISOString();
-  } else if (stats.health.consecutiveFailures >= 5) {
-    stats.health.pausedUntil = new Date(now + 2 * 60_000).toISOString();
-  }
 }
 
 async function refuseIfAlive(profile: string): Promise<void> {

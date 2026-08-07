@@ -85,8 +85,8 @@
     },
     {
       "path": "batches/search-list/00-search-page.json",
-      "bytes": 13088,
-      "sha256": "66ceacc92e416dfbe79d144c8f7f0645dff5d3da3e781397ffed24d4b61449ac"
+      "bytes": 13050,
+      "sha256": "1ecc6f0526605475e16df444f02ba964d8d5e2ff1a0d65d04684029c0e28fa56"
     },
     {
       "path": "batches/store-qualification/00-store-qualification.json",
@@ -130,13 +130,13 @@
     },
     {
       "path": "envelopes/search-list.completion-receipt.json",
-      "bytes": 16514,
-      "sha256": "65ffd399894118d6ecb26c52e0930eacdf90ba5d4078fed930ef54fca5802284"
+      "bytes": 16472,
+      "sha256": "73bd5f6024cc2689c17c2dc4a05af0b13f47bb3a19bf5eb1b6d61cf870d058f5"
     },
     {
       "path": "envelopes/search-list.execution-attempt-receipt.json",
-      "bytes": 18921,
-      "sha256": "f4cfff23add1da13f23ba1fcde4625878b96ebe20f1cdd67cc4b70ca6057f54e"
+      "bytes": 18879,
+      "sha256": "d8273ea4e7a8dbfc3632a5a9d758e34e3cde262bc8184b0d48e5b4e7acf5a9ee"
     },
     {
       "path": "envelopes/store-qualification.completion-receipt.json",
@@ -180,8 +180,8 @@
     },
     {
       "path": "manifest.json",
-      "bytes": 12003,
-      "sha256": "98f657e9dcfef9c6b01a3fc5cdd81009b8717e50aabeb7e6f1796e52a7709be4"
+      "bytes": 11830,
+      "sha256": "2ed8127856ee3f97ecb495adf9a907bdc206de74f0a9ece096a5480e0bf8e3c8"
     },
     {
       "path": "responses/offer-detail.wire-response.json",
@@ -190,8 +190,8 @@
     },
     {
       "path": "responses/search-list.wire-response.json",
-      "bytes": 37048,
-      "sha256": "2b6760cfc93e5a2bf35510988a577c89a5fc9e2b27d4edc0beb1079919833760"
+      "bytes": 36960,
+      "sha256": "2e0858a1fbc4fe35099a1451f18cf71834ad7934557ecb30d4f2d282ff235b48"
     },
     {
       "path": "responses/store-qualification.wire-response.json",

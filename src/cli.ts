@@ -30,12 +30,11 @@ program
 
 program
   .command('login')
-  .description('Log in to 1688 by scanning a QR code (auto-starts daemon afterwards)')
+  .description('Log in to 1688 by scanning a QR code')
   .option('--force', 'Re-login even if a session already exists')
   .option('--timeout <seconds>', 'Seconds to wait for QR scan', '300')
   .option('--profile <name>', 'Profile name (default: default)')
   .option('--headed', 'Open a real browser window instead of terminal QR')
-  .option('--no-daemon', 'Do not auto-start the daemon after login')
   .action(async (opts) => {
     const { run } = await import('./commands/login.js');
     await run(opts);
@@ -56,7 +55,7 @@ program
   .option('--exclude-ads', 'Exclude P4P/ad results')
   .option('--page-delay-min <seconds>', 'Minimum pause between search result pages', '2')
   .option('--page-delay-max <seconds>', 'Maximum pause between search result pages', '4')
-  .option('--deeppro', 'After search, deep collect each offer using pro inline mode (retry up to 3x)')
+  .option('--deeppro', 'After search, deep collect each offer through the Profile daemon (retry up to 3x)')
   .option('--deeppro-delay-min <seconds>', 'Minimum delay between deeppro offer collections', '6')
   .option('--deeppro-delay-max <seconds>', 'Maximum delay between deeppro offer collections', '10')
   .option('--profile <name>', 'Profile name (default: default)')
@@ -204,7 +203,7 @@ program
   .argument('<offerIds...>', 'One or more offer IDs (digits)')
   .option('--profile <name>', 'Profile name (default: default)')
   .option('--headed', 'Open a browser window (fallback for risk control)')
-  .option('--pro', 'Run offer collection inline and bypass daemon health pause')
+  .option('--pro', 'Deep collect one or more offers through the Profile daemon')
   .action(async (offerIds: string[], opts) => {
     const { run } = await import('./commands/offer.js');
     await run({ ...opts, offerIds });
@@ -526,70 +525,18 @@ program
 
 program
   .command('serve')
-  .description('Run the 1688 daemon in the foreground')
+  .description('Run a Supervisor-managed 1688 daemon in the foreground')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--idle-timeout <minutes>', 'Idle timeout in minutes', '30')
-  .option('--no-prewarm', 'Skip pre-warming Chromium at startup')
-  .option('--supervisor-config <path>', '0600 Supervisor-issued daemon config')
-  .option('--legacy-rollback', 'Explicitly run the legacy unfenced daemon')
+  .requiredOption('--supervisor-config <path>', '0600 Supervisor-issued daemon config')
   .action(async (opts) => {
     const { start } = await import('./daemon/server.js');
-    const supervisorConfig = opts.supervisorConfig
-      ?? process.env.BB1688_SUPERVISOR_CONFIG;
-    if (supervisorConfig && opts.legacyRollback === true) {
-      throw new CliError(
-        20,
-        'DAEMON_MODE_CONFLICT',
-        'Managed Supervisor config and --legacy-rollback are mutually exclusive.',
-      );
-    }
-    if (supervisorConfig) {
-      const { loadManagedServerOptions } = await import('./daemon/managed-bootstrap.js');
-      await start(await loadManagedServerOptions(supervisorConfig, opts.profile));
-      return;
-    }
-    if (opts.legacyRollback !== true) {
-      throw new CliError(
-        20,
-        'SUPERVISOR_CONFIG_REQUIRED',
-        'serve requires --supervisor-config; use --legacy-rollback only for an explicit legacy rollback cohort.',
-      );
-    }
-    if (process.env.BB1688_SUPERVISOR_MANAGED === '1') {
-      throw new CliError(
-        20,
-        'LEGACY_ROLLBACK_ISOLATION_REQUIRED',
-        'Legacy rollback cannot inherit Supervisor-managed runtime identity.',
-      );
-    }
-    await start({
-      profile: opts.profile,
-      idleTimeoutMs: Math.max(1, parseInt(opts.idleTimeout, 10)) * 60_000,
-      prewarm: opts.prewarm !== false,
-      legacyRollback: true,
-    });
+    const { loadManagedServerOptions } = await import('./daemon/managed-bootstrap.js');
+    await start(await loadManagedServerOptions(opts.supervisorConfig, opts.profile));
   });
 
 const daemon = program
   .command('daemon')
   .description('Manage the background 1688 daemon');
-
-daemon
-  .command('start')
-  .description('Start the daemon as a background process')
-  .option('--profile <name>', 'Profile name (default: default)')
-  .action(async (opts) => {
-    const { start } = await import('./daemon/manager.js');
-    const { emit } = await import('./io/output.js');
-    const { pid, profile } = await start(opts.profile);
-    emit({
-      human: () =>
-        process.stdout.write(
-          `Daemon started for profile "${profile}" (pid ${pid}).\n`,
-        ),
-      data: { ok: true, profile, pid },
-    });
-  });
 
 daemon
   .command('managed-start')
@@ -623,38 +570,6 @@ daemon
             : `Daemon was not running for profile "${profile}".\n`,
         ),
       data: { ok: true, profile, stopped },
-    });
-  });
-
-daemon
-  .command('reload')
-  .description('Restart the daemon (stop + start) to pick up new code')
-  .option('--profile <name>', 'Profile name (default: default)')
-  .action(async (opts) => {
-    const { stop, start, status, cleanupLock } = await import(
-      './daemon/manager.js'
-    );
-    const { defaultProfileName } = await import('./session/paths.js');
-    const { emit, info } = await import('./io/output.js');
-    const profile = defaultProfileName(opts.profile);
-    const before = await status(profile);
-    if (before.running) {
-      info(`Stopping daemon for profile "${profile}"...`);
-      await stop(profile);
-    }
-    // Force-clean stale lock — we own the lifecycle here, so this is safe.
-    // proper-lockfile sometimes leaves the `.lock.lock` dir behind if the daemon
-    // exits before its release callback runs to completion.
-    info(`Cleaning stale lock for profile "${profile}"...`);
-    await cleanupLock(profile);
-    info(`Starting daemon for profile "${profile}"...`);
-    const { pid } = await start(profile);
-    emit({
-      human: () =>
-        process.stdout.write(
-          `Daemon reloaded for profile "${profile}" (pid ${pid}).\n`,
-        ),
-      data: { ok: true, profile, pid, wasRunning: before.running },
     });
   });
 

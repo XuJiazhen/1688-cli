@@ -14,11 +14,9 @@ afterEach(async () => {
 
 function authority() {
   return {
-    mode: 'scripted_offline' as const,
-    executionAuthorityDocumentId: '20000000-0000-4000-8000-000000000001',
-    executionAuthorityDocumentSha256: 'a'.repeat(64),
-    executionSubjectDocumentId: '20000000-0000-4000-8000-000000000002',
-    executionSubjectDocumentSha256: 'b'.repeat(64),
+    mode: 'live_remote' as const,
+    liveAuthorizationId: '20000000-0000-4000-8000-000000000001',
+    liveAuthorizationSha256: 'a'.repeat(64),
     cohortId: '20000000-0000-4000-8000-000000000003',
     runId: '20000000-0000-4000-8000-000000000004',
     protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,

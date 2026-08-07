@@ -14,25 +14,6 @@ export interface LoginOpts {
   timeout?: string;
   profile?: string;
   headed?: boolean;
-  noDaemon?: boolean;
-}
-
-async function ensureDaemonStarted(opts: LoginOpts): Promise<void> {
-  if (opts.noDaemon) return;
-  const profile = defaultProfileName(opts.profile);
-  try {
-    const { status, start } = await import('../daemon/manager.js');
-    const st = await status(profile);
-    if (st.running) {
-      info(`Daemon already running for profile "${profile}" (pid ${st.pid}).`);
-      return;
-    }
-    info(`Starting daemon for profile "${profile}" to keep browser warm (reduces risk control hits)...`);
-    const { pid } = await start(profile);
-    info(`Daemon ready for profile "${profile}" (pid ${pid}) — next commands will reuse this context.`);
-  } catch (e) {
-    info(`(Daemon auto-start skipped for profile "${profile}": ${(e as Error).message})`);
-  }
 }
 
 const LOGIN_URL = 'https://login.1688.com/member/signin.htm?tbpm=1';
@@ -64,7 +45,6 @@ export async function run(opts: LoginOpts): Promise<void> {
           nick: existing.nick,
         },
       });
-      await ensureDaemonStarted(opts);
       return;
     }
   }
@@ -120,7 +100,6 @@ export async function run(opts: LoginOpts): Promise<void> {
       ),
     data: { ok: true, memberId: identity.memberId, nick: identity.nick },
   });
-  await ensureDaemonStarted(opts);
 }
 
 async function peekIdentity(profile?: string): Promise<Identity | null> {

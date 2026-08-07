@@ -30,7 +30,7 @@ describe('CollectionBatch ingestion contract', () => {
     const unit: CollectionUnit = {
       schemaVersion: 1,
       unitId: 'integration-catalog-1',
-      taskId: 'selection-task-1',
+      collectionTaskId: 'selection-task-1',
       kind: 'store-catalog',
       subject: { supplier: { memberId: 'b2b-fixture-supplier' } },
       scope: { requestedScope: 'page', pageSize: 2 },

@@ -8,11 +8,9 @@ import type { PageActionRequestV1 } from '../src/collection/page-action-contract
 import { SUPERVISOR_PROTOCOL_SHA256_V2 } from '../src/daemon/supervisor-rpc.js';
 
 const transportAuthority = {
-  mode: 'scripted_offline' as const,
-  executionAuthorityDocumentId: '50000000-0000-4000-8000-000000000001',
-  executionAuthorityDocumentSha256: '1'.repeat(64),
-  executionSubjectDocumentId: '50000000-0000-4000-8000-000000000002',
-  executionSubjectDocumentSha256: '2'.repeat(64),
+  mode: 'live_remote' as const,
+  liveAuthorizationId: '50000000-0000-4000-8000-000000000001',
+  liveAuthorizationSha256: '1'.repeat(64),
   cohortId: '50000000-0000-4000-8000-000000000003',
   runId: '50000000-0000-4000-8000-000000000004',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,

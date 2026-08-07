@@ -34,12 +34,7 @@ export type CanonicalSearchSort =
   | 'price-asc'
   | 'price-desc';
 
-export type SearchSortInput =
-  | CanonicalSearchSort
-  | 'best-selling'
-  | 'va_rmdarkgmv30'
-  | 'va_price_asc'
-  | 'va_price_desc';
+export type SearchSortInput = CanonicalSearchSort;
 
 export interface SearchFilterOptionV1 {
   groupPath: string[];
@@ -124,7 +119,6 @@ export interface SearchIntentV1 {
 export interface ResolvedSearchIntentV1 {
   keyword: string;
   sort: CanonicalSearchSort;
-  compatibilitySortInput: string | null;
   filterConfigSnapshotId: string;
   filterConfigSnapshotHash: string;
   serializerCapabilitySnapshotId: string;
@@ -174,26 +168,11 @@ const MULTI_COMPOSERS: Readonly<Record<SearchFilterRequestKey, string>> = {
   uniqfield: 'single-v1',
 };
 
-export function normalizeSearchSortInput(input: SearchSortInput): {
-  sort: CanonicalSearchSort;
-  compatibilityInput: string | null;
-} {
-  const aliases: Readonly<Record<string, CanonicalSearchSort>> = {
-    relevance: 'relevance',
-    sales: 'sales',
-    'best-selling': 'sales',
-    va_rmdarkgmv30: 'sales',
-    'price-asc': 'price-asc',
-    va_price_asc: 'price-asc',
-    'price-desc': 'price-desc',
-    va_price_desc: 'price-desc',
-  };
-  const sort = aliases[input];
-  if (!sort) searchContractError('SEARCH_SORT_UNSUPPORTED', `Unsupported search sort: ${input}`);
-  return {
-    sort,
-    compatibilityInput: input === sort ? null : input,
-  };
+export function normalizeSearchSortInput(input: SearchSortInput): CanonicalSearchSort {
+  if (!['relevance', 'sales', 'price-asc', 'price-desc'].includes(input)) {
+    searchContractError('SEARCH_SORT_UNSUPPORTED', `Unsupported search sort: ${input}`);
+  }
+  return input;
 }
 
 export function parseSearchFilterConfigSnapshotV1(input: {
@@ -325,7 +304,7 @@ export function resolveSearchIntentV1(input: {
   }
   assertPositiveBound(input.intent.maxPages, 20, 'maxPages');
   assertPositiveBound(input.intent.maxOffers, 1200, 'maxOffers');
-  const { sort, compatibilityInput } = normalizeSearchSortInput(input.intent.sort);
+  const sort = normalizeSearchSortInput(input.intent.sort);
   const selected = input.intent.selections.map((selection, index) => {
     const matches = snapshot.options.filter((option) =>
       sameStrings(option.groupPath, selection.groupPath) &&
@@ -374,7 +353,6 @@ export function resolveSearchIntentV1(input: {
   return Object.freeze({
     keyword: input.intent.keyword.trim(),
     sort,
-    compatibilitySortInput: compatibilityInput,
     filterConfigSnapshotId: snapshot.snapshotId,
     filterConfigSnapshotHash: snapshot.snapshotHash,
     serializerCapabilitySnapshotId: capabilitySnapshot.snapshotId,

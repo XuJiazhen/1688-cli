@@ -158,7 +158,7 @@ export async function run(opts: SupplierCatalogOpts): Promise<void> {
   const data = await dispatch<SupplierCatalogArgs, CollectionBatch>(
     'supplier-catalog',
     { unit, headed: opts.headed, catalogTransport },
-    { profile: opts.profile, headed: opts.headed, noDaemon: true },
+    { profile: opts.profile, headed: opts.headed },
   );
   emit({
     data,

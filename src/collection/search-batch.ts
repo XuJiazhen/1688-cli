@@ -108,7 +108,6 @@ export interface CreateSearchPageBatchInput {
     filterConfigSnapshotHash: string;
     serializerCapabilitySnapshotHash: string;
     businessSort: 'relevance' | 'sales' | 'price-asc' | 'price-desc';
-    compatibilitySortInput: string | null;
     remoteSortType: 'normal' | 'va_sales360' | 'price';
     remoteDescendOrder: boolean;
     filterParams: Record<string, string | boolean | number>;

@@ -307,7 +307,7 @@ describe('startSearchOfferCapture', () => {
 describe('strict Search PageAction capture', () => {
   it('drains a deferred raw archive before action cancellation returns', async () => {
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1',
       filterConfigSnapshotHash: `sha256:${'1'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1',
@@ -355,7 +355,7 @@ describe('strict Search PageAction capture', () => {
     vi.useFakeTimers();
     try {
       const parameterSet = compileSearchParameterSetV1({
-        keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+        keyword: 'fixture', sort: 'relevance',
         filterConfigSnapshotId: 'filter-1',
         filterConfigSnapshotHash: `sha256:${'1'.repeat(64)}`,
         serializerCapabilitySnapshotId: 'serializer-1',
@@ -399,7 +399,7 @@ describe('strict Search PageAction capture', () => {
 
   it('delivers the correlated response bytes before strict parsing fails', async () => {
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1',
       filterConfigSnapshotHash: `sha256:${'1'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1',
@@ -431,7 +431,7 @@ describe('strict Search PageAction capture', () => {
 
   it('returns a typed retryable timeout instead of an unclassified Error', async () => {
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1',
       filterConfigSnapshotHash: `sha256:${'1'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1',

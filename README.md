@@ -31,7 +31,7 @@ npm i -g 1688-cli
 1688 research 手机壳 数据线 --max-per-query 50 --jsonl         # multi-keyword research dataset
 1688 image-search ./sample.jpg                                # search by image
 1688 offer 628196518518                                       # single product detail
-1688 offer 628196518518 1234567890 --json --pretty --pro      # batch product detail, bypass daemon
+1688 offer 628196518518 1234567890 --json --pretty --pro      # batch product detail via daemon
 1688 compare 628196518518 1234567890                          # compare offer details
 
 # Supplier scraper / supplier research
@@ -161,7 +161,7 @@ Research** when you start from companies, factories, or supplier qualification.
 1688 image-search ./shoe.jpg                     # search by local image
 1688 image-search https://.../img.png            # search by http(s) URL
 1688 offer 628196518518                          # single product detail (priceTiers, attributes, packageInfo, SKUs)
-1688 offer 628196518518 1234567890 --pro --json  # batch product detail, bypass daemon
+1688 offer 628196518518 1234567890 --pro --json  # batch product detail via daemon
 1688 compare 628196518518 1234567890             # compare price/MOQ/SKU/sales signals
 ```
 
@@ -172,7 +172,7 @@ original JSON shape; multiple IDs return a batch envelope:
 
 ```bash
 1688 offer 967417789506 --json --pretty                      # single → OfferResult
-1688 offer 967417789506 --json --pretty --pro                # single, bypass daemon pause
+1688 offer 967417789506 --json --pretty --pro                # single deep collection via daemon
 1688 offer 967417789506 817273094122 --json --pretty --pro   # batch → OfferBatchResult
 ```
 
@@ -190,13 +190,13 @@ Batch output shape:
 }
 ```
 
-- `--pro` bypasses daemon health pause for each offer.
+- `--pro` deep-collects each offer through the selected Profile daemon.
 - `RISK_CONTROL` per-offer failures appear in `failures[]`, don't stop the batch.
 - Progress lines are written to stderr so `--json --pretty` stdout stays clean.
 
 #### Deep pro search
 
-Search first, then deep collect returned offer IDs in pro inline mode.
+Search first, then deep collect returned offer IDs through the same Profile daemon.
 Each offer is retried up to 2 times after the first failed attempt.
 
 ```bash
@@ -236,7 +236,7 @@ Output includes a `deeppro` envelope alongside normal search results:
 
 - `--max` controls how many search results are deep-collected.
 - `--page-delay-min` / `--page-delay-max` control the pause between search-result pages (default 2–4 s).
-- `--deeppro` uses pro inline collection for every offer, bypassing daemon health pause.
+- `--deeppro` deep-collects every offer through the selected Profile daemon.
 - `--deeppro-delay-min` / `--deeppro-delay-max` control the pause between offers (default 6–10 s).
 - Each offer is retried up to 3 times total (1 initial + 2 retries).
 - Progress is written to stderr; stdout remains clean JSON.
@@ -503,7 +503,7 @@ profile's lock. Within one profile, daemon work remains serialized and paced.
 ```bash
 1688 login                                # scan QR, auto-start daemon
 1688 login --timeout 300                  # wait up to 5 minutes for QR scan
-1688 login --no-daemon                    # login without auto-starting daemon
+1688 login --headed                       # explicit interactive login/risk recovery
 1688 login --headed                       # open real browser window instead of terminal QR
 1688 login --force                        # re-login even if session already exists
 ```
@@ -696,7 +696,6 @@ See also the FAQ entry on [verification challenges](#what-happens-if-1688-shows-
 ## Environment variables
 
 ```
-BB1688_NO_DAEMON=1          disable daemon, always run inline
 BB1688_JSON=1               force JSON output on TTY
 BB1688_DEBUG=1              verbose internal logs to stderr
 BB1688_FORCE_CHROMIUM=1     skip system Chrome, use bundled Chromium

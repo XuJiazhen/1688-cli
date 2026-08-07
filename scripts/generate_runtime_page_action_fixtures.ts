@@ -519,11 +519,6 @@ export async function generateRuntimeDerivedPageActionFixtures(
         containsLiveCredentials: false,
         containsPersonalData: false,
       },
-      legacySyntheticFixtureSet: {
-        path: 'tests/fixtures/page-actions',
-        evidenceStatus: 'synthetic-non-runtime',
-        acceptedAsRuntimeParityEvidence: false,
-      },
       actions: actionManifests,
     };
     const manifestBytes = jsonBytes(manifest);
@@ -554,7 +549,7 @@ export async function verifyRuntimeDerivedPageActionFixtureSet(
     [
       'schema', 'fixtureSetVersion', 'provenance', 'productionExecutorModule',
       'transportMode', 'generatedAt', 'generator', 'security',
-      'legacySyntheticFixtureSet', 'actions',
+      'actions',
     ],
   );
   if (
@@ -576,18 +571,6 @@ export async function verifyRuntimeDerivedPageActionFixtureSet(
     || security['containsPersonalData'] !== false
   ) {
     throw new Error('Runtime fixture security declaration is invalid.');
-  }
-  const legacy = strictRecord(
-    manifest['legacySyntheticFixtureSet'],
-    'legacy fixture declaration',
-    ['path', 'evidenceStatus', 'acceptedAsRuntimeParityEvidence'],
-  );
-  if (
-    legacy['path'] !== 'tests/fixtures/page-actions'
-    || legacy['evidenceStatus'] !== 'synthetic-non-runtime'
-    || legacy['acceptedAsRuntimeParityEvidence'] !== false
-  ) {
-    throw new Error('Legacy synthetic fixtures must remain explicitly non-runtime evidence.');
   }
   const generator = strictRecord(
     manifest['generator'],
@@ -900,7 +883,6 @@ function searchParameterSet() {
   return compileSearchParameterSetV1({
     keyword: SEARCH_INPUT.keyword,
     sort: 'relevance',
-    compatibilitySortInput: null,
     filterConfigSnapshotId: 'runtime-filter-snapshot-1',
     filterConfigSnapshotHash: canonicalCollectorSha256V1('runtime-filter-snapshot-1'),
     serializerCapabilitySnapshotId: 'runtime-serializer-snapshot-1',

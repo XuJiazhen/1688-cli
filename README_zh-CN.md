@@ -474,7 +474,7 @@ profile 的锁。同一 profile 内，daemon 工作保持串行和节奏控制�
 ```bash
 1688 login                                # 扫码，自动启动 daemon
 1688 login --timeout 300                  # 等待扫码最长 5 分钟
-1688 login --no-daemon                    # 登录但不自动启动 daemon
+1688 login --headed                       # 显式交互登录/风险处理
 1688 login --headed                       # 打开真实浏览器窗口而非终端二维码
 1688 login --force                        # 即使已有 session 也重新登录
 ```
@@ -654,7 +654,6 @@ Daemon 管理使用相同命令界面：
 ## 环境变量
 
 ```
-BB1688_NO_DAEMON=1          禁用 daemon，始终 inline 运行
 BB1688_JSON=1               在 TTY 中强制 JSON 输出
 BB1688_DEBUG=1              详细内部日志输出到 stderr
 BB1688_FORCE_CHROMIUM=1     跳过系统 Chrome，使用内置 Chromium

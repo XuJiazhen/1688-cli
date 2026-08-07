@@ -155,7 +155,7 @@ export async function execute(
   ));
 }
 
-/** Executes one production search page while retaining the legacy search API. */
+/** Executes one isolated search page for the manual CLI workflow. */
 export async function fetchIncrementalSearchPage(
   ctx: BrowserContext,
   args: IncrementalSearchPageArgs,
@@ -252,8 +252,6 @@ export async function run(keyword: string, opts: SearchOpts): Promise<void> {
     excludeAds: opts.excludeAds,
   });
 
-  // --deeppro bypasses daemon for the initial search too, so DAEMON_PAUSED
-  // can't block the search before deep collection even starts.
   const data = await dispatch<SearchArgs, SearchResult>(
     'search',
     {
@@ -265,10 +263,10 @@ export async function run(keyword: string, opts: SearchOpts): Promise<void> {
       pageDelayMin,
       pageDelayMax,
     },
-    { headed: opts.headed, profile: opts.profile, noDaemon: opts.deeppro === true },
+    { headed: opts.headed, profile: opts.profile },
   );
 
-  // --deeppro: deep collect each search result in pro inline mode.
+  // --deeppro: deep collect each search result through the same Profile daemon.
   if (opts.deeppro === true) {
     const ids = data.offers
       .map((o) => String(o.offerId ?? '').trim())
@@ -1190,7 +1188,7 @@ async function deepProCollect(
         const detail = await dispatch<OfferArgs, OfferResult>(
           'offer',
           { offerId, headed: opts.headed },
-          { headed: opts.headed, profile: opts.profile, noDaemon: true },
+          { headed: opts.headed, profile: opts.profile },
         );
 
         if (!isValidDeepOffer(detail)) {

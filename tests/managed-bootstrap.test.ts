@@ -42,11 +42,9 @@ const key = 'managed-bootstrap-key-with-at-least-32-bytes';
 const PROFILE_ID = '40000000-0000-4000-8000-000000000001';
 const DAEMON_ID = '40000000-0000-4000-8000-000000000002';
 const transportAuthority = {
-  mode: 'scripted_offline' as const,
-  executionAuthorityDocumentId: '40000000-0000-4000-8000-000000000003',
-  executionAuthorityDocumentSha256: 'a'.repeat(64),
-  executionSubjectDocumentId: '40000000-0000-4000-8000-000000000004',
-  executionSubjectDocumentSha256: 'b'.repeat(64),
+  mode: 'live_remote' as const,
+  liveAuthorizationId: '40000000-0000-4000-8000-000000000003',
+  liveAuthorizationSha256: 'a'.repeat(64),
   cohortId: '40000000-0000-4000-8000-000000000005',
   runId: '40000000-0000-4000-8000-000000000006',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
@@ -252,7 +250,7 @@ describe('managed daemon bootstrap', () => {
       })).resolves.toMatchObject({
         schema: 'profile-supervisor.rpc-response.v2',
         ok: false,
-        error: { code: 'RPC_VERSION_UNSUPPORTED' },
+        error: { code: 'SUPERVISOR_RPC_REQUIRED' },
       });
       const status = await supervisorDaemonCall<Record<string, unknown>>(
         signedStatusRequest(sampled),
@@ -317,35 +315,6 @@ describe('managed daemon bootstrap', () => {
     }
   });
 
-  it('keeps legacy rollback on the pre-Supervisor Request protocol only', async () => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'legacy-daemon-rpc-'));
-    const previousHome = process.env.BB1688_HOME;
-    process.env.BB1688_HOME = directory;
-    const profile = 'legacy-only';
-    try {
-      await start({ profile, prewarm: false, legacyRollback: true });
-      await expect(daemonCall('status', {}, 'legacy-status', profile))
-        .resolves.toMatchObject({ profile });
-      await expect(rawSocketFrame(profile, signedStatusRequest(new Date())))
-        .resolves.toMatchObject({
-          schema: 'profile-supervisor.rpc-response.v2',
-          ok: false,
-          error: { code: 'SUPERVISOR_RUNTIME_DISABLED' },
-        });
-      await expect(rawSocketFrame(profile, {
-        ...signedStatusRequest(new Date()),
-        schema: 'profile-supervisor.rpc.v1',
-      })).resolves.toMatchObject({
-        schema: 'profile-supervisor.rpc-response.v2',
-        ok: false,
-        error: { code: 'RPC_VERSION_UNSUPPORTED' },
-      });
-    } finally {
-      await stopServerForTesting(profile);
-      if (previousHome === undefined) delete process.env.BB1688_HOME;
-      else process.env.BB1688_HOME = previousHome;
-    }
-  });
 });
 
 async function rawSocketFrame(

@@ -45,6 +45,7 @@ import {
   type SupervisorRpcResponseV2,
   type SupervisorRpcSuccessV2,
   type VerifyInterventionCommandV1,
+  type HealthProbeCommandV1,
   type RemoteAttemptAdmissionRequestV2,
   type RemoteAttemptAdmissionReceiptV2,
   type TransportAuthorityV2,
@@ -75,7 +76,7 @@ export interface IdentityProbeReceipt {
   probedAt: string;
   expectedMemberId: string;
   observedMemberId: string | null;
-  pageState: 'normal' | 'login_required' | 'risk_challenge' | 'unreachable';
+  pageState: 'normal' | 'login_required' | 'risk_challenge' | 'rate_limited' | 'unreachable';
   passed: boolean;
   safeEvidenceHash: string;
 }
@@ -400,6 +401,7 @@ export class ProfileDaemonRuntime {
   private registry: ProfilePageRegistry;
   private active: ActiveExecution | null = null;
   private intervention: ActiveIntervention | null = null;
+  private healthProbeSession: { pageSessionId: string; ownerId: string } | null = null;
   private cooldownUntil: string | null = null;
   private readonly verifiedInterventionEndReceipts = new Map<
     string,
@@ -547,6 +549,9 @@ export class ProfileDaemonRuntime {
         case 'supervisor.restart':
           data = await this.restart(request.payload);
           break;
+        case 'supervisor.health.probe':
+          data = await this.healthProbe(request.payload);
+          break;
         case 'supervisor.intervention.begin':
           data = await this.beginIntervention(request.payload);
           break;
@@ -683,7 +688,8 @@ export class ProfileDaemonRuntime {
       || active.rpcId !== parentRpcId
       || active.request.requestId !== renewal.payload.requestId
       || active.request.idempotencyKey !== renewal.payload.idempotencyKey
-      || canonicalRpcPayloadHash(active.authorizedRequest) !== canonicalRpcPayloadHash(renewal)
+      || canonicalCollectorSha256V1(active.request)
+        !== canonicalCollectorSha256V1(renewal.payload)
       || !sameFenceIdentity(
         active.authorizedRequest.binding.supervisor,
         renewal.binding.supervisor,
@@ -1138,6 +1144,76 @@ export class ProfileDaemonRuntime {
         } catch (error) {
           await this.handleCleanupFailure(error);
         }
+      }
+    });
+  }
+
+  async healthProbe(input: HealthProbeCommandV1): Promise<IdentityProbeReceipt> {
+    return this.controlSerial(async () => {
+      if (this.state !== 'warm') {
+        throw new SupervisorRuntimeError(
+          'DAEMON_NOT_WARM',
+          `Daemon is ${this.state}; it cannot run a health probe.`,
+          true,
+        );
+      }
+      let page: ManagedPage;
+      let pageSessionId: string;
+      let ownerId: string;
+      if (this.healthProbeSession === null) {
+        page = await this.options.host.createPage();
+        ownerId = `health-probe-${this.idFactory()}`;
+        const pageSession = await this.registry.register(page, {
+          pageSessionId: `page-session-${ownerId}`,
+          playwrightPageId: this.options.host.pageId(page),
+          ownerKind: 'health_probe',
+          ownerId,
+          lastUrlClass: 'health_probe',
+        });
+        pageSessionId = pageSession.pageSessionId;
+        this.healthProbeSession = { pageSessionId, ownerId };
+      } else {
+        ({ pageSessionId, ownerId } = this.healthProbeSession);
+        const entry = this.registry.get(pageSessionId);
+        page = this.options.host.pages().find(
+          (candidate) => entry !== null
+            && this.options.host.pageId(candidate) === entry.playwrightPageId,
+        )!;
+        if (entry === null || page === undefined) {
+          this.healthProbeSession = null;
+          throw new SupervisorRuntimeError(
+            'HEALTH_PROBE_PAGE_LOST',
+            'The headed health intervention Page is no longer present.',
+            true,
+          );
+        }
+      }
+      try {
+        const probe = await this.options.host.probeIdentity({ ...input, page });
+        await this.event(
+          probe.passed ? 'health_probe_passed' : 'health_probe_failed',
+          {
+            probeReceiptId: probe.probeReceiptId,
+            pageState: probe.pageState,
+            identityMatched: probe.observedMemberId === probe.expectedMemberId,
+          },
+        );
+        if (probe.passed) {
+          await this.registry.close(
+            pageSessionId,
+            { ownerKind: 'health_probe', ownerId },
+            'health_probe_ready',
+          );
+          this.healthProbeSession = null;
+        }
+        return probe;
+      } catch (error) {
+        if (this.healthProbeSession === null) throw error;
+        await this.event('health_probe_error', {
+          pageSessionId,
+          message: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
       }
     });
   }

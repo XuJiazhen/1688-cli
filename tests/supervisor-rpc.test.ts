@@ -36,11 +36,9 @@ const SUPERVISOR_LEASE_ID = '30000000-0000-4000-8000-000000000003';
 const RESERVATION_LEASE_ID = '30000000-0000-4000-8000-000000000004';
 const WORK_LEASE_ID = '30000000-0000-4000-8000-000000000005';
 const transportAuthority = {
-  mode: 'scripted_offline' as const,
-  executionAuthorityDocumentId: '30000000-0000-4000-8000-000000000006',
-  executionAuthorityDocumentSha256: 'a'.repeat(64),
-  executionSubjectDocumentId: '30000000-0000-4000-8000-000000000007',
-  executionSubjectDocumentSha256: 'b'.repeat(64),
+  mode: 'live_remote' as const,
+  liveAuthorizationId: '30000000-0000-4000-8000-000000000006',
+  liveAuthorizationSha256: 'a'.repeat(64),
   cohortId: '30000000-0000-4000-8000-000000000008',
   runId: '30000000-0000-4000-8000-000000000009',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,

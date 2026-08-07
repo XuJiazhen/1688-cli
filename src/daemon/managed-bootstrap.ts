@@ -64,14 +64,6 @@ export async function loadManagedServerOptions(
   if (expectedProfile !== undefined && expectedProfile !== config.profileName) {
     throw new Error('Managed daemon config does not match --profile.');
   }
-  if (
-    config.transportAuthority.mode === 'scripted_offline'
-    && dependencies.executorFactory === undefined
-  ) {
-    throw new Error(
-      'scripted_offline authority requires the exact offline harness executor.',
-    );
-  }
   const sampledDatabase = Date.parse(config.databaseNow);
   const sampledWall = Date.parse(config.databaseTimeSampledAt);
   const elapsedBeforeBoot = Math.max(0, Date.now() - sampledWall);

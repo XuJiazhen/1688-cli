@@ -11,9 +11,6 @@ import {
   type PageActionVerificationConfigV1,
 } from '../collection/page-action-contracts.js';
 
-export const LEGACY_SUPERVISOR_RPC_SCHEMA = 'profile-supervisor.rpc.v1' as const;
-export const LEGACY_SUPERVISOR_EXECUTION_RENEWAL_SCHEMA =
-  'profile-supervisor.execution-renewal.v1' as const;
 export const SUPERVISOR_RPC_SCHEMA = 'profile-supervisor.rpc.v2' as const;
 export const SUPERVISOR_RPC_RESPONSE_SCHEMA =
   'profile-supervisor.rpc-response.v2' as const;
@@ -32,6 +29,7 @@ export const SUPERVISOR_RPC_METHODS = Object.freeze([
   'supervisor.status',
   'supervisor.drain',
   'supervisor.restart',
+  'supervisor.health.probe',
   'supervisor.intervention.begin',
   'supervisor.intervention.verify',
   'supervisor.intervention.end',
@@ -55,8 +53,7 @@ export const SUPERVISOR_PROTOCOL_CANONICAL_CONTENT_V2 = Object.freeze({
     'controlCredential',
   ],
   transportAuthorityKeys: [
-    'mode', 'executionAuthorityDocumentId', 'executionAuthorityDocumentSha256',
-    'executionSubjectDocumentId', 'executionSubjectDocumentSha256', 'cohortId',
+    'mode', 'liveAuthorizationId', 'liveAuthorizationSha256', 'cohortId',
     'runId', 'protocolSha256',
   ],
   leaseFenceKeys: ['leaseId', 'generation', 'fencingToken', 'leaseNotAfter'],
@@ -114,18 +111,17 @@ export type SupervisorRpcOperation =
   | 'status'
   | 'drain'
   | 'restart'
+  | 'health_probe'
   | 'begin_intervention'
   | 'verify_intervention'
   | 'end_intervention';
 
-export type TransportAuthorityMode = 'scripted_offline' | 'live_remote';
+export type TransportAuthorityMode = 'live_remote';
 
 export interface TransportAuthorityV2 {
   mode: TransportAuthorityMode;
-  executionAuthorityDocumentId: string;
-  executionAuthorityDocumentSha256: string;
-  executionSubjectDocumentId: string;
-  executionSubjectDocumentSha256: string;
+  liveAuthorizationId: string;
+  liveAuthorizationSha256: string;
   cohortId: string;
   runId: string;
   protocolSha256: string;
@@ -227,33 +223,6 @@ export type SupervisorRpcResponseV2<T = unknown> =
   | SupervisorRpcSuccessV2<T>
   | SupervisorRpcFailureV2;
 
-export interface HistoricalSupervisorRpcRequestV1 {
-  schema: typeof LEGACY_SUPERVISOR_RPC_SCHEMA;
-  rpcId: string;
-  method: SupervisorRpcMethod;
-  deadlineAt: string;
-  binding: Readonly<Record<string, unknown>>;
-  payload: unknown;
-}
-
-/** Read-only decoder for archived v1 evidence. Never call this from daemon runtime dispatch. */
-export function parseHistoricalSupervisorRpcRequestV1(
-  value: unknown,
-): HistoricalSupervisorRpcRequestV1 {
-  const record = strictRecord(value, 'HistoricalSupervisorRpcRequestV1', [
-    'schema', 'rpcId', 'method', 'deadlineAt', 'binding', 'payload',
-  ]);
-  literal(record['schema'], LEGACY_SUPERVISOR_RPC_SCHEMA, 'historical.schema');
-  return {
-    schema: LEGACY_SUPERVISOR_RPC_SCHEMA,
-    rpcId: identifier(record['rpcId'], 'historical.rpcId'),
-    method: enumValue(record['method'], SUPERVISOR_RPC_METHODS, 'historical.method'),
-    deadlineAt: timestamp(record['deadlineAt'], 'historical.deadlineAt'),
-    binding: structuredClone(recordValue(record['binding'], 'historical.binding')),
-    payload: structuredClone(record['payload']),
-  };
-}
-
 export function parseSupervisorRpcResponseV2<T = unknown>(
   value: unknown,
   expected: { rpcId: string; canonicalRequestHash: string },
@@ -343,6 +312,11 @@ export interface BeginInterventionCommandV1 {
   expiresAt: string;
 }
 
+export interface HealthProbeCommandV1 {
+  expectedMemberId: string;
+  probeRevision: string;
+}
+
 export interface VerifyInterventionCommandV1 {
   interventionSessionId: string;
   expectedMemberId: string;
@@ -372,6 +346,9 @@ export type ParsedSupervisorRpcRequestV2 =
     })
   | (SupervisorRpcRequestV2<DrainCommandV1> & { method: 'supervisor.drain' })
   | (SupervisorRpcRequestV2<RestartCommandV1> & { method: 'supervisor.restart' })
+  | (SupervisorRpcRequestV2<HealthProbeCommandV1> & {
+      method: 'supervisor.health.probe';
+    })
   | (SupervisorRpcRequestV2<BeginInterventionCommandV1> & {
       method: 'supervisor.intervention.begin';
     })
@@ -605,6 +582,8 @@ export function parseSupervisorRpcRequest(
       return { ...base, method, payload: parseDrain(record['payload']) };
     case 'supervisor.restart':
       return { ...base, method, payload: parseRestart(record['payload']) };
+    case 'supervisor.health.probe':
+      return { ...base, method, payload: parseHealthProbe(record['payload']) };
     case 'supervisor.intervention.begin':
       return { ...base, method, payload: parseBeginIntervention(record['payload']) };
     case 'supervisor.intervention.verify':
@@ -622,6 +601,7 @@ export function supervisorRpcOperation(method: SupervisorRpcMethod): SupervisorR
     case 'supervisor.status': return 'status';
     case 'supervisor.drain': return 'drain';
     case 'supervisor.restart': return 'restart';
+    case 'supervisor.health.probe': return 'health_probe';
     case 'supervisor.intervention.begin': return 'begin_intervention';
     case 'supervisor.intervention.verify': return 'verify_intervention';
     case 'supervisor.intervention.end': return 'end_intervention';
@@ -1090,6 +1070,16 @@ function parseVerifyIntervention(value: unknown): VerifyInterventionCommandV1 {
   };
 }
 
+function parseHealthProbe(value: unknown): HealthProbeCommandV1 {
+  const record = strictRecord(value, 'HealthProbeCommand', [
+    'expectedMemberId', 'probeRevision',
+  ]);
+  return {
+    expectedMemberId: identifier(record['expectedMemberId'], 'expectedMemberId'),
+    probeRevision: identifier(record['probeRevision'], 'probeRevision'),
+  };
+}
+
 function parseEndIntervention(value: unknown): EndInterventionCommandV1 {
   const record = strictRecord(value, 'EndInterventionCommand', [
     'interventionSessionId', 'reason', 'completionIntentSha256',
@@ -1162,10 +1152,8 @@ function recordValue(value: unknown, path: string): Record<string, unknown> {
 export function parseTransportAuthorityV2(value: unknown): TransportAuthorityV2 {
   const record = strictRecord(value, 'transportAuthority', [
     'mode',
-    'executionAuthorityDocumentId',
-    'executionAuthorityDocumentSha256',
-    'executionSubjectDocumentId',
-    'executionSubjectDocumentSha256',
+    'liveAuthorizationId',
+    'liveAuthorizationSha256',
     'cohortId',
     'runId',
     'protocolSha256',
@@ -1173,24 +1161,16 @@ export function parseTransportAuthorityV2(value: unknown): TransportAuthorityV2 
   return {
     mode: enumValue(
       record['mode'],
-      ['scripted_offline', 'live_remote'] as const,
+      ['live_remote'] as const,
       'transportAuthority.mode',
     ),
-    executionAuthorityDocumentId: uuid(
-      record['executionAuthorityDocumentId'],
-      'transportAuthority.executionAuthorityDocumentId',
+    liveAuthorizationId: uuid(
+      record['liveAuthorizationId'],
+      'transportAuthority.liveAuthorizationId',
     ),
-    executionAuthorityDocumentSha256: hash(
-      record['executionAuthorityDocumentSha256'],
-      'transportAuthority.executionAuthorityDocumentSha256',
-    ),
-    executionSubjectDocumentId: uuid(
-      record['executionSubjectDocumentId'],
-      'transportAuthority.executionSubjectDocumentId',
-    ),
-    executionSubjectDocumentSha256: hash(
-      record['executionSubjectDocumentSha256'],
-      'transportAuthority.executionSubjectDocumentSha256',
+    liveAuthorizationSha256: hash(
+      record['liveAuthorizationSha256'],
+      'transportAuthority.liveAuthorizationSha256',
     ),
     cohortId: uuid(record['cohortId'], 'transportAuthority.cohortId'),
     runId: uuid(record['runId'], 'transportAuthority.runId'),

@@ -48,7 +48,6 @@ export interface CollectionUnit {
   schemaVersion: typeof COLLECTION_SCHEMA_VERSION;
   unitId: string;
   collectionTaskId?: string;
-  taskId?: string;
   kind: CollectionKind;
   subject: CollectionSubject;
   scope?: CollectionScope;
@@ -180,18 +179,14 @@ export function normalizeCollectionUnit(value: unknown): CollectionUnit {
     record.collectionTaskId,
     'CollectionUnit.collectionTaskId',
   );
-  const taskId = optionalString(record.taskId, 'CollectionUnit.taskId');
-  if (collectionTaskId !== undefined && taskId !== undefined) {
-    invalid(
-      'CollectionUnit.collectionTaskId and legacy taskId must not both be set.',
-    );
+  if (record.taskId !== undefined) {
+    invalid('CollectionUnit.taskId is not supported; use collectionTaskId.');
   }
 
   return omitUndefined({
     schemaVersion: COLLECTION_SCHEMA_VERSION,
     unitId: requireString(record.unitId, 'CollectionUnit.unitId'),
     collectionTaskId,
-    taskId,
     kind,
     subject,
     scope,

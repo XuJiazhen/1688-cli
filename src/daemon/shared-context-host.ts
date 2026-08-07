@@ -135,7 +135,9 @@ export class SharedPersistentContextHost implements PersistentContextHost {
       ? 'login_required'
       : state?.kind === 'risk_challenge'
         ? 'risk_challenge'
-        : state === null || state.kind === 'unknown' || state.kind === 'rate_limited'
+        : state?.kind === 'rate_limited'
+          ? 'rate_limited'
+        : state === null || state.kind === 'unknown'
           ? 'unreachable'
           : 'normal';
     const observedMemberId = identity?.memberId ?? null;

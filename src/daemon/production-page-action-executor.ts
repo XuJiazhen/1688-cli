@@ -389,7 +389,6 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
         filterConfigSnapshotHash: parameterSet.filterConfigSnapshotHash,
         serializerCapabilitySnapshotHash: parameterSet.serializerCapabilitySnapshotHash,
         businessSort: parameterSet.sort,
-        compatibilitySortInput: null,
         remoteSortType: parameterSet.sortType,
         remoteDescendOrder: parameterSet.descendOrder,
         filterParams: capture.sanitizedRequest.filterParams,

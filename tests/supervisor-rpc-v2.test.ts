@@ -6,7 +6,6 @@ import {
   canonicalAuthorizedRequestHashV2,
   parseRemoteAttemptAdmissionResponseFrame,
   parseSupervisorRpcResponseV2,
-  parseHistoricalSupervisorRpcRequestV1,
   parseSupervisorRpcRequest,
   type SupervisorRpcRequestV2,
   type TransportAuthorityV2,
@@ -21,11 +20,9 @@ const verification = {
 const key = 'v10-supervisor-credential-key-at-least-32-bytes';
 
 const authority: TransportAuthorityV2 = {
-  mode: 'scripted_offline',
-  executionAuthorityDocumentId: '10000000-0000-4000-8000-000000000001',
-  executionAuthorityDocumentSha256: 'a'.repeat(64),
-  executionSubjectDocumentId: '10000000-0000-4000-8000-000000000002',
-  executionSubjectDocumentSha256: 'b'.repeat(64),
+  mode: 'live_remote',
+  liveAuthorizationId: '10000000-0000-4000-8000-000000000001',
+  liveAuthorizationSha256: 'a'.repeat(64),
   cohortId: '10000000-0000-4000-8000-000000000003',
   runId: '10000000-0000-4000-8000-000000000004',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
@@ -104,14 +101,6 @@ describe('Profile Supervisor v2 wire contract', () => {
         transportAuthority: { ...authority, networkAllowed: false },
       },
     }, { verification })).toThrow(/unknown fields/u);
-    expect(parseHistoricalSupervisorRpcRequestV1({
-      schema: 'profile-supervisor.rpc.v1',
-      rpcId: 'historical-rpc',
-      method: 'supervisor.status',
-      deadlineAt: '2026-07-31T08:05:00.000Z',
-      binding: { historical: true },
-      payload: {},
-    })).toMatchObject({ schema: 'profile-supervisor.rpc.v1', method: 'supervisor.status' });
   });
 
   it('requires control-only binding for supervisor methods', () => {

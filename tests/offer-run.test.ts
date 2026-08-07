@@ -50,7 +50,7 @@ describe('offer run', () => {
     expect(dispatchMock).toHaveBeenCalledWith(
       'offer',
       { offerId: '100', headed: undefined },
-      { headed: undefined, profile: 'buyer', noDaemon: true },
+      { headed: undefined, profile: 'buyer' },
     );
     expect(JSON.parse(stdout)).toMatchObject({
       offerId: '100',
@@ -70,13 +70,13 @@ describe('offer run', () => {
       1,
       'offer',
       { offerId: '100', headed: undefined },
-      { headed: undefined, profile: undefined, noDaemon: true },
+      { headed: undefined, profile: undefined },
     );
     expect(dispatchMock).toHaveBeenNthCalledWith(
       2,
       'offer',
       { offerId: '200', headed: undefined },
-      { headed: undefined, profile: undefined, noDaemon: true },
+      { headed: undefined, profile: undefined },
     );
 
     expect(JSON.parse(stdout)).toMatchObject({

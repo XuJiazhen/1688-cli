@@ -17,7 +17,6 @@ import {
 export interface DispatchOpts {
   headed?: boolean;
   profile?: string;
-  noDaemon?: boolean;
   requestId?: string;
 }
 
@@ -153,53 +152,23 @@ export async function dispatch<TArgs, TData>(
     );
   };
 
-  const skipDaemon =
-    opts.headed === true ||
-    opts.noDaemon === true ||
-    process.env.BB1688_NO_DAEMON === '1';
-
-  if (!skipDaemon) {
-    // Auto-start daemon if not running. Keeps the "warm browser" promise
-    // after `npm i -g` (postinstall kills the daemon) without requiring the
-    // user to re-run `1688 login` or `daemon start` manually.
+  if (opts.headed !== true) {
     if (!(await isDaemonReachable(profile))) {
-      try {
-        const { ensureFreshDaemon } = await import('../daemon/manager.js');
-        info(`Starting daemon for profile "${profile}" (one-time)...`);
-        await ensureFreshDaemon(profile);
-      } catch {
-        // Couldn't start — fall through to inline.
-      }
-    } else {
-      try {
-        const { ensureFreshDaemon } = await import('../daemon/manager.js');
-        const result = await ensureFreshDaemon(profile);
-        if (result.restarted) {
-          info(`Restarted daemon for profile "${profile}" to match current CLI version.`);
-        }
-      } catch {
-        // Couldn't refresh — fall through to the normal daemon/inline logic.
-      }
+      throw new TypeError(
+        `Profile "${profile}" has no Supervisor-managed daemon; inline fallback is disabled.`,
+      );
     }
-    if (await isDaemonReachable(profile)) {
-      try {
-        const data = await daemonCall<TData>(name, args, requestId, profile);
-        await finishOk();
-        return data;
-      } catch (e) {
-        const code = (e as { code?: string }).code;
-        if (code && code !== 'ECONNREFUSED' && code !== 'ENOENT') {
-          await finishError(e);
-          throw e;
-        }
-      }
+    try {
+      const data = await daemonCall<TData>(name, args, requestId, profile);
+      await finishOk();
+      return data;
+    } catch (error) {
+      await finishError(error);
+      throw error;
     }
   }
 
-  // Inline path. If a daemon is alive, it holds the lock — we must pause it
-  // for the duration so this inline call can grab the lock and open its own
-  // browser context on the shared profile. Restart on exit.
-  const daemonMgr = await maybePauseDaemon(profile);
+  info(`Opening explicit headed intervention for profile "${profile}".`);
   try {
     const fn = await loadExecutor<TArgs, TData>(name);
     const data = await withSession(
@@ -212,29 +181,5 @@ export async function dispatch<TArgs, TData>(
   } catch (error) {
     await finishError(error);
     throw error;
-  } finally {
-    await daemonMgr.resume();
-  }
-}
-
-async function maybePauseDaemon(profile: string): Promise<{ resume: () => Promise<void> }> {
-  try {
-    const { status, stop, start } = await import('../daemon/manager.js');
-    const st = await status(profile);
-    if (!st.running) return { resume: async () => {} };
-    info(`Pausing daemon for profile "${profile}" for inline run...`);
-    await stop(profile);
-    return {
-      resume: async () => {
-        try {
-          info(`Resuming daemon for profile "${profile}"...`);
-          await start(profile);
-        } catch (e) {
-          info(`(Daemon resume failed for profile "${profile}": ${(e as Error).message})`);
-        }
-      },
-    };
-  } catch {
-    return { resume: async () => {} };
   }
 }

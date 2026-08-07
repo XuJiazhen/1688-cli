@@ -66,13 +66,13 @@ describe('search --deeppro', () => {
       1,
       'search',
       expect.objectContaining({ keyword: '修枝剪', max: 1 }),
-      { headed: undefined, profile: 'buyer', noDaemon: true },
+      { headed: undefined, profile: 'buyer' },
     );
     expect(dispatchMock).toHaveBeenNthCalledWith(
       2,
       'offer',
       { offerId: '100', headed: undefined },
-      { headed: undefined, profile: 'buyer', noDaemon: true },
+      { headed: undefined, profile: 'buyer' },
     );
 
     expect(JSON.parse(stdout)).toMatchObject({

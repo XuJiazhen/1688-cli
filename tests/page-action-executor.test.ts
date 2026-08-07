@@ -84,7 +84,7 @@ function request(kind: PageActionRequestV1['actionKind']): PageActionRequestV1 {
             executionHandle: {} as never,
           };
   const parameterSet = compileSearchParameterSetV1({
-    keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+    keyword: 'fixture', sort: 'relevance',
     filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: HASH('filter'),
     serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: HASH('serializer'),
     filterParams: {}, selectedOptions: [], maxPages: 3, maxOffers: 90,
@@ -226,7 +226,7 @@ function runFor(requestValue: PageActionRequestV1): CollectorActionRunV1 {
 
 function ports(requestValue: PageActionRequestV1): CollectorPageActionExecutorPortsV1 {
   const parameterSet = compileSearchParameterSetV1({
-    keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+    keyword: 'fixture', sort: 'relevance',
     filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: HASH('filter'),
     serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: HASH('serializer'),
     filterParams: {}, selectedOptions: [], maxPages: 3, maxOffers: 90,

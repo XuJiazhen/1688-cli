@@ -5,7 +5,7 @@ import { mapSupplierQualificationPayload } from '../src/session/supplier-qualifi
 const unit = {
   schemaVersion: 1 as const,
   unitId: 'unit-qualification-1',
-  taskId: 'task-1',
+  collectionTaskId: 'task-1',
   kind: 'store-qualification' as const,
   subject: {
     supplier: { memberId: 'b2b-sanitized-supplier' },

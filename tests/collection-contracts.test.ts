@@ -16,7 +16,7 @@ describe('collection contracts', () => {
       normalizeCollectionUnit({
         schemaVersion: 1,
         unitId: ' unit-1 ',
-        taskId: ' task-1 ',
+        collectionTaskId: ' task-1 ',
         kind: 'store-catalog',
         subject: {
           supplier: {
@@ -35,7 +35,7 @@ describe('collection contracts', () => {
     ).toEqual({
       schemaVersion: COLLECTION_SCHEMA_VERSION,
       unitId: 'unit-1',
-      taskId: 'task-1',
+      collectionTaskId: 'task-1',
       kind: 'store-catalog',
       subject: {
         supplier: {
@@ -122,7 +122,7 @@ describe('collection contracts', () => {
     const first = {
       schemaVersion: 1,
       unitId: 'unit-1',
-      taskId: 'task-a',
+      collectionTaskId: 'collection-task-a',
       kind: 'search-page',
       subject: { keyword: '帐篷' },
       scope: {
@@ -136,7 +136,6 @@ describe('collection contracts', () => {
     const resumed = {
       ...first,
       unitId: 'unit-retry',
-      taskId: undefined,
       collectionTaskId: 'collection-task-b',
       scope: { ...first.scope, maxPagesPerBatch: 5 },
       limits: { maxItems: 150, deadlineMs: 60_000 },
@@ -152,7 +151,7 @@ describe('collection contracts', () => {
     ).not.toBe(fingerprintCollectionUnit(first));
   });
 
-  it('keeps collection ownership explicit and rejects ambiguous legacy ownership', () => {
+  it('keeps collection ownership explicit and rejects removed legacy ownership', () => {
     expect(
       normalizeCollectionUnit({
         schemaVersion: 1,
@@ -178,7 +177,7 @@ describe('collection contracts', () => {
           supplier: { memberId: 'b2b-sanitized-supplier' },
         },
       }),
-    ).toThrow(/must not both be set/);
+    ).toThrow(/taskId is not supported/);
   });
 
   it('normalizes available evidence while preserving the observed value', () => {

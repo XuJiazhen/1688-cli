@@ -1452,7 +1452,7 @@ export async function run(opts: OfferOpts): Promise<void> {
     const data = await dispatch<OfferArgs, OfferResult>(
       'offer',
       { offerId: ids[0]!, headed: opts.headed },
-      { headed: opts.headed, profile: opts.profile, noDaemon: opts.pro === true },
+      { headed: opts.headed, profile: opts.profile },
     );
     emit({
       human: () => printOffer(data),
@@ -1478,7 +1478,7 @@ export async function run(opts: OfferOpts): Promise<void> {
       const data = await dispatch<OfferArgs, OfferResult>(
         'offer',
         { offerId, headed: opts.headed },
-        { headed: opts.headed, profile: opts.profile, noDaemon: opts.pro === true },
+        { headed: opts.headed, profile: opts.profile },
       );
       offers.push(data);
     } catch (error) {

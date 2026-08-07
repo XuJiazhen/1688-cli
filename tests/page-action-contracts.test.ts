@@ -1018,8 +1018,10 @@ describe('PageAction V1 wire contracts', () => {
     }).readFences.reservation.leaseId).toBe('reservation-lease-1');
   });
 
-  it('dual-reads legacy bare CollectionBatch V1 and new envelopes', () => {
-    expect(normalizeCollectorWireResponseV1(batch())).toMatchObject({ schemaVersion: 1 });
+  it('rejects bare CollectionBatch responses and accepts only fenced envelopes', () => {
+    expect(() => normalizeCollectorWireResponseV1(batch())).toThrow(
+      /unknown field/u,
+    );
     const receipt = receiptFixture(requestFixture(), 'completed');
     expect(normalizeCollectorWireResponseV1({ executionAttemptReceipt: receipt }))
       .toMatchObject({ executionAttemptReceipt: { terminal: true } });

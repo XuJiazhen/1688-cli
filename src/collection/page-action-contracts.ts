@@ -510,7 +510,7 @@ export interface PageActionReceiptLookupV1 {
   };
 }
 
-export type CollectorWireResponseV1 = CollectionBatch | PageActionExecuteResponseV1;
+export type CollectorWireResponseV1 = PageActionExecuteResponseV1;
 
 export function canonicalCollectorJsonV1(value: unknown): string {
   return JSON.stringify(canonicalize(value, '$'));
@@ -1134,10 +1134,7 @@ export function normalizePageActionExecuteResponseV1(
 }
 
 export function normalizeCollectorWireResponseV1(value: unknown): CollectorWireResponseV1 {
-  if (isRecord(value) && Object.hasOwn(value, 'executionAttemptReceipt')) {
-    return normalizePageActionExecuteResponseV1(value);
-  }
-  return normalizeCollectionBatch(value);
+  return normalizePageActionExecuteResponseV1(value);
 }
 
 export function normalizePageActionCancelV1(value: unknown): PageActionCancelV1 {

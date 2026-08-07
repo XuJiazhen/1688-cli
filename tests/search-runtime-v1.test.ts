@@ -19,7 +19,7 @@ function parameterSet(
   advertisementPolicy: CanonicalSearchParameterSetV1['advertisementPolicy'] = 'exclude-p4p',
 ): CanonicalSearchParameterSetV1 {
   return compileSearchParameterSetV1({
-    keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+    keyword: 'fixture', sort: 'relevance',
     filterConfigSnapshotId: 'filters-1', filterConfigSnapshotHash: `sha256:${'1'.repeat(64)}`,
     serializerCapabilitySnapshotId: 'serializers-1', serializerCapabilitySnapshotHash: `sha256:${'2'.repeat(64)}`,
     filterParams: {}, selectedOptions: [], maxPages, maxOffers,

@@ -95,6 +95,7 @@ async function executeRaw(
 }
 
 export async function run(opts: CheckoutConfirmOpts): Promise<void> {
+  assertNotSupervisorManaged();
   if (!opts.cartIds || opts.cartIds.length === 0) {
     throw new CliError(2, 'BAD_INPUT', 'At least one cartId is required.');
   }
@@ -201,29 +202,24 @@ async function runConfirmedInline(
 }
 
 async function withDaemonPaused<T>(profile: string | undefined, fn: () => Promise<T>): Promise<T> {
-  let daemonWasRunning = false;
+  assertNotSupervisorManaged();
   if (await isDaemonReachable(profile)) {
-    info('Pausing daemon temporarily for checkout confirmation (will restart after)...');
-    const { stop } = await import('../daemon/manager.js');
-    await stop(profile);
-    daemonWasRunning = true;
+    throw new CliError(
+      20,
+      'SUPERVISOR_INTERVENTION_REQUIRED',
+      'Checkout confirmation requires the Supervisor to drain and stop the Profile daemon first.',
+    );
   }
+  return fn();
+}
 
-  try {
-    return await fn();
-  } finally {
-    if (daemonWasRunning) {
-      info('Restarting daemon...');
-      try {
-        const { start } = await import('../daemon/manager.js');
-        await start(profile);
-      } catch (e) {
-        process.stderr.write(
-          `WARN: daemon failed to restart: ${(e as Error).message}. ` +
-            'Run `1688 daemon start --profile <name>` manually.\n',
-        );
-      }
-    }
+function assertNotSupervisorManaged(): void {
+  if (process.env.BB1688_SUPERVISOR_MANAGED === '1') {
+    throw new CliError(
+      20,
+      'SUPERVISOR_INTERVENTION_REQUIRED',
+      'Checkout confirmation is not available inside a Supervisor-managed Profile runtime.',
+    );
   }
 }
 

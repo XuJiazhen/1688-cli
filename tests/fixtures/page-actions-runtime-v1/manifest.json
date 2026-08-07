@@ -8,17 +8,12 @@
   "generator": {
     "revision": "production-page-action-executor-offline-fake-v1@2",
     "sourcePath": "scripts/generate_runtime_page_action_fixtures.ts",
-    "sourceSha256": "d59e0e12cb0dc47a297e4686ef7469ea70983b406eba86969a66bfa044cdab36"
+    "sourceSha256": "46232332bb986d18f2aa91b4e2a9b27aae7441c6d34ed90bb9cde26a7e7a3caf"
   },
   "security": {
     "recursiveSanitizationGate": true,
     "containsLiveCredentials": false,
     "containsPersonalData": false
-  },
-  "legacySyntheticFixtureSet": {
-    "path": "tests/fixtures/page-actions",
-    "evidenceStatus": "synthetic-non-runtime",
-    "acceptedAsRuntimeParityEvidence": false
   },
   "actions": [
     {
@@ -32,16 +27,16 @@
       "transportInputPath": "inputs/search-list.transport.json",
       "transportInputSha256": "21ce536fdf2e8fcbf3e211a7b7af99533a135988e71dd91b283ba9f8ca49fc0e",
       "responsePath": "responses/search-list.wire-response.json",
-      "responseSha256": "2b6760cfc93e5a2bf35510988a577c89a5fc9e2b27d4edc0beb1079919833760",
+      "responseSha256": "2e0858a1fbc4fe35099a1451f18cf71834ad7934557ecb30d4f2d282ff235b48",
       "executionEnvelopePath": "envelopes/search-list.execution-attempt-receipt.json",
-      "executionEnvelopeSha256": "f4cfff23add1da13f23ba1fcde4625878b96ebe20f1cdd67cc4b70ca6057f54e",
+      "executionEnvelopeSha256": "d8273ea4e7a8dbfc3632a5a9d758e34e3cde262bc8184b0d48e5b4e7acf5a9ee",
       "completionEnvelopePath": "envelopes/search-list.completion-receipt.json",
-      "completionEnvelopeSha256": "65ffd399894118d6ecb26c52e0930eacdf90ba5d4078fed930ef54fca5802284",
+      "completionEnvelopeSha256": "73bd5f6024cc2689c17c2dc4a05af0b13f47bb3a19bf5eb1b6d61cf870d058f5",
       "batchFiles": [
         {
           "path": "batches/search-list/00-search-page.json",
-          "bytes": 13088,
-          "sha256": "66ceacc92e416dfbe79d144c8f7f0645dff5d3da3e781397ffed24d4b61449ac"
+          "bytes": 13050,
+          "sha256": "1ecc6f0526605475e16df444f02ba964d8d5e2ff1a0d65d04684029c0e28fa56"
         }
       ],
       "archiveFiles": [

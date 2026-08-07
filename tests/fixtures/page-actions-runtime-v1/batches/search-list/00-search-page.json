@@ -98,7 +98,6 @@
     "remoteSort": "normal",
     "requestSnapshot": {
       "businessSort": "relevance",
-      "compatibilitySortInput": null,
       "filterConfigSnapshotHash": "sha256:1257e229d427e2292bb5d14b607dbc65c12a8953df557645521ae7edb3f5193b",
       "filterParams": {},
       "pageSessionHash": "sha256:fe53e256225dc59d3cf620f82752dbfc71e86f7b201cce08e9cd0ba47630bdee",

@@ -2,7 +2,7 @@
   "executionAttemptReceipt": {
     "schema": "collector.page-action.execution-attempt-receipt.v1",
     "receiptId": "execution-receipt-search-list-fixture-002",
-    "receiptHash": "sha256:07744058d39196a643056e8d8c7459e48271d943a53ac4a4fff5c6ab62dfa069",
+    "receiptHash": "sha256:969db863f182266d6cbfc444290361f4a72c5c72628837c11edd68bf8958f61f",
     "requestId": "runtime-request-search-list",
     "idempotencyKey": "runtime-idempotency-search-list",
     "pageActionId": "runtime-page-action-search-list",
@@ -181,7 +181,6 @@
           "remoteSort": "normal",
           "requestSnapshot": {
             "businessSort": "relevance",
-            "compatibilitySortInput": null,
             "filterConfigSnapshotHash": "sha256:1257e229d427e2292bb5d14b607dbc65c12a8953df557645521ae7edb3f5193b",
             "filterParams": {},
             "pageSessionHash": "sha256:fe53e256225dc59d3cf620f82752dbfc71e86f7b201cce08e9cd0ba47630bdee",
@@ -426,7 +425,7 @@
   "completionReceipt": {
     "schema": "collector.page-action.completion-receipt.v1",
     "completionReceiptId": "completion-receipt-search-list-fixture-003",
-    "completionReceiptHash": "sha256:1608638559c428bd168c8de59c9cb9a8973e3cfc641fd258832dcb603c2b7055",
+    "completionReceiptHash": "sha256:8dd5c8f01cc7c87bd29eb769f3a9742ca295b2438bfe78f63a1d63fc65b21d8e",
     "pageActionId": "runtime-page-action-search-list",
     "pageActionBusinessHash": "sha256:281bae1ec8dfd0d156e994b5565c35b05ad3a41234479922ce36e8f2fb88f710",
     "logicalLineage": {
@@ -452,7 +451,7 @@
         "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
         "executionAttemptOrdinal": 1,
         "receiptId": "execution-receipt-search-list-fixture-002",
-        "receiptHash": "sha256:07744058d39196a643056e8d8c7459e48271d943a53ac4a4fff5c6ab62dfa069",
+        "receiptHash": "sha256:969db863f182266d6cbfc444290361f4a72c5c72628837c11edd68bf8958f61f",
         "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c"
       }
     ],
@@ -460,7 +459,7 @@
       "pageActionExecutionAttemptId": "runtime-execution-attempt-search-list",
       "executionAttemptOrdinal": 1,
       "receiptId": "execution-receipt-search-list-fixture-002",
-      "receiptHash": "sha256:07744058d39196a643056e8d8c7459e48271d943a53ac4a4fff5c6ab62dfa069",
+      "receiptHash": "sha256:969db863f182266d6cbfc444290361f4a72c5c72628837c11edd68bf8958f61f",
       "executionLineageHash": "sha256:252500fd75c526ecae6761d2e4cb27a923c412a1bcd1eaf975c75b4dba86982c"
     },
     "batches": [
@@ -564,7 +563,6 @@
           "remoteSort": "normal",
           "requestSnapshot": {
             "businessSort": "relevance",
-            "compatibilitySortInput": null,
             "filterConfigSnapshotHash": "sha256:1257e229d427e2292bb5d14b607dbc65c12a8953df557645521ae7edb3f5193b",
             "filterParams": {},
             "pageSessionHash": "sha256:fe53e256225dc59d3cf620f82752dbfc71e86f7b201cce08e9cd0ba47630bdee",

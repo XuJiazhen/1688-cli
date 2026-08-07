@@ -96,64 +96,6 @@ export async function status(profile?: string): Promise<DaemonStatus> {
   };
 }
 
-export async function start(
-  profile?: string,
-): Promise<{ pid: number; profile: string }> {
-  const profileName = defaultProfileName(profile);
-  await ensureRoot();
-  await ensureProfileRuntimeDir(profileName);
-  const existing = await status(profileName);
-  if (existing.running) {
-    if (existing.versionMatches === false) {
-      await stop(profileName);
-    } else {
-      throw new CliError(
-        5,
-        'DAEMON_RUNNING',
-        `Daemon already running for profile "${profileName}" (pid ${existing.pid}).`,
-      );
-    }
-  }
-
-  // Locate the CLI entrypoint to re-exec as "1688 serve".
-  // When installed via npm link, this module sits at dist/daemon/manager.js,
-  // and the CLI is at dist/cli.js.
-  const here = fileURLToPath(import.meta.url);
-  const cliPath = path.join(path.dirname(here), '..', 'cli.js');
-
-  // Detach from the parent; redirect output to a log file.
-  const logFd = await fs.open(daemonLogFile(profileName), 'a');
-  const child = spawn(
-    process.execPath,
-    [cliPath, 'serve', '--profile', profileName, '--legacy-rollback'],
-    {
-      detached: true,
-      stdio: ['ignore', logFd.fd, logFd.fd],
-      env: {
-        ...process.env,
-        BB1688_DAEMON_BG: '1',
-        BB1688_LEGACY_ROLLBACK: '1',
-      },
-    },
-  );
-  child.unref();
-  await logFd.close();
-
-  const reachable = await waitUntil(() => isDaemonReachable(profileName), {
-    timeoutMs: 15000,
-    intervalMs: 250,
-  });
-  if (reachable) {
-    const pid = (await readPid(profileName)) ?? child.pid ?? -1;
-    return { pid, profile: profileName };
-  }
-  throw new CliError(
-    9,
-    'DAEMON_START_TIMEOUT',
-    `Daemon for profile "${profileName}" did not start within 15s. Check ${daemonLogFile(profileName)}.`,
-  );
-}
-
 export async function startManaged(
   configPath: string,
 ): Promise<{ pid: number; profile: string }> {
@@ -222,27 +164,6 @@ export async function startManaged(
     );
   }
   return { pid: identity.daemonPid, profile: profileName };
-}
-
-export async function ensureFreshDaemon(profile?: string): Promise<{
-  pid: number;
-  profile: string;
-  restarted: boolean;
-}> {
-  const profileName = defaultProfileName(profile);
-  const existing = await status(profileName);
-  if (!existing.running) {
-    const started = await start(profileName);
-    return { ...started, restarted: false };
-  }
-
-  if (existing.versionMatches === false) {
-    await stop(profileName);
-    const started = await start(profileName);
-    return { ...started, restarted: true };
-  }
-
-  return { pid: existing.pid ?? -1, profile: profileName, restarted: false };
 }
 
 export async function stop(

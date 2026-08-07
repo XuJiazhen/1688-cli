@@ -542,7 +542,7 @@ export async function waitForStoreCatalogRuntime(
         failureKind: 'runtime-unavailable',
         recoveryAction: 'rebuild-page',
         retryable: true,
-        fallbackAllowed: true,
+        fallbackAllowed: false,
         timeoutMs: options.timeoutMs,
       },
     );

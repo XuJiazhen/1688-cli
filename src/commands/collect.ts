@@ -111,7 +111,6 @@ export interface CollectCommandDependencies {
     options: {
       profile?: string;
       headed?: boolean;
-      noDaemon: true;
       requestId?: string;
     },
   ) => Promise<CollectionBatch>;
@@ -201,7 +200,6 @@ export async function executeCollectCommand(
     ((args: CollectArgs, options: {
       profile?: string;
       headed?: boolean;
-      noDaemon: true;
       requestId?: string;
     }) =>
       dispatch<CollectArgs, CollectionBatch>(
@@ -220,7 +218,6 @@ export async function executeCollectCommand(
     {
       profile: opts.profile,
       headed: opts.headed,
-      noDaemon: true,
       ...(requestId === undefined ? {} : { requestId }),
     },
   );

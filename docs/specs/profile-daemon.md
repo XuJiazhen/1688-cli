@@ -62,13 +62,11 @@ behavior remains compatible for users who do not pass `--profile`.
   the daemon-bound profile and stores cookies/session in that profile's
   persistent context directory.
 - `runOnSharedCtx` serializes operations within one daemon process only.
-- `dispatch(name, args, { profile })` attempts the selected profile daemon
-  unless headed, no-daemon, or `BB1688_NO_DAEMON=1` is set.
-- If inline fallback is needed, dispatch pauses only the selected profile
-  daemon, not daemons for other profiles.
-- `login --profile <name>` writes identity state for that profile and, unless
-  `--no-daemon` is set, attempts to start that profile daemon after login or
-  after detecting an already-logged-in profile.
+- `dispatch(name, args, { profile })` requires the selected Profile daemon.
+- Inline execution exists only for an explicit headed intervention such as
+  login or risk recovery; normal commands never fall back from daemon RPC.
+- `login --profile <name> --headed` is the explicit interactive identity and
+  risk-recovery entry point. Normal business commands remain daemon-only.
 - `doctor --profile <name>` checks the selected profile's directory, lock,
   state, daemon, and live daemon socket status.
 - `profile status <name>` reports the selected profile's profile directory,

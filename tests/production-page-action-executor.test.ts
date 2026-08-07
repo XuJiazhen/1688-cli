@@ -139,7 +139,7 @@ describe('Production PageAction bridge', () => {
   it('binds safe replay to immutable predecessor page/candidate hashes before forwarding', () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1',
       filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1',
@@ -476,7 +476,6 @@ describe('Production PageAction bridge', () => {
     const parameterSet = compileSearchParameterSetV1({
       keyword: 'fixture',
       sort: 'relevance',
-      compatibilitySortInput: null,
       filterConfigSnapshotId: 'filter-1',
       filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1',
@@ -540,7 +539,6 @@ describe('Production PageAction bridge', () => {
     const parameterSet = compileSearchParameterSetV1({
       keyword: 'fixture',
       sort: 'relevance',
-      compatibilitySortInput: null,
       filterConfigSnapshotId: 'filter-1',
       filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1',
@@ -606,7 +604,7 @@ describe('Production PageAction bridge', () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-cas-'));
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
       filterParams: {}, selectedOptions: [], maxPages: 1, maxOffers: 60,
@@ -691,7 +689,7 @@ describe('Production PageAction bridge', () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-fallback-'));
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
       filterParams: {}, selectedOptions: [], maxPages: 2, maxOffers: 120,
@@ -757,7 +755,7 @@ describe('Production PageAction bridge', () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-page2-'));
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
       filterParams: {}, selectedOptions: [], maxPages: 3, maxOffers: 120,
@@ -797,7 +795,7 @@ describe('Production PageAction bridge', () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-page1-'));
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
       filterParams: {}, selectedOptions: [], maxPages: 3, maxOffers: 120,
@@ -868,7 +866,6 @@ describe('Production PageAction bridge', () => {
         const parameterSet = compileSearchParameterSetV1({
           keyword: '灭火器',
           sort,
-          compatibilitySortInput: null,
           filterConfigSnapshotId: 'dynamic-filter-snapshot-1',
           filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
           serializerCapabilitySnapshotId: 'dynamic-serializer-snapshot-1',
@@ -963,7 +960,7 @@ describe('Production PageAction bridge', () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-overflow-'));
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
       filterParams: {}, selectedOptions: [], maxPages: 1, maxOffers: 2,
@@ -1017,7 +1014,7 @@ describe('Production PageAction bridge', () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-no-progress-'));
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
       filterParams: {}, selectedOptions: [], maxPages: 1, maxOffers: 60,
@@ -1073,7 +1070,7 @@ describe('Production PageAction bridge', () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-network-'));
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
       filterParams: {}, selectedOptions: [], maxPages: 1, maxOffers: 60,
@@ -1127,7 +1124,7 @@ describe('Production PageAction bridge', () => {
 
   it('binds a Search capture to its successful retry instead of the same array index', () => {
     const parameterSet = compileSearchParameterSetV1({
-      keyword: 'fixture', sort: 'relevance', compatibilitySortInput: null,
+      keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
       serializerCapabilitySnapshotId: 'serializer-1', serializerCapabilitySnapshotHash: `sha256:${'b'.repeat(64)}`,
       filterParams: {}, selectedOptions: [], maxPages: 1, maxOffers: 60,

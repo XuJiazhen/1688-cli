@@ -72,7 +72,7 @@ function intent(overrides: Partial<SearchIntentV1> = {}): SearchIntentV1 {
   return {
     keyword: '灭火器',
     filterConfigSnapshotHash: filterSnapshot.snapshotHash,
-    sort: 'va_rmdarkgmv30',
+    sort: 'sales',
     selections: [
       { groupPath: ['filters', '商家特色'], label: '实力商家', filterId: 'power' },
       { groupPath: ['filters', '商家特色'], label: '深度验厂', filterId: 'factory' },
@@ -99,7 +99,6 @@ describe('Search Contract Resolver and Compiler V1', () => {
     });
     expect(resolved).toMatchObject({
       sort: 'sales',
-      compatibilitySortInput: 'va_rmdarkgmv30',
       filterParams: {
         filtMemberTags: '5179713,5125953;3938689',
         featurePair: '1995:33711371,1995:4081',
@@ -137,7 +136,7 @@ describe('Search Contract Resolver and Compiler V1', () => {
 
   it.each([
     ['relevance', 'normal', true],
-    ['best-selling', 'va_sales360', true],
+    ['sales', 'va_sales360', true],
     ['price-desc', 'price', true],
     ['price-asc', 'price', false],
   ] as const)('maps %s only to the frozen current protocol', (sort, sortType, descendOrder) => {
@@ -196,21 +195,17 @@ describe('Search Contract Resolver and Compiler V1', () => {
     expect(hashes.size).toBe(1);
   });
 
-  it('keeps compatibility aliases out of canonical identity and artifacts', () => {
+  it('rejects removed compatibility sort aliases', () => {
     const filterSnapshot = snapshot();
-    const resolve = (sort: SearchIntentV1['sort']) => compileSearchParameterSetV1(
-      resolveSearchIntentV1({
-        intent: intent({ sort, filterConfigSnapshotHash: filterSnapshot.snapshotHash }),
+    expect(() => resolveSearchIntentV1({
+        intent: intent({
+          sort: 'va_rmdarkgmv30' as SearchIntentV1['sort'],
+          filterConfigSnapshotHash: filterSnapshot.snapshotHash,
+        }),
         filterSnapshot,
         capabilitySnapshot: capabilities(),
         now: NOW,
-      }),
-    );
-    const legacy = resolve('va_rmdarkgmv30');
-    const canonical = resolve('sales');
-    expect(legacy.parameterSetHash).toBe(canonical.parameterSetHash);
-    expect(JSON.stringify(legacy)).not.toContain('va_rmdarkgmv30');
-    expect(legacy).not.toHaveProperty('compatibilitySortInput');
+      })).toThrow(/Unsupported search sort/u);
   });
 
   it.each([
