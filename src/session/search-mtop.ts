@@ -281,7 +281,9 @@ export function mapOffer(item: RawOfferItem): Offer | null {
       name: d.shop?.text ?? null,
       loginId: d.loginId ?? null,
       memberId: d.memberId ?? null,
-      shopUrl: d.shopAddition?.shopLinkUrl ?? d.winPortUrl ?? null,
+      shopUrl: normalizeLive1688ShopUrl(
+        d.shopAddition?.shopLinkUrl ?? d.winPortUrl,
+      ),
       years,
       badgeImageUrl: d.shop?.newPic ?? null,
       tradeService: {
@@ -484,6 +486,25 @@ function searchProtocolError(code: string, message: string): never {
     retryable: false,
     recoveryAction: 'refresh-search-contract',
   });
+}
+
+function normalizeLive1688ShopUrl(value: string | undefined): string | null {
+  if (value === undefined || value.trim().length === 0) return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol === 'http:'
+      && url.username === ''
+      && url.password === ''
+      && /(?:^|\.)1688\.com$/iu.test(url.hostname)
+    ) {
+      url.protocol = 'https:';
+      return url.toString();
+    }
+  } catch {
+    return value;
+  }
+  return value;
 }
 
 function searchResponseHash(value: unknown): string {

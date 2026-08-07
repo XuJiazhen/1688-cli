@@ -126,6 +126,17 @@ describe('parseOfferItemsFromMtopText', () => {
 });
 
 describe('mapOffer', () => {
+  it('upgrades a live 1688 shop transport URL to HTTPS', () => {
+    expect(mapOffer({
+      data: {
+        offerId: '1000',
+        shopAddition: {
+          shopLinkUrl: 'http://shop034e5c754v515.1688.com',
+        },
+      },
+    })?.supplier.shopUrl).toBe('https://shop034e5c754v515.1688.com/');
+  });
+
   it('preserves cellType P4P semantics and redacts contacts embedded in title HTML', () => {
     const mapped = mapOffer({
       cellType: 'offer_p4p_card',
