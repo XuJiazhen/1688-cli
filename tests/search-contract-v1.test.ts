@@ -42,6 +42,13 @@ function snapshot() {
             { label: '生产加工', urlKey: 'bizType', value: '1', filterId: 'biz-1', isMultiple: true },
             { label: '经销批发', urlKey: 'bizType', value: '2', filterId: 'biz-2', isMultiple: true },
           ] },
+          { groupName: '数值筛选', children: [
+            { label: '最低价', urlKey: 'priceStart', type: 'decimal' },
+            { label: '最高价', urlKey: 'priceEnd', type: 'decimal' },
+            { label: '起订量', urlKey: 'quantityBegin', type: 'integer' },
+            { label: '店铺商品数下限', urlKey: 'shopCountStart', type: 'integer' },
+            { label: '店铺商品数上限', urlKey: 'shopCountEnd', type: 'integer' },
+          ] },
         ],
       } } },
     },
@@ -195,6 +202,103 @@ describe('Search Contract Resolver and Compiler V1', () => {
     expect(hashes.size).toBe(1);
   });
 
+  it('fails closed when a numeric input was not discovered in the frozen catalog', () => {
+    const filterSnapshot = parseSearchFilterConfigSnapshotV1({
+      snapshotId: 'filter-snapshot-without-price-end',
+      keyword: '暖炉',
+      observedAt: NOW,
+      expiresAt: LATER,
+      payload: { data: { data: { filterData: {
+        filtbarBottom: [], filtbarLeft: [], filtbarRight: [],
+        filters: [
+          { groupName: '商家特色', children: [
+            { label: '一件代发', urlKey: 'filtOfferTags', value: 'opaque-drop-ship' },
+          ] },
+          { groupName: '数值筛选', children: [
+            { label: '最低价', urlKey: 'priceStart', type: 'decimal' },
+          ] },
+        ],
+      } } } },
+    });
+    expect(() => resolveSearchIntentV1({
+      intent: {
+        ...intent({
+          keyword: '暖炉',
+          filterConfigSnapshotHash: filterSnapshot.snapshotHash,
+          selections: [],
+        }),
+        numeric: { priceEnd: '100' },
+      },
+      filterSnapshot,
+      capabilitySnapshot: capabilities(),
+      now: NOW,
+    })).toThrowError(expect.objectContaining({
+      code: 'SEARCH_NUMERIC_FILTER_NOT_DISCOVERED',
+    }));
+  });
+
+  it('freezes the complete warm-stove filter matrix into one deterministic parameter set', () => {
+    const filterSnapshot = warmStoveSnapshot();
+    const resolved = resolveSearchIntentV1({
+      intent: {
+        keyword: '暖炉',
+        filterConfigSnapshotHash: filterSnapshot.snapshotHash,
+        sort: 'price-asc',
+        selections: [
+          selection('商家特色', '一件代发'),
+          selection('商品特色', '新品'),
+          selection('交易服务', '包邮'),
+          selection('经营模式', '生产加工'),
+          selection('平台标签', '严选'),
+          selection('复合标签', '48H发货'),
+          selection('唯一标签', '官方物流'),
+          selection('动态属性', '家用'),
+          selection('所在地区', '浙江'),
+          selection('所在地区', '杭州'),
+        ],
+        numeric: {
+          priceStart: '20',
+          priceEnd: '200',
+          quantityBegin: '1',
+          shopCountStart: '30',
+          shopCountEnd: '123',
+        },
+        maxPages: 3,
+        maxOffers: 120,
+        advertisementPolicy: 'exclude-p4p',
+      },
+      filterSnapshot,
+      capabilitySnapshot: capabilities(false),
+      now: NOW,
+    });
+    const parameterSet = compileSearchParameterSetV1(resolved);
+    expect(parameterSet).toMatchObject({
+      keyword: '暖炉',
+      sort: 'price-asc',
+      sortType: 'price',
+      descendOrder: false,
+      filterParams: {
+        bizType: 'production',
+        city: '杭州',
+        complexTags: 'ship-48h',
+        featurePair: 'usage:home',
+        filtMemberTags: 'drop-ship',
+        filtOfferTags: 'new-product',
+        freeShipping: 'true',
+        priceEnd: '200',
+        priceStart: '20',
+        province: '浙江',
+        quantityBegin: '1',
+        shopCountEnd: '123',
+        shopCountStart: '30',
+        tags: 'strict-selection',
+        uniqfield: 'official-logistics',
+      },
+    });
+    expect(compileSearchParameterSetV1(resolved).parameterSetHash)
+      .toBe(parameterSet.parameterSetHash);
+  });
+
   it('rejects removed compatibility sort aliases', () => {
     const filterSnapshot = snapshot();
     expect(() => resolveSearchIntentV1({
@@ -247,6 +351,48 @@ function hashParameterSet(value: Record<string, unknown>): string {
   return `sha256:${createHash('sha256')
     .update(JSON.stringify(canonicalize(content)), 'utf8')
     .digest('hex')}`;
+}
+
+function warmStoveSnapshot() {
+  const option = (
+    groupName: string,
+    label: string,
+    urlKey: string,
+    value: string,
+    parentRequestContext?: Record<string, string>,
+  ) => ({ groupName, label, urlKey, value, parentRequestContext });
+  return parseSearchFilterConfigSnapshotV1({
+    snapshotId: 'warm-stove-filter-snapshot-1',
+    keyword: '暖炉',
+    observedAt: NOW,
+    expiresAt: LATER,
+    payload: { data: { data: { filterData: {
+      filtbarBottom: [], filtbarLeft: [], filtbarRight: [],
+      filters: [
+        option('商家特色', '一件代发', 'filtMemberTags', 'drop-ship'),
+        option('商品特色', '新品', 'filtOfferTags', 'new-product'),
+        option('交易服务', '包邮', 'freeShipping', 'true'),
+        option('经营模式', '生产加工', 'bizType', 'production'),
+        option('平台标签', '严选', 'tags', 'strict-selection'),
+        option('复合标签', '48H发货', 'complexTags', 'ship-48h'),
+        option('唯一标签', '官方物流', 'uniqfield', 'official-logistics'),
+        option('动态属性', '家用', 'featurePair', 'usage:home'),
+        option('所在地区', '浙江', 'province', '浙江'),
+        option('所在地区', '杭州', 'city', '杭州', { province: '浙江' }),
+        { groupName: '数值筛选', children: [
+          { label: '最低价', urlKey: 'priceStart', type: 'decimal' },
+          { label: '最高价', urlKey: 'priceEnd', type: 'decimal' },
+          { label: '起订量', urlKey: 'quantityBegin', type: 'integer' },
+          { label: '店铺商品数下限', urlKey: 'shopCountStart', type: 'integer' },
+          { label: '店铺商品数上限', urlKey: 'shopCountEnd', type: 'integer' },
+        ] },
+      ],
+    } } } },
+  });
+}
+
+function selection(group: string, label: string) {
+  return { groupPath: ['filters', group], label };
 }
 
 function canonicalize(value: unknown): unknown {

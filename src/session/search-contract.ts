@@ -197,12 +197,24 @@ export function parseSearchFilterConfigSnapshotV1(input: {
   }
 
   const options: SearchFilterOptionV1[] = [];
+  const inputCapabilities = new Map<
+    SearchFilterRequestKey,
+    SearchFilterInputCapabilityV1
+  >();
   for (const section of ['filtbarBottom', 'filtbarLeft', 'filtbarRight', 'filters']) {
-    collectOptions(filterData[section], [section], options);
+    collectOptions(
+      filterData[section],
+      [section],
+      options,
+      inputCapabilities,
+    );
   }
   const unique = uniqueOptions(options);
-  if (unique.length === 0) {
-    searchContractError('SEARCH_FILTER_SCHEMA_DRIFT', 'Search filter response contains no recognized options.');
+  if (unique.length === 0 && inputCapabilities.size === 0) {
+    searchContractError(
+      'SEARCH_FILTER_SCHEMA_DRIFT',
+      'Search filter response contains no recognized filters.',
+    );
   }
 
   const responseSchemaHash = sha256(schemaShape(input.payload));
@@ -216,7 +228,8 @@ export function parseSearchFilterConfigSnapshotV1(input: {
     observedAt,
     expiresAt,
     options: unique,
-    inputCapabilities: Object.values(KNOWN_INPUTS),
+    inputCapabilities: [...inputCapabilities.values()]
+      .sort((left, right) => left.requestKey.localeCompare(right.requestKey)),
     sortNodes: discoverSortNodes(filterData),
   };
   return Object.freeze({
@@ -345,6 +358,15 @@ export function resolveSearchIntentV1(input: {
     if (value === undefined) continue;
     const capability = KNOWN_INPUTS[key];
     if (!capability) searchContractError('SEARCH_NUMERIC_FILTER_INVALID', `Unknown numeric filter ${key}.`);
+    if (!snapshot.inputCapabilities.some(
+      (item) => item.requestKey === capability.requestKey
+        && item.inputType === capability.inputType,
+    )) {
+      searchContractError(
+        'SEARCH_NUMERIC_FILTER_NOT_DISCOVERED',
+        `Numeric filter ${key} is absent from the frozen filter snapshot.`,
+      );
+    }
     filterParams[capability.requestKey] = normalizeNumeric(value, capability);
   }
   assertRange(filterParams.priceStart, filterParams.priceEnd, 'price');
@@ -369,9 +391,18 @@ function collectOptions(
   value: unknown,
   path: string[],
   output: SearchFilterOptionV1[],
+  inputCapabilities: Map<
+    SearchFilterRequestKey,
+    SearchFilterInputCapabilityV1
+  >,
 ): void {
   if (Array.isArray(value)) {
-    value.forEach((item, index) => collectOptions(item, [...path, String(index)], output));
+    value.forEach((item, index) => collectOptions(
+      item,
+      [...path, String(index)],
+      output,
+      inputCapabilities,
+    ));
     return;
   }
   const record = asRecord(value);
@@ -381,31 +412,38 @@ function collectOptions(
   const rawValue = scalarString(record.value ?? record.urlValue ?? record.paramValue);
   const groupLabel = firstText(record.groupName, record.groupLabel, record.title, record.name);
   const nextPath = groupLabel && groupLabel !== label ? [...path, groupLabel] : path;
-  if (label && rawKey && rawValue !== null && isSearchFilterRequestKey(rawKey)) {
-    const parentRequestContext = scalarRecord(
-      record.parentRequestContext ?? record.parentContext,
-    );
-    output.push({
-      groupPath: nextPath.filter((segment) => !/^\d+$/.test(segment)),
-      label,
-      type: firstText(record.type, record.filterType) ?? 'option',
-      urlKey: rawKey,
-      value: rawValue,
-      ...(firstText(record.filterId, record.id)
-        ? { filterId: firstText(record.filterId, record.id)! }
-        : {}),
-      ...(typeof record.isMultiple === 'boolean'
-        ? { isMultiple: record.isMultiple }
-        : {}),
-      ...(firstText(record.multiDivider)
-        ? { multiDivider: firstText(record.multiDivider)! }
-        : {}),
-      ...(parentRequestContext ? { parentRequestContext } : {}),
-    });
+  if (label && rawKey && isSearchFilterRequestKey(rawKey)) {
+    const inputCapability = KNOWN_INPUTS[rawKey];
+    if (inputCapability !== undefined) {
+      inputCapabilities.set(rawKey, inputCapability);
+    } else if (rawValue !== null) {
+      const parentRequestContext = scalarRecord(
+        record.parentRequestContext ?? record.parentContext,
+      );
+      output.push({
+        groupPath: nextPath.filter((segment) => !/^\d+$/.test(segment)),
+        label,
+        type: firstText(record.type, record.filterType) ?? 'option',
+        urlKey: rawKey,
+        value: rawValue,
+        ...(firstText(record.filterId, record.id)
+          ? { filterId: firstText(record.filterId, record.id)! }
+          : {}),
+        ...(typeof record.isMultiple === 'boolean'
+          ? { isMultiple: record.isMultiple }
+          : {}),
+        ...(firstText(record.multiDivider)
+          ? { multiDivider: firstText(record.multiDivider)! }
+          : {}),
+        ...(parentRequestContext ? { parentRequestContext } : {}),
+      });
+    }
   }
   for (const [key, child] of Object.entries(record)) {
     if (['parentRequestContext', 'parentContext'].includes(key)) continue;
-    if (child && typeof child === 'object') collectOptions(child, nextPath, output);
+    if (child && typeof child === 'object') {
+      collectOptions(child, nextPath, output, inputCapabilities);
+    }
   }
 }
 
