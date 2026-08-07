@@ -472,7 +472,7 @@ function checkDaemonLiveProbe(daemon: DoctorDaemonStatus | null, profile: string
     return {
       name: 'live daemon socket',
       status: 'warn',
-      message: `daemon not running for profile "${profile}"; commands will use inline browser sessions`,
+      message: `daemon not running for profile "${profile}"; automated commands are disabled`,
       fix: `1688 daemon start --profile ${profile}`,
     };
   }

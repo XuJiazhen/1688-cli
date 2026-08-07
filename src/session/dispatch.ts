@@ -1,5 +1,5 @@
-// Routes a command either through the selected profile daemon (fast) or inline
-// (slow but self-contained). Headed mode stays inline.
+// Automated commands require the selected Profile daemon. Explicit headed
+// mode remains available only as an operator intervention path.
 
 import type { BrowserContext } from 'playwright';
 import { withSession } from './context.js';
