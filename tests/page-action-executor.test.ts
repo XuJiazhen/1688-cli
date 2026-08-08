@@ -294,6 +294,34 @@ describe('exact four Collector PageAction executor', () => {
     },
   );
 
+  it('fails closed when the current terminal authority rejects publication', async () => {
+    const requestValue = request('offer-detail');
+    const transport = ports(requestValue);
+    transport.assertTerminalAuthorized = vi.fn(async () => {
+      throw new Error('current terminal authority expired');
+    });
+
+    await expect(executeCollectorPageActionV1({
+      request: requestValue,
+      ports: transport,
+    })).rejects.toThrow('current terminal authority expired');
+    expect(transport.assertTerminalAuthorized).toHaveBeenCalledOnce();
+  });
+
+  it('retains the frozen terminal fence for callers without current authority', async () => {
+    const requestValue = request('offer-detail');
+    const transport = ports(requestValue);
+    let clockReads = 0;
+    transport.now = () => new Date(clockReads++ === 0
+      ? NOW
+      : '2026-07-31T00:11:00.000Z');
+
+    await expect(executeCollectorPageActionV1({
+      request: requestValue,
+      ports: transport,
+    })).rejects.toMatchObject({ code: 'PAGE_ACTION_FENCE_EXPIRED' });
+  });
+
   it('leaves replacement-attempt completion finalization to the authoritative Archive', async () => {
     const first = request('offer-detail');
     const executionLineage = {

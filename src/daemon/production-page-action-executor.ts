@@ -256,6 +256,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
     return {
       now: this.now,
       createId: (kind) => `${kind}-${this.idFactory()}`,
+      assertTerminalAuthorized: () => scope.assertAuthorized('terminal'),
       resolveCanonicalSearchParameterSet: (artifactRef) =>
         this.resolveSearchParameterSet(artifactRef),
       runSearch: ({ parameterSet, signal }) =>

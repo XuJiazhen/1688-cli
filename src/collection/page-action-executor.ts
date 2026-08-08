@@ -64,6 +64,7 @@ export interface CollectorActionRunV1 {
 export interface CollectorPageActionExecutorPortsV1 {
   now(): Date;
   createId(kind: 'execution-receipt' | 'completion-receipt'): string;
+  assertTerminalAuthorized?(): Promise<void>;
   resolveCanonicalSearchParameterSet(
     artifactRef: string,
   ): Promise<CanonicalSearchParameterSetV1>;
@@ -175,7 +176,15 @@ export async function executeCollectorPageActionV1(input: {
   }
   assertTerminalRun(request, run, trustedStoreIdentity);
   run = persistCollectorPageActionEvidenceV1(request, run);
-  assertPreTerminalDeadline(request, ports.now(), run);
+  assertPreTerminalDeadline(
+    request,
+    ports.now(),
+    run,
+    ports.assertTerminalAuthorized !== undefined,
+  );
+  if (run.outcome === 'completed') {
+    await ports.assertTerminalAuthorized?.();
+  }
   return buildResponse(request, run, ports);
 }
 
@@ -659,8 +668,12 @@ function assertPreTerminalDeadline(
   request: PageActionRequestV1,
   now: Date,
   run: CollectorActionRunV1,
+  hasCurrentAuthority: boolean,
 ): void {
-  if (run.outcome === 'completed' && now.getTime() >= effectiveDeadline(request)) {
+  const terminalDeadline = hasCurrentAuthority
+    ? Date.parse(request.deadlineAt)
+    : effectiveDeadline(request);
+  if (run.outcome === 'completed' && now.getTime() >= terminalDeadline) {
     throw contractError('PAGE_ACTION_FENCE_EXPIRED', 'PageAction cannot write success after its deadline or fence expiry.');
   }
 }

@@ -1380,6 +1380,54 @@ describe('Production PageAction bridge', () => {
     ]);
   });
 
+  it('publishes terminal success under renewed runtime authority after the frozen lease horizon', async () => {
+    const startedAt = new Date('2026-07-31T08:00:00.000Z');
+    let current = startedAt;
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-store-renewed-terminal-'));
+    const request = executableStoreRequest(startedAt);
+    const frozenLeaseNotAfter = new Date(startedAt.getTime() + 20_000).toISOString();
+    request.leaseNotAfter = frozenLeaseNotAfter;
+    request.executionLineage.fences = {
+      supervisor: failureFence('supervisor', frozenLeaseNotAfter),
+      reservation: failureFence('reservation', frozenLeaseNotAfter),
+      workUnit: failureFence('work', frozenLeaseNotAfter),
+    };
+    request.executionLineageHash = computeExecutionLineageHashV1(request.executionLineage);
+    await fs.writeFile(path.join(artifactDirectory, 'identity-store.json'), JSON.stringify({
+      schema: 'collector.canonical-shop-identity-artifact.v1',
+      memberId: 'b2b-member-1', canonicalShopUrl: 'https://fixture.1688.com/',
+      receiptId: 'identity-store', receiptHash: canonicalCollectorSha256V1('identity-store'),
+    }), { mode: 0o600 });
+    let terminalAuthorityChecks = 0;
+    let id = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory, now: () => current,
+      idFactory: () => `store-renewed-terminal-${++id}`,
+      pace: async () => {}, random: () => 0,
+    }).execute(request, {
+      page: new FakeStorePage() as never,
+      pageSessionId: 'store-renewed-terminal-page-session',
+      signal: new AbortController().signal,
+      assertAuthorized: async (operation) => {
+        if (operation === 'terminal') terminalAuthorityChecks++;
+      },
+      admitRemoteAttempt: async (input) => {
+        if (input.ordinal === 4) {
+          current = new Date(startedAt.getTime() + 21_000);
+        }
+        return {
+          remoteActionStartId: `start-${input.ordinal}`,
+          admittedAt: current.toISOString(),
+        };
+      },
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+
+    expect(response.executionAttemptReceipt.error?.code).not.toBe('PAGE_ACTION_FENCE_EXPIRED');
+    expect(response.executionAttemptReceipt).toMatchObject({ outcome: 'completed' });
+    expect(terminalAuthorityChecks).toBe(1);
+  });
+
   it('archives an invalid Store page-1 response without publishing invented observations', async () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-store-invalid-'));
