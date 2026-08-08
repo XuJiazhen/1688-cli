@@ -601,9 +601,11 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
     let startedAt = '';
     let successfulOrdinal = 0;
     let componentEvidenceRefs: string[] = [];
+    let componentEvidenceRefByKind = new Map<string, string>();
     for (let retry = 0; retry < 3; retry++) {
       const ordinal = remoteLedger.nextOrdinal();
       const rawEvidenceRefs: string[] = [];
+      const rawEvidenceRefByKind = new Map<string, string>();
       remoteRequestAttemptId = `remote-${request.pageActionExecutionAttemptId}-${ordinal}`;
       const admission = await scope.admitRemoteAttempt({
         remoteRequestAttemptId,
@@ -635,6 +637,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
             payload,
           });
           rawEvidenceRefs.push(ref);
+          rawEvidenceRefByKind.set(component, ref);
         };
         for (const [component, payload] of stagedOfferRawComponentsV1(offer)) {
           await onRawComponent(component, payload);
@@ -642,6 +645,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
         await scope.assertAuthorized('checkpoint');
         successfulOrdinal = ordinal;
         componentEvidenceRefs = [...rawEvidenceRefs];
+        componentEvidenceRefByKind = rawEvidenceRefByKind;
         break;
       } catch (error) {
         remoteLedger.recordFailure(
@@ -669,6 +673,26 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
       rawEvidenceRefs: componentEvidenceRefs,
     }));
     const sourceEvidence = readOfferSourceCaptureEvidenceV1(offer);
+    const shopCardContextEvidenceRef =
+      sourceEvidence?.shopCard.correlationAuthority?.kind
+        === 'offer-page-context-v1'
+        ? componentEvidenceRefByKind.get('core') ?? null
+        : null;
+    if (
+      sourceEvidence?.shopCard.correlationAuthority !== undefined
+      && shopCardContextEvidenceRef === null
+    ) {
+      throw new CliError(
+        9,
+        'SHOP_CARD_CORRELATION_EVIDENCE_MISSING',
+        'Shop-card page-context correlation is missing its frozen core evidence.',
+        {
+          category: 'protocol',
+          retryable: false,
+          recoveryAction: 'recollect-offer-with-staged-raw-evidence',
+        },
+      );
+    }
     const shopCardEvidenceRef = sourceEvidence?.shopCard.rawPayload === null || !sourceEvidence
       ? null
       : await persistOfferSourceSidecarV1({
@@ -680,6 +704,18 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
             pageActionId: request.pageActionId,
             remoteRequestAttemptId, capturedAt: completedAt,
             rawPayload: sourceEvidence.shopCard.rawPayload,
+            ...(sourceEvidence.shopCard.correlationAuthority === undefined
+              ? {}
+              : {
+                  correlationEvidence: {
+                    method: sourceEvidence.shopCard.correlationAuthority.kind,
+                    rawEvidenceRef: shopCardContextEvidenceRef!,
+                    offerIdFieldPath:
+                      sourceEvidence.shopCard.correlationAuthority.offerIdFieldPath,
+                    memberIdFieldPath:
+                      sourceEvidence.shopCard.correlationAuthority.memberIdFieldPath,
+                  },
+                }),
           }),
         });
     const consignmentEvidenceRef = sourceEvidence?.consignment.rawPayload === null || !sourceEvidence
@@ -729,6 +765,9 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
       responseSucceeded: sourceEvidence?.shopCard.responseSucceeded ?? false,
       parsedValue: offer.shopCard,
       rawEvidenceRefs: shopCardEvidenceRef ? [shopCardEvidenceRef] : [],
+      ...(shopCardContextEvidenceRef === null
+        ? {}
+        : { fieldObservationRefs: [shopCardContextEvidenceRef] }),
       ...(sourceEvidence?.shopCard.authoritativeEmpty === undefined
         ? {}
         : { authoritativeEmpty: sourceEvidence.shopCard.authoritativeEmpty }),

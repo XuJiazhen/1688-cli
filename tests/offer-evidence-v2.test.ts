@@ -194,6 +194,79 @@ describe('Offer evidence and SourceMedia V2', () => {
     )).toThrow(/does not match/i);
   });
 
+  it('content-addresses page-context correlation evidence in the ShopCard sidecar', () => {
+    const sidecar = createOfferSourceSidecarV1({
+      source: 'shop-card',
+      offerId: '100',
+      memberId: 'member-1',
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+      pageActionId: 'action-1',
+      remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      correlationEvidence: {
+        method: 'offer-page-context-v1',
+        rawEvidenceRef: `artifact:collector-raw-offer-core-${'b'.repeat(64)}`,
+        offerIdFieldPath: 'contextResult.data.gallery.fields.offerId',
+        memberIdFieldPath:
+          'contextResult.global.globalData.model.sellerModel.memberId',
+      },
+      rawPayload: { data: { shopName: 'Shop' } },
+    });
+    expect(sidecar.artifact.correlationEvidence).toMatchObject({
+      method: 'offer-page-context-v1',
+      rawEvidenceRef: `artifact:collector-raw-offer-core-${'b'.repeat(64)}`,
+    });
+    expect(() => assertOfferSourceSidecarBindingV1(
+      sidecar.artifactRef,
+      sidecar.artifact,
+    )).not.toThrow();
+    const invalid = createOfferSourceSidecarV1({
+      source: 'shop-card',
+      offerId: '100',
+      memberId: 'member-1',
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+      pageActionId: 'action-1',
+      remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      correlationEvidence: {
+        method: 'offer-page-context-v1',
+        rawEvidenceRef: 'not-a-core-artifact',
+        offerIdFieldPath: 'contextResult.data.gallery.fields.offerId',
+        memberIdFieldPath:
+          'contextResult.global.globalData.model.sellerModel.memberId',
+      },
+      rawPayload: { data: { shopName: 'Shop' } },
+    });
+    expect(() => assertOfferSourceSidecarBindingV1(
+      invalid.artifactRef,
+      invalid.artifact,
+    )).toThrow(/does not match/);
+    const mismatched = createOfferSourceSidecarV1({
+      source: 'shop-card',
+      offerId: '100',
+      memberId: 'member-1',
+      correlatedOfferId: 'other-offer',
+      correlatedMemberId: 'member-1',
+      pageActionId: 'action-1',
+      remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      correlationEvidence: {
+        method: 'offer-page-context-v1',
+        rawEvidenceRef: `artifact:collector-raw-offer-core-${'c'.repeat(64)}`,
+        offerIdFieldPath: 'contextResult.data.gallery.fields.offerId',
+        memberIdFieldPath:
+          'contextResult.global.globalData.model.sellerModel.memberId',
+      },
+      rawPayload: { data: { shopName: 'Shop' } },
+    });
+    expect(() => assertOfferSourceSidecarBindingV1(
+      mismatched.artifactRef,
+      mismatched.artifact,
+    )).toThrow(/does not match/);
+  });
+
   it('content-addresses sanitized raw sidecars and removes credentials and contact PII', () => {
     const sidecar = createOfferSourceSidecarV1({
       source: 'shop-card', offerId: '100', memberId: 'member-1',

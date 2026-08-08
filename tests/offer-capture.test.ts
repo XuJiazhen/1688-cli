@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import {
   executeRaw,
+  bindShopCardSourceToPageContextV1,
   mapContextSkuBizModel,
   readContextConsignmentSourceV1,
   requireSkuSelectorModel,
@@ -189,6 +190,53 @@ describe('SSR consignment source fallback', () => {
         expectedMemberId,
       ),
     ).toBeNull();
+  });
+
+  it('binds an identity-free ShopCard response to exact archived page context', () => {
+    const captured = {
+      value: { shopName: 'Fixture shop' },
+      responseSucceeded: true,
+      correlatedOfferId: null,
+      correlatedMemberId: null,
+      rawPayload: { data: { shopName: 'Fixture shop' } },
+    };
+    expect(bindShopCardSourceToPageContextV1(
+      captured,
+      sourcePayload,
+      '671182185805',
+      'b2b-22114100897724d9dd',
+    )).toMatchObject({
+      correlatedOfferId: '671182185805',
+      correlatedMemberId: 'b2b-22114100897724d9dd',
+      correlationAuthority: {
+        kind: 'offer-page-context-v1',
+      },
+    });
+  });
+
+  it('does not override missing, contradictory, or partially correlated ShopCard scope', () => {
+    const captured = {
+      value: { shopName: 'Fixture shop' },
+      responseSucceeded: true,
+      correlatedOfferId: null,
+      correlatedMemberId: null,
+      rawPayload: { data: { shopName: 'Fixture shop' } },
+    };
+    expect(bindShopCardSourceToPageContextV1(
+      captured,
+      sourcePayload,
+      'different-offer',
+      'b2b-22114100897724d9dd',
+    )).toBe(captured);
+    expect(bindShopCardSourceToPageContextV1(
+      { ...captured, correlatedOfferId: '671182185805' },
+      sourcePayload,
+      '671182185805',
+      'b2b-22114100897724d9dd',
+    )).toMatchObject({
+      correlatedOfferId: '671182185805',
+      correlatedMemberId: null,
+    });
   });
 });
 

@@ -112,6 +112,12 @@ export interface OfferSourceSidecarV1 {
   pageActionId: string;
   remoteRequestAttemptId: string;
   capturedAt: string;
+  correlationEvidence?: {
+    method: 'offer-page-context-v1';
+    rawEvidenceRef: string;
+    offerIdFieldPath: 'contextResult.data.gallery.fields.offerId';
+    memberIdFieldPath: 'contextResult.global.globalData.model.sellerModel.memberId';
+  };
   sanitizedRawPayload: unknown;
 }
 
@@ -125,6 +131,7 @@ export function createOfferSourceSidecarV1(input: {
   remoteRequestAttemptId: string;
   capturedAt: string;
   rawPayload: unknown;
+  correlationEvidence?: OfferSourceSidecarV1['correlationEvidence'];
 }): { artifactRef: string; artifact: OfferSourceSidecarV1 } {
   const artifact: OfferSourceSidecarV1 = {
     schema: 'collector.offer-source-sidecar.v1',
@@ -139,6 +146,17 @@ export function createOfferSourceSidecarV1(input: {
       'remoteRequestAttemptId',
     ),
     capturedAt: new Date(input.capturedAt).toISOString(),
+    ...(input.correlationEvidence === undefined
+      ? {}
+      : {
+          correlationEvidence: {
+            ...input.correlationEvidence,
+            rawEvidenceRef: requiredId(
+              input.correlationEvidence.rawEvidenceRef,
+              'correlationEvidence.rawEvidenceRef',
+            ),
+          },
+        }),
     sanitizedRawPayload: sanitizeOfferSourcePayloadV1(input.rawPayload),
   };
   const digest = evidenceHash(artifact).slice('sha256:'.length);
@@ -153,9 +171,24 @@ export function assertOfferSourceSidecarBindingV1(
   artifact: OfferSourceSidecarV1,
 ): void {
   const digest = evidenceHash(artifact).slice('sha256:'.length);
+  const correlationEvidenceValid = artifact.correlationEvidence === undefined
+    || (
+      artifact.source === 'shop-card'
+      && artifact.correlatedOfferId === artifact.offerId
+      && artifact.correlatedMemberId === artifact.memberId
+      && artifact.correlationEvidence.method === 'offer-page-context-v1'
+      && artifact.correlationEvidence.offerIdFieldPath
+        === 'contextResult.data.gallery.fields.offerId'
+      && artifact.correlationEvidence.memberIdFieldPath
+        === 'contextResult.global.globalData.model.sellerModel.memberId'
+      && /^artifact:collector-raw-offer-core-[0-9a-f]{64}$/u.test(
+        artifact.correlationEvidence.rawEvidenceRef,
+      )
+    );
   if (
     artifact.schema !== 'collector.offer-source-sidecar.v1' ||
-    artifactRef !== `artifact:offer-source-${artifact.source}-${digest}`
+    artifactRef !== `artifact:offer-source-${artifact.source}-${digest}` ||
+    !correlationEvidenceValid
   ) {
     throw new TypeError('Offer source sidecar content does not match its artifact reference.');
   }
@@ -343,6 +376,11 @@ export function assertOfferSourceReceiptsCompleteV1(input: {
       receipt.rawEvidenceRefs.length === 0 ||
       receipt.rawEvidenceRefs.some((ref) => !isOfferSourceArtifactRefV1(ref, source)) ||
       receipt.rawEvidenceRefs.some((ref) => !input.remoteRawEvidenceRefs.includes(ref)) ||
+      (receipt.fieldObservationRefs ?? [])
+        .some((ref) =>
+          !/^artifact:collector-raw-offer-core-[0-9a-f]{64}$/u.test(ref)
+          || !input.remoteRawEvidenceRefs.includes(ref)
+        ) ||
       !absenceProofValid ||
       (receipt.state === 'available' && receipt.absenceProof !== undefined) ||
       receipt.error !== undefined ||

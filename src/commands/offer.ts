@@ -132,6 +132,11 @@ export interface OfferSourceCaptureEvidenceV1 {
   correlatedOfferId: string | null;
   correlatedMemberId: string | null;
   rawPayload: unknown | null;
+  correlationAuthority?: {
+    kind: 'offer-page-context-v1';
+    offerIdFieldPath: 'contextResult.data.gallery.fields.offerId';
+    memberIdFieldPath: 'contextResult.global.globalData.model.sellerModel.memberId';
+  };
   authoritativeEmpty?: {
     sourcePath: string;
     sourceValue: unknown;
@@ -155,6 +160,7 @@ export interface OfferSourceResponseCaptureV1<T> {
   correlatedOfferId: string | null;
   correlatedMemberId: string | null;
   rawPayload: unknown;
+  correlationAuthority?: OfferSourceCaptureEvidenceV1['correlationAuthority'];
   authoritativeEmpty?: OfferSourceCaptureEvidenceV1['authoritativeEmpty'];
 }
 
@@ -198,6 +204,48 @@ export function readContextConsignmentSourceV1(
     correlatedOfferId,
     correlatedMemberId,
     rawPayload,
+  };
+}
+
+export function bindShopCardSourceToPageContextV1<T>(
+  captured: OfferSourceResponseCaptureV1<T> | null,
+  rawPayload: unknown,
+  expectedOfferId: string,
+  expectedMemberId: string | null,
+): OfferSourceResponseCaptureV1<T> | null {
+  if (
+    captured === null
+    || captured.correlatedOfferId !== null
+    || captured.correlatedMemberId !== null
+    || expectedMemberId === null
+  ) {
+    return captured;
+  }
+  const root = asRecord(rawPayload);
+  const contextResult = asRecord(root?.contextResult);
+  const data = asRecord(contextResult?.data);
+  const gallery = asRecord(asRecord(data?.gallery)?.fields);
+  const globalData = asRecord(asRecord(contextResult?.global)?.globalData);
+  const model = asRecord(globalData?.model);
+  const sellerModel = asRecord(model?.sellerModel);
+  const correlatedOfferId = scalarString(gallery?.offerId);
+  const correlatedMemberId = scalarString(sellerModel?.memberId);
+  if (
+    correlatedOfferId !== expectedOfferId
+    || correlatedMemberId !== expectedMemberId
+  ) {
+    return captured;
+  }
+  return {
+    ...captured,
+    correlatedOfferId,
+    correlatedMemberId,
+    correlationAuthority: {
+      kind: 'offer-page-context-v1',
+      offerIdFieldPath: 'contextResult.data.gallery.fields.offerId',
+      memberIdFieldPath:
+        'contextResult.global.globalData.model.sellerModel.memberId',
+    },
   };
 }
 
@@ -512,7 +560,13 @@ export async function executeRaw(
       selectSkuSelectorModel(sku?.model ?? null, pageInfo.skuModel),
       skuCapture.diagnostics(),
     );
-    const shopCard = shopCardResponse?.value ?? null;
+    const effectiveShopCardResponse = bindShopCardSourceToPageContextV1(
+      shopCardResponse,
+      pageInfo.rawPayload,
+      args.offerId,
+      pageInfo.sellerMemberId,
+    );
+    const shopCard = effectiveShopCardResponse?.value ?? null;
     const effectiveConsignmentResponse =
       consignmentResponse ??
       readContextConsignmentSourceV1(
@@ -529,12 +583,12 @@ export async function executeRaw(
       shopCard,
       consignment,
       offerDetails?.evidence ?? null,
-      shopCardResponse !== null,
+      effectiveShopCardResponse !== null,
       effectiveConsignmentResponse !== null,
       offerDetailsCapture.diagnostics().matchedCount > 0,
     );
     OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
-      shopCard: captureEvidence(shopCardResponse),
+      shopCard: captureEvidence(effectiveShopCardResponse),
       consignment: captureEvidence(effectiveConsignmentResponse),
       components: {
         core: pageInfo.rawPayload,
@@ -567,6 +621,9 @@ function captureEvidence<T>(
     correlatedOfferId: captured?.correlatedOfferId ?? null,
     correlatedMemberId: captured?.correlatedMemberId ?? null,
     rawPayload: captured?.rawPayload ?? null,
+    ...(captured?.correlationAuthority === undefined
+      ? {}
+      : { correlationAuthority: captured.correlationAuthority }),
     ...(captured?.authoritativeEmpty === undefined
       ? {}
       : { authoritativeEmpty: captured.authoritativeEmpty }),
