@@ -1,5 +1,5 @@
-import { createHash } from 'node:crypto';
 import type { Page } from 'playwright';
+import { canonicalCollectorSha256V1 } from '../collection/page-action-contracts.js';
 import { CliError } from '../io/errors.js';
 import {
   compileSearchPageRequestV1,
@@ -445,5 +445,5 @@ function isRetryableProtocol(error: unknown): boolean {
 }
 
 function hash(value: unknown): string {
-  return `sha256:${createHash('sha256').update(JSON.stringify(value), 'utf8').digest('hex')}`;
+  return canonicalCollectorSha256V1(value);
 }

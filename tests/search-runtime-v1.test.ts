@@ -1,5 +1,6 @@
 import type { Page } from 'playwright';
 import { describe, expect, it } from 'vitest';
+import { canonicalCollectorSha256V1 } from '../src/collection/page-action-contracts.js';
 import { mapOffer } from '../src/session/search-mtop.js';
 import {
   compileSearchParameterSetV1,
@@ -263,6 +264,8 @@ describe('compiled Search pagination runtime', () => {
     });
     expect(receipt).toMatchObject({ terminalReason: 'source-end', lastCompletedPage: 1 });
     expect(receipt.receiptHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+    const { receiptHash, ...content } = receipt;
+    expect(receiptHash).toBe(canonicalCollectorSha256V1(content));
     expect(() => createSearchTerminalReceiptV1({
       collectionTaskId: 'task', searchQueryKeyHash: `sha256:${'1'.repeat(64)}`,
       querySnapshotHash: `sha256:${'2'.repeat(64)}`,
