@@ -27,6 +27,7 @@ const INLINE_SECRET = /\b(?:authorization|cookie|mh5tk|password|secret|sign(?:at
 
 export type CollectorRawArchiveKindV1 =
   | 'search-response'
+  | 'search-filter-config'
   | 'offer-core'
   | 'offer-sku'
   | 'offer-detail'

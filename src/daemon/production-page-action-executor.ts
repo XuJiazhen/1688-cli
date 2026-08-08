@@ -84,6 +84,7 @@ import {
   type SearchRuntimeResultV1,
 } from '../session/search-runtime.js';
 import {
+  startSearchFilterConfigCaptureV1,
   startSearchPageCaptureV1,
   type SearchPageCaptureV1,
 } from '../session/search-capture.js';
@@ -460,6 +461,18 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
                 const evidenceRef = await this.persistRawArchive({
                   kind: 'search-response',
                   parserRevision: 'search-response-v1@1',
+                  request,
+                  ordinal,
+                  requestBusinessHash: compiledRequest.requestBusinessHash,
+                  payload: rawResponseText,
+                });
+                rawEvidenceRefs.push(evidenceRef);
+                evidenceRefsByAttempt.set(ordinal, [...rawEvidenceRefs]);
+              },
+              onRawFilterConfigResponse: async (rawResponseText) => {
+                const evidenceRef = await this.persistRawArchive({
+                  kind: 'search-filter-config',
+                  parserRevision: 'search-filter-config-v1@1',
                   request,
                   ordinal,
                   requestBusinessHash: compiledRequest.requestBusinessHash,
@@ -2238,8 +2251,16 @@ export async function navigateCompiledSearchPageV1(input: {
   admitRemoteAttempt(): Promise<void>;
   assertCheckpointAuthorized(operation: 'checkpoint'): Promise<void>;
   onRawResponse?: (rawResponseText: string) => Promise<void>;
+  onRawFilterConfigResponse?: (rawResponseText: string) => Promise<void>;
 }) {
   await input.admitRemoteAttempt();
+  const filterConfigCapture = input.onRawFilterConfigResponse === undefined
+    ? null
+    : startSearchFilterConfigCaptureV1({
+        page: input.page,
+        timeoutMs: 20_000,
+        onRawResponse: input.onRawFilterConfigResponse,
+      });
   const capture = startSearchPageCaptureV1({
     page: input.page,
     compiledRequest: input.compiledRequest,
@@ -2274,6 +2295,8 @@ export async function navigateCompiledSearchPageV1(input: {
     if (authorizationFailed) throw error;
     if (navigationFailed) throw typedNavigationFailure(error, 'SEARCH_NAVIGATION_FAILED');
     throw typedSearchCaptureFailureV1(error);
+  } finally {
+    await filterConfigCapture?.disposeAndDrain();
   }
   await input.assertCheckpointAuthorized('checkpoint');
   return observed;

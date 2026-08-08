@@ -4,6 +4,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { SEARCH_APP_ID, SEARCH_MTOP_API } from '../src/session/search-mtop.js';
 import {
   captureSearchOffersForAction,
+  containsSearchFilterConfigV1,
+  startSearchFilterConfigCaptureV1,
   startSearchPageCaptureV1,
   startSearchOfferCapture,
 } from '../src/session/search-capture.js';
@@ -305,6 +307,29 @@ describe('startSearchOfferCapture', () => {
 });
 
 describe('strict Search PageAction capture', () => {
+  it('captures only a server dynamic filter catalog from a trusted Search response', async () => {
+    const mockPage = page();
+    const captured: string[] = [];
+    const capture = startSearchFilterConfigCaptureV1({
+      page: mockPage,
+      timeoutMs: 50,
+      onRawResponse: async (raw) => { captured.push(raw); },
+    });
+    mockPage.emitResponse(response(
+      'https://untrusted.example/search',
+      JSON.stringify({ data: { data: { filterData: { filters: [] } } } }),
+    ));
+    mockPage.emitResponse(response(
+      'https://h5api.m.1688.com/h5/search-filter/1.0/',
+      JSON.stringify({ data: { data: { filterData: { filters: [] } } } }),
+    ));
+    await capture.disposeAndDrain();
+    expect(capture.captured()).toBe(true);
+    expect(captured).toHaveLength(1);
+    expect(containsSearchFilterConfigV1(captured[0]!)).toBe(true);
+    expect(mockPage.listenerCount('response')).toBe(0);
+  });
+
   it('drains a deferred raw archive before action cancellation returns', async () => {
     const parameterSet = compileSearchParameterSetV1({
       keyword: 'fixture', sort: 'relevance',
