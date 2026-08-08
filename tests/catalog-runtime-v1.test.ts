@@ -386,6 +386,97 @@ describe('bounded Store Sample runtime', () => {
     }));
   });
 
+  it('binds the live Wangpu mobile header URL to the frozen Store identity', async () => {
+    const payload = {
+      data: {
+        data: {
+          companyName: 'Fixture Store',
+          commonUrl: {
+            shopUrl: `https://winport.m.1688.com/page/index.html?newRender=true&memberId=${MEMBER}&upstreamSource=pc`,
+          },
+        },
+      },
+    };
+    const profile = mapStoreProfilePayload(payload, NOW, {
+      sourceRef: 'fixture:wangpu-header',
+      rawRef: 'artifact:wangpu-header',
+    });
+    const memberAuthority = parseStoreProfileMemberAuthorityV1(payload, profile.source);
+
+    expect(memberAuthority).toMatchObject({
+      memberId: MEMBER,
+      memberIdSource: {
+        rawRef: 'artifact:wangpu-header',
+        fieldPath: 'data.data.commonUrl.shopUrl',
+      },
+    });
+    await expect(baseline({
+      collectProfileObservation: async () => ({
+        ...memberAuthority,
+        canonicalShopUrl: SHOP,
+        observedAt: NOW,
+        profile,
+      }),
+    })).resolves.toMatchObject({ calls: [1, 2, 3] });
+  });
+
+  it.each([
+    ['lookalike host', `https://winport.m.1688.com.evil.example/page/index.html?memberId=${MEMBER}`],
+    ['alternate path', `https://winport.m.1688.com/other/index.html?memberId=${MEMBER}`],
+    ['duplicate member', `https://winport.m.1688.com/page/index.html?memberId=${MEMBER}&memberId=other-member`],
+    ['credentials', `https://user@winport.m.1688.com/page/index.html?memberId=${MEMBER}`],
+    ['fragment', `https://winport.m.1688.com/page/index.html?memberId=${MEMBER}#other`],
+  ])('rejects a Wangpu mobile member authority with %s', (_label, shopUrl) => {
+    const payload = { data: { data: { commonUrl: { shopUrl } } } };
+    const profile = mapStoreProfilePayload(payload, NOW, {
+      sourceRef: 'fixture:wangpu-header',
+      rawRef: 'artifact:wangpu-header',
+    });
+    expect(() => parseStoreProfileMemberAuthorityV1(payload, profile.source)).toThrowError(
+      expect.objectContaining({ code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' }),
+    );
+  });
+
+  it('rejects contradictory Store member authorities in the same header', () => {
+    const payload = {
+      data: {
+        data: {
+          memberId: MEMBER,
+          commonUrl: {
+            shopUrl: 'https://winport.m.1688.com/page/index.html?memberId=other-member',
+          },
+        },
+      },
+    };
+    const profile = mapStoreProfilePayload(payload, NOW, {
+      sourceRef: 'fixture:wangpu-header',
+      rawRef: 'artifact:wangpu-header',
+    });
+    expect(() => parseStoreProfileMemberAuthorityV1(payload, profile.source)).toThrowError(
+      expect.objectContaining({ code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' }),
+    );
+  });
+
+  it('rejects a malformed direct member even when the Wangpu URL is otherwise valid', () => {
+    const payload = {
+      data: {
+        data: {
+          memberId: 'unsafe member id',
+          commonUrl: {
+            shopUrl: `https://winport.m.1688.com/page/index.html?memberId=${MEMBER}`,
+          },
+        },
+      },
+    };
+    const profile = mapStoreProfilePayload(payload, NOW, {
+      sourceRef: 'fixture:wangpu-header',
+      rawRef: 'artifact:wangpu-header',
+    });
+    expect(() => parseStoreProfileMemberAuthorityV1(payload, profile.source)).toThrowError(
+      expect.objectContaining({ code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' }),
+    );
+  });
+
   it.each(['offer-count', 'total-pages', 'categories'] as const)(
     'cannot complete when page-1 %s authority is missing',
     async (missing) => {

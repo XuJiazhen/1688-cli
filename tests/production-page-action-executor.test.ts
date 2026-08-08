@@ -1337,6 +1337,49 @@ describe('Production PageAction bridge', () => {
     ]);
   });
 
+  it('completes the real Wangpu mobile header shape without replacing canonical Store authority', async () => {
+    const now = new Date('2026-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-store-mobile-header-'));
+    const request = executableStoreRequest(now);
+    await fs.writeFile(path.join(artifactDirectory, 'identity-store.json'), JSON.stringify({
+      schema: 'collector.canonical-shop-identity-artifact.v1',
+      memberId: 'b2b-member-1', canonicalShopUrl: 'https://fixture.1688.com/',
+      receiptId: 'identity-store', receiptHash: canonicalCollectorSha256V1('identity-store'),
+    }), { mode: 0o600 });
+    const page = new FakeStorePage(
+      false,
+      false,
+      'https://winport.m.1688.com/page/index.html?newRender=true&memberId=b2b-member-1&upstreamSource=pc',
+      null,
+    );
+    let id = 0;
+    const response = await new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now, idFactory: () => `store-mobile-header-${++id}`,
+      pace: async () => {}, random: () => 0,
+    }).execute(request, {
+      page: page as never, pageSessionId: 'store-page-session',
+      signal: new AbortController().signal, assertAuthorized: async () => {},
+      admitRemoteAttempt: async (input) => ({
+        remoteActionStartId: `start-${input.ordinal}`,
+        admittedAt: new Date(now.getTime() + input.ordinal).toISOString(),
+      }),
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+
+    expect(response.executionAttemptReceipt).toMatchObject({ outcome: 'completed' });
+    expect(response.executionAttemptReceipt.batches.find(
+      (batch) => batch.kind === 'store-profile',
+    )?.observations).toEqual([
+      expect.objectContaining({
+        memberId: 'b2b-member-1',
+        canonicalShopUrl: 'https://fixture.1688.com/',
+        memberIdSource: expect.objectContaining({
+          fieldPath: 'data.data.commonUrl.shopUrl',
+        }),
+      }),
+    ]);
+  });
+
   it('archives an invalid Store page-1 response without publishing invented observations', async () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-store-invalid-'));
@@ -1806,7 +1849,7 @@ class FakeStorePage extends EventEmitter {
     private readonly incompletePage1 = false,
     private readonly incompleteHeader = false,
     private readonly headerShopUrl = 'https://fixture.1688.com/',
-    private readonly headerMemberId = 'b2b-member-1',
+    private readonly headerMemberId: string | null = 'b2b-member-1',
   ) { super(); }
 
   async goto(url: string): Promise<null> {
@@ -1827,7 +1870,7 @@ class FakeStorePage extends EventEmitter {
           data: this.incompleteHeader
             ? { mainCate: 'Tools' }
             : {
-                memberId: this.headerMemberId,
+                ...(this.headerMemberId === null ? {} : { memberId: this.headerMemberId }),
                 companyName: 'Fixture Store Header',
                 commonUrl: { shopUrl: this.headerShopUrl },
               },

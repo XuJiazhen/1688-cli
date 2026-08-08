@@ -245,13 +245,16 @@ export function assertStoreSampleProfileObservationV1(
   const memberIdSource = observation?.memberIdSource;
   let observedCanonicalShopUrl: string;
   let expectedShopUrl: string;
-  let payloadShopUrl: string;
+  let payloadShopIdentity: Readonly<
+    | { kind: 'canonical-shop'; canonicalShopUrl: string }
+    | { kind: 'wangpu-member'; memberId: string }
+  >;
   try {
     observedCanonicalShopUrl = canonicalProfileShopUrl(
       observation?.canonicalShopUrl,
     );
     expectedShopUrl = canonicalProfileShopUrl(expectedCanonicalShopUrl);
-    payloadShopUrl = canonicalProfileShopUrl(profile?.shopUrl.value);
+    payloadShopIdentity = storeProfileShopIdentity(profile?.shopUrl.value);
   } catch {
     throw catalogProtocolError(
       'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
@@ -267,9 +270,16 @@ export function assertStoreSampleProfileObservationV1(
     || memberIdSource.parserVersion !== profile.source.parserVersion
     || memberIdSource.rawRef !== profile.source.rawRef
     || memberIdSource.sourceRef !== profile.source.sourceRef
-    || memberIdSource.fieldPath !== 'data.data.memberId'
+    || (
+      memberIdSource.fieldPath !== 'data.data.memberId'
+      && memberIdSource.fieldPath !== 'data.data.commonUrl.shopUrl'
+    )
     || observedCanonicalShopUrl !== expectedShopUrl
-    || payloadShopUrl !== expectedShopUrl
+    || (
+      payloadShopIdentity.kind === 'canonical-shop'
+        ? payloadShopIdentity.canonicalShopUrl !== expectedShopUrl
+        : payloadShopIdentity.memberId !== expectedMemberId
+    )
     || profile?.source.api !== ALISITE_MODULE_API
     || profile.source.componentKey !== STORE_PROFILE_COMPONENT_KEY
     || !profile.source.rawRef?.startsWith('artifact:')
@@ -303,20 +313,91 @@ export function parseStoreProfileMemberAuthorityV1(
   const root = recordValue(payload);
   const envelope = recordValue(root?.['data']);
   const header = recordValue(envelope?.['data']);
-  const memberId = header?.['memberId'];
-  if (typeof memberId !== 'string' || !isSafeSupplierMemberKey(memberId)) {
+  const directMemberId = header?.['memberId'];
+  const commonUrl = recordValue(header?.['commonUrl']);
+  const mobileMemberId = parseWangpuMobileMemberId(commonUrl?.['shopUrl']);
+  const hasDirectMemberId = typeof directMemberId === 'string'
+    && isSafeSupplierMemberKey(directMemberId);
+  if (
+    header !== null
+    && Object.prototype.hasOwnProperty.call(header, 'memberId')
+    && !hasDirectMemberId
+  ) {
     throw catalogProtocolError(
       'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
-      'Store Sample requires member authority parsed from data.data.memberId.',
+      'Store Sample header contains a malformed direct member authority.',
+    );
+  }
+  if (
+    hasDirectMemberId
+    && mobileMemberId !== null
+    && directMemberId !== mobileMemberId
+  ) {
+    throw catalogProtocolError(
+      'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
+      'Store Sample header contains contradictory member authorities.',
+    );
+  }
+  const memberId = hasDirectMemberId ? directMemberId : mobileMemberId;
+  if (memberId === null || memberId === undefined) {
+    throw catalogProtocolError(
+      'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
+      'Store Sample requires member authority parsed from the response header.',
     );
   }
   return {
     memberId,
     memberIdSource: {
       ...source,
-      fieldPath: 'data.data.memberId',
+      fieldPath: hasDirectMemberId
+        ? 'data.data.memberId'
+        : 'data.data.commonUrl.shopUrl',
     },
   };
+}
+
+function storeProfileShopIdentity(value: unknown): Readonly<
+  | { kind: 'canonical-shop'; canonicalShopUrl: string }
+  | { kind: 'wangpu-member'; memberId: string }
+> {
+  try {
+    return { kind: 'canonical-shop', canonicalShopUrl: canonicalProfileShopUrl(value) };
+  } catch {
+    const memberId = parseWangpuMobileMemberId(value);
+    if (memberId === null) throw new TypeError('Store profile shop URL is not authoritative.');
+    return { kind: 'wangpu-member', memberId };
+  }
+}
+
+function parseWangpuMobileMemberId(value: unknown): string | null {
+  if (
+    typeof value !== 'string'
+    || !/^https:\/\/winport\.m\.1688\.com\/page\/index\.html\?[^#]+$/u.test(value)
+  ) {
+    return null;
+  }
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  const memberIds = url.searchParams.getAll('memberId');
+  if (
+    url.protocol !== 'https:'
+    || url.username !== ''
+    || url.password !== ''
+    || url.hostname !== 'winport.m.1688.com'
+    || url.host !== 'winport.m.1688.com'
+    || url.port !== ''
+    || url.pathname !== '/page/index.html'
+    || url.hash !== ''
+    || memberIds.length !== 1
+    || !isSafeSupplierMemberKey(memberIds[0]!)
+  ) {
+    return null;
+  }
+  return memberIds[0]!;
 }
 
 function canonicalProfileShopUrl(value: unknown): string {

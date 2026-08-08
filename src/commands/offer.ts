@@ -15,6 +15,7 @@ import {
 import { withIsolatedOperationPages } from '../session/page-lifecycle.js';
 import { debugTmpPath } from '../util/temp.js';
 import {
+  mapContextConsignmentPayloadV1,
   mapConsignmentPayload,
   mapShopCardPayload,
   type ConsignmentInfo,
@@ -148,7 +149,7 @@ export interface OfferSourceCaptureEvidenceSetV1 {
   };
 }
 
-interface OfferSourceResponseCaptureV1<T> {
+export interface OfferSourceResponseCaptureV1<T> {
   value: T | null;
   responseSucceeded: boolean;
   correlatedOfferId: string | null;
@@ -166,6 +167,38 @@ export function readOfferSourceCaptureEvidenceV1(
   offer: OfferResult,
 ): OfferSourceCaptureEvidenceSetV1 | null {
   return OFFER_SOURCE_CAPTURE_EVIDENCE.get(offer) ?? null;
+}
+
+export function readContextConsignmentSourceV1(
+  rawPayload: unknown,
+  expectedOfferId: string,
+  expectedMemberId: string | null,
+): OfferSourceResponseCaptureV1<ConsignmentInfo> | null {
+  const root = asRecord(rawPayload);
+  const contextResult = asRecord(root?.contextResult);
+  const data = asRecord(contextResult?.data);
+  const gallery = asRecord(asRecord(data?.gallery)?.fields);
+  const globalData = asRecord(asRecord(contextResult?.global)?.globalData);
+  const model = asRecord(globalData?.model);
+  const sellerModel = asRecord(model?.sellerModel);
+  const correlatedOfferId = scalarString(gallery?.offerId);
+  const correlatedMemberId = scalarString(sellerModel?.memberId);
+  const value = mapContextConsignmentPayloadV1(rawPayload);
+  if (
+    correlatedOfferId !== expectedOfferId ||
+    correlatedMemberId === undefined ||
+    correlatedMemberId !== expectedMemberId ||
+    value === null
+  ) {
+    return null;
+  }
+  return {
+    value,
+    responseSucceeded: true,
+    correlatedOfferId,
+    correlatedMemberId,
+    rawPayload,
+  };
 }
 
 export interface PriceTier {
@@ -480,7 +513,14 @@ export async function executeRaw(
       skuCapture.diagnostics(),
     );
     const shopCard = shopCardResponse?.value ?? null;
-    const consignment = consignmentResponse?.value ?? null;
+    const effectiveConsignmentResponse =
+      consignmentResponse ??
+      readContextConsignmentSourceV1(
+        pageInfo.rawPayload,
+        args.offerId,
+        pageInfo.sellerMemberId,
+      );
+    const consignment = effectiveConsignmentResponse?.value ?? null;
     const result = assemble(
       args.offerId,
       url,
@@ -490,12 +530,12 @@ export async function executeRaw(
       consignment,
       offerDetails?.evidence ?? null,
       shopCardResponse !== null,
-      consignmentResponse !== null,
+      effectiveConsignmentResponse !== null,
       offerDetailsCapture.diagnostics().matchedCount > 0,
     );
     OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
       shopCard: captureEvidence(shopCardResponse),
-      consignment: captureEvidence(consignmentResponse),
+      consignment: captureEvidence(effectiveConsignmentResponse),
       components: {
         core: pageInfo.rawPayload,
         sku: sku?.rawPayload ?? pageInfo.skuRawPayload,

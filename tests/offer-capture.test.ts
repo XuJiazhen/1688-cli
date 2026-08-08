@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   executeRaw,
   mapContextSkuBizModel,
+  readContextConsignmentSourceV1,
   requireSkuSelectorModel,
   selectSkuSelectorModel,
 } from '../src/commands/offer.js';
@@ -110,6 +111,84 @@ describe('requireSkuSelectorModel', () => {
         }),
       ),
     ).toBe(model);
+  });
+});
+
+describe('SSR consignment source fallback', () => {
+  const sourcePayload = {
+    contextResult: {
+      data: {
+        gallery: { fields: { offerId: 671182185805 } },
+      },
+      global: {
+        globalData: {
+          model: {
+            sellerModel: { memberId: 'b2b-22114100897724d9dd' },
+            consignModel: {
+              consignOffer: false,
+              consignSign: {
+                canIgnoreConsignRelation: false,
+                signs: {
+                  supportDistribution: true,
+                  isSupportConsignIssuing: false,
+                  hasConsignReation: false,
+                },
+              },
+              distributeChannels: [
+                { name: '淘宝', typeCode: 'thyny' },
+                { name: 'Amazon', typeCode: 'amazon' },
+              ],
+              hasConsignPrice: false,
+            },
+          },
+        },
+      },
+    },
+    feGlobals: { memberId: 'unrelated-signed-in-profile' },
+  };
+
+  it('uses exact offer and seller paths to preserve the Offer-scoped SSR model', () => {
+    expect(
+      readContextConsignmentSourceV1(
+        sourcePayload,
+        '671182185805',
+        'b2b-22114100897724d9dd',
+      ),
+    ).toMatchObject({
+      responseSucceeded: true,
+      correlatedOfferId: '671182185805',
+      correlatedMemberId: 'b2b-22114100897724d9dd',
+      rawPayload: sourcePayload,
+      value: {
+        offerFlags: {
+          consignOffer: false,
+          hasConsignPrice: false,
+          'consignSign.canIgnoreConsignRelation': false,
+          'consignSign.signs.supportDistribution': true,
+          'consignSign.signs.isSupportConsignIssuing': false,
+          'consignSign.signs.hasConsignReation': false,
+        },
+        supportedChannels: [
+          { name: '淘宝', iconUrl: null },
+          { name: 'Amazon', iconUrl: null },
+        ],
+      },
+    });
+  });
+
+  it.each([
+    ['offer mismatch', { contextResult: { ...sourcePayload.contextResult, data: { gallery: { fields: { offerId: 'other' } } } } }, 'b2b-22114100897724d9dd'],
+    ['missing seller', { contextResult: { ...sourcePayload.contextResult, global: { globalData: { model: { consignModel: sourcePayload.contextResult.global.globalData.model.consignModel } } } } }, 'b2b-22114100897724d9dd'],
+    ['seller mismatch', sourcePayload, 'b2b-other-member'],
+    ['malformed model', { contextResult: { ...sourcePayload.contextResult, global: { globalData: { model: { sellerModel: { memberId: 'b2b-22114100897724d9dd' }, consignModel: {} } } } } }, 'b2b-22114100897724d9dd'],
+  ])('rejects %s instead of manufacturing consignment evidence', (_label, payload, expectedMemberId) => {
+    expect(
+      readContextConsignmentSourceV1(
+        payload,
+        '671182185805',
+        expectedMemberId,
+      ),
+    ).toBeNull();
   });
 });
 

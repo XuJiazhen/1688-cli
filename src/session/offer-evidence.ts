@@ -769,6 +769,96 @@ export function mapConsignmentPayload(
   };
 }
 
+export function mapContextConsignmentPayloadV1(
+  payload: unknown,
+): ConsignmentInfo | null {
+  const data = objectAt(payload, [
+    'contextResult',
+    'global',
+    'globalData',
+    'model',
+    'consignModel',
+  ]);
+  if (!data) return null;
+
+  const offerFlags: Record<string, boolean> = {};
+  const collectBoolean = (path: string[], key: string) => {
+    let current: unknown = data;
+    for (const segment of path) {
+      current = recordOrNull(current)?.[segment];
+    }
+    if (typeof current === 'boolean') offerFlags[key] = current;
+  };
+  collectBoolean(['consignOffer'], 'consignOffer');
+  collectBoolean(['hasConsignPrice'], 'hasConsignPrice');
+  collectBoolean(
+    ['consignSign', 'canIgnoreConsignRelation'],
+    'consignSign.canIgnoreConsignRelation',
+  );
+  collectBoolean(
+    ['consignSign', 'supportConsignIssuing'],
+    'consignSign.supportConsignIssuing',
+  );
+  collectBoolean(
+    ['consignSign', 'supportDistribution'],
+    'consignSign.supportDistribution',
+  );
+  for (const key of [
+    'supportDistribution',
+    'isCanIgnoreConsignRelation',
+    'isSupportConsignIssuing',
+    'hasConsignReation',
+  ]) {
+    collectBoolean(
+      ['consignSign', 'signs', key],
+      `consignSign.signs.${key}`,
+    );
+  }
+
+  const supportedChannels = arrayAt(data, ['distributeChannels'])
+    .map((raw) => {
+      const channel = recordOrNull(raw);
+      const name = stringOrNull(channel?.name);
+      return name
+        ? {
+            name,
+            iconUrl: normalizeUrl(
+              stringOrNull(channel?.iconUrl) ?? stringOrNull(channel?.icon),
+            ),
+          }
+        : null;
+    })
+    .filter(
+      (
+        channel,
+      ): channel is { name: string; iconUrl: string | null } =>
+        channel !== null,
+    );
+
+  if (Object.keys(offerFlags).length === 0 && supportedChannels.length === 0) {
+    return null;
+  }
+  return {
+    name: null,
+    offerFlags,
+    metrics: [],
+    orderCount30dText: null,
+    orderCount7dText: null,
+    delivery24hRate: null,
+    delivery48hRate: null,
+    downstreamListingCountText: null,
+    distributorCountText: null,
+    offerPublishedAtText: null,
+    prices: [],
+    minimumQuantity: null,
+    onePieceEligible: null,
+    onePiecePrice: null,
+    operations: [],
+    protections: [],
+    supportedChannels,
+  };
+}
+
 export function parseOfferModelSignFromUrl(
   requestUrl: string | undefined,
 ): Record<string, boolean> {
