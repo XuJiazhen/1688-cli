@@ -498,7 +498,6 @@ export function parseExecutionRenewalFrame(
     );
   }
   const rpcId = identifier(record['rpcId'], 'rpcId');
-  equal(rpcId, request.rpcId, 'renewal rpcId');
   return {
     schema: SUPERVISOR_EXECUTION_RENEWAL_SCHEMA,
     rpcId,

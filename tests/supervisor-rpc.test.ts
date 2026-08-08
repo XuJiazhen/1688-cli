@@ -18,6 +18,7 @@ import {
 import {
   canonicalRpcPayloadHash,
   SUPERVISOR_PROTOCOL_SHA256_V2,
+  parseExecutionRenewalFrame,
   parseSupervisorRpcFrame,
   parseSupervisorRpcRequest,
   validateRpcBinding,
@@ -335,6 +336,35 @@ describe('Profile Supervisor RPC protocol', () => {
     expect(() => validateRpcBinding(lookup, expectedAt('2026-07-31T08:11:00.000Z')))
       .not.toThrow();
     await authorize(lookup, 'lookup_receipt', '2026-07-31T08:11:00.000Z');
+  });
+
+  it('binds an execution renewal to the parent RPC while allowing a fresh inner RPC id', () => {
+    const payload = schedulerPageAction();
+    const initial = workRequest('collector.pageAction.execute', payload, {
+      deadlineAt: payload.deadlineAt,
+      fences: payload.executionLineage.fences,
+      issuedAt: '2026-07-31T08:00:00.000Z',
+      credentialExpiresAt: '2026-07-31T08:04:00.000Z',
+    });
+    const renewal = workRequest('collector.pageAction.execute', payload, {
+      deadlineAt: payload.deadlineAt,
+      fences: payload.executionLineage.fences,
+      issuedAt: '2026-07-31T08:02:00.000Z',
+      credentialExpiresAt: '2026-07-31T08:06:00.000Z',
+    });
+
+    const parsed = parseExecutionRenewalFrame({
+      schema: 'profile-supervisor.execution-renewal.v2',
+      rpcId: initial.rpcId,
+      request: renewal,
+    }, {
+      verification: schedulerVerification(payload),
+      now: new Date('2026-07-31T08:02:00.000Z'),
+    });
+
+    expect(parsed.rpcId).toBe(initial.rpcId);
+    expect(parsed.request.rpcId).toBe(renewal.rpcId);
+    expect(parsed.request.rpcId).not.toBe(parsed.rpcId);
   });
 });
 
