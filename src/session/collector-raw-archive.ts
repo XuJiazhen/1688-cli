@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { redactUrlForDiagnostics } from './redaction.js';
 
 const REDACTED = '[redacted]';
 const NUMERIC_IDENTITY_KEYS = new Set([
@@ -71,6 +72,9 @@ export function sanitizeCollectorPayloadV1(
     return value === null ? null : REDACTED;
   }
   if (typeof value === 'string') {
+    if (/^https?:\/\//iu.test(value)) {
+      return redactUrlForDiagnostics(value);
+    }
     const structured = parseStructuredCollectorTextV1(value);
     return structured === undefined
       ? redactCollectorTextV1(value)

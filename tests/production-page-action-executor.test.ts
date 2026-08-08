@@ -1602,6 +1602,59 @@ describe('Production PageAction bridge', () => {
     });
   });
 
+  it('stops Qualification on a correlated risk response without retrying or retaining its challenge token', async () => {
+    const now = new Date('2030-07-31T08:00:00.000Z');
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-qualification-risk-'));
+    const request = executableQualificationRequest(now);
+    await fs.writeFile(path.join(artifactDirectory, 'identity-qualification.json'), JSON.stringify({
+      schema: 'collector.canonical-shop-identity-artifact.v1',
+      memberId: 'member-1', canonicalShopUrl: 'https://fixture.1688.com/',
+      receiptId: 'identity-qualification',
+      receiptHash: canonicalCollectorSha256V1('identity-qualification'),
+    }), { mode: 0o600 });
+    const page = new RiskQualificationPage();
+    let id = 0;
+    const executor = new ProductionPageActionExecutor({
+      artifactDirectory, now: () => now,
+      idFactory: () => `qualification-risk-${++id}`,
+      pace: async () => {}, random: () => 0,
+    });
+
+    const response = await executor.execute(request, {
+      page: page as never,
+      pageSessionId: 'qualification-page-session',
+      signal: new AbortController().signal,
+      assertAuthorized: async () => {},
+      admitRemoteAttempt: async (input) => ({
+        remoteActionStartId: `start-${input.ordinal}`,
+        admittedAt: new Date(now.getTime() + input.ordinal).toISOString(),
+      }),
+      classifyUrl: async () => {}, closeOwnedPage: async () => {},
+    });
+
+    expect(page.runtimeCalls).toBe(1);
+    expect(response.executionAttemptReceipt).toMatchObject({
+      outcome: 'blocked',
+      error: {
+        code: 'RISK_CONTROL', category: 'risk-control', retryable: false,
+        actionRequired: 'risk-control', recoveryAction: 'pause_for_manual_challenge',
+      },
+      metrics: { remoteRequests: 2 },
+      remoteRequestAttempts: [
+        { ordinal: 1, status: 'succeeded' },
+        { ordinal: 2, status: 'failed', error: { code: 'RISK_CONTROL', retryable: false } },
+      ],
+    });
+    const persisted = await Promise.all(
+      (await fs.readdir(artifactDirectory))
+        .filter((name) => name.startsWith('collector-raw-qualification-response-'))
+        .map((name) => fs.readFile(path.join(artifactDirectory, name), 'utf8')),
+    );
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]).not.toContain('challenge-secret');
+    expect(persisted[0]).toContain('%5Bredacted%5D');
+  });
+
   it('retains archived Qualification bytes and its Batch when checkpoint cancellation is late', async () => {
     const now = new Date('2030-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-qualification-cancel-'));
@@ -1859,6 +1912,42 @@ class FakeQualificationPage extends EventEmitter {
       }),
     });
     return null;
+  }
+}
+
+class RiskQualificationPage extends EventEmitter {
+  runtimeCalls = 0;
+  private currentUrl = 'about:blank';
+
+  async goto(url: string): Promise<null> {
+    this.currentUrl = url;
+    return null;
+  }
+
+  url(): string { return this.currentUrl; }
+  async title(): Promise<string> { return 'Fixture Qualification'; }
+  async waitForFunction(): Promise<void> {}
+
+  async evaluate(_fn: unknown, arg?: { data?: { componentKey?: string; params?: string } }): Promise<unknown> {
+    if (arg === undefined) return '';
+    this.runtimeCalls++;
+    const params = JSON.parse(arg.data?.params ?? '{}') as { memberId?: string };
+    const outer = encodeURIComponent(JSON.stringify({
+      componentKey: arg.data?.componentKey,
+      params: JSON.stringify({ memberId: params.memberId }),
+    }));
+    this.emit('response', {
+      url: () => `https://h5api.m.1688.com/h5/mtop.alibaba.alisite.cbu.server.ModuleAsyncService/1.0/?data=${outer}`,
+      request: () => ({ postData: () => null }),
+      text: async () => JSON.stringify({
+        ret: ['FAIL_SYS_USER_VALIDATE', 'RGV587_ERROR::SM'],
+        data: {
+          url: 'https://h5api.m.taobao.com/punish?x5secdata=challenge-secret&action=captcha',
+        },
+      }),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    throw new Error('fixture risk response rejection');
   }
 }
 

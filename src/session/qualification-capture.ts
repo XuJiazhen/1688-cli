@@ -317,6 +317,7 @@ export async function captureSupplierQualificationForAction<TResult>(
   options: SupplierQualificationCaptureOptions,
   action: () => Promise<TResult>,
 ): Promise<SupplierQualificationCaptureResult<TResult>> {
+  let riskControlDetected = false;
   const capture = startResponseCapture<{
     qualification: SupplierQualification;
     sanitizedRawPayload: unknown;
@@ -336,8 +337,9 @@ export async function captureSupplierQualificationForAction<TResult>(
     },
     parse: async (response) => {
       const rawResponseText = await response.text();
-      await options.onRawResponse?.(rawResponseText);
       const rawPayload = parseMtopJsonp(rawResponseText);
+      riskControlDetected ||= qualificationResponseSignalsRiskControl(rawPayload);
+      await options.onRawResponse?.(rawResponseText);
       return {
         qualification: mapSupplierQualificationPayload(
           rawPayload,
@@ -347,7 +349,14 @@ export async function captureSupplierQualificationForAction<TResult>(
       };
     },
   });
-  const result = await capture.waitForAction(action);
+  let result;
+  try {
+    result = await capture.waitForAction(action);
+  } catch (error) {
+    if (riskControlDetected) throw qualificationRiskControlError();
+    throw error;
+  }
+  if (riskControlDetected) throw qualificationRiskControlError();
   return {
     actionResult: result.actionResult,
     qualification: result.response?.qualification ?? null,
@@ -356,6 +365,40 @@ export async function captureSupplierQualificationForAction<TResult>(
       : { sanitizedRawPayload: result.response.sanitizedRawPayload }),
     diagnostics: result.diagnostics,
   };
+}
+
+function qualificationResponseSignalsRiskControl(value: unknown): boolean {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  const ret = Array.isArray(record.ret)
+    ? record.ret.filter((entry): entry is string => typeof entry === 'string')
+    : [];
+  if (ret.some((entry) => /^(?:FAIL_SYS_USER_VALIDATE|RISK_CONTROL)(?:::|$)/iu.test(entry))) {
+    return true;
+  }
+  const data = record.data;
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) {
+    return false;
+  }
+  const challengeUrl = (data as Record<string, unknown>).url;
+  return typeof challengeUrl === 'string'
+    && /(?:punish|x5secdata|captcha|nocaptcha)/iu.test(challengeUrl);
+}
+
+function qualificationRiskControlError(): CliError {
+  return new CliError(
+    4,
+    'RISK_CONTROL',
+    'The qualification response requires a headed risk challenge.',
+    {
+      category: 'risk_challenge',
+      retryable: false,
+      actionRequired: 'risk-control',
+      recoveryAction: 'pause_for_manual_challenge',
+    },
+  );
 }
 
 export function requireSupplierQualificationResponse(

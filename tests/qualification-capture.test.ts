@@ -20,16 +20,19 @@ function url(memberId: string, componentKey = 'wp_pc_shop_basic_info'): string {
   return `https://h5api.m.1688.com/h5/${ALISITE_MODULE_API}/1.0/?sign=secret&data=${encodeURIComponent(JSON.stringify(data))}`;
 }
 
-function response(requestUrl: string): PWResponse {
+function response(
+  requestUrl: string,
+  payload: unknown = {
+    data: {
+      memberId: 'b2b-target',
+      certList: [],
+      businessInfo: { companyBusinessLine: '户外用品销售' },
+    },
+  },
+): PWResponse {
   return {
     url: () => requestUrl,
-    text: async () => JSON.stringify({
-      data: {
-        memberId: 'b2b-target',
-        certList: [],
-        businessInfo: { companyBusinessLine: '户外用品销售' },
-      },
-    }),
+    text: async () => JSON.stringify(payload),
   } as unknown as PWResponse;
 }
 
@@ -137,6 +140,60 @@ describe('captureSupplierQualificationForAction', () => {
         timeoutMs: 5,
       }),
     });
+  });
+
+  it('turns a correlated validation response into a non-retryable risk stop', async () => {
+    const page = new MockPage() as Page & MockPage;
+    await expect(captureSupplierQualificationForAction(
+      page,
+      { memberId: 'b2b-target', timeoutMs: 50 },
+      async () => {
+        page.emit('response', response(url('b2b-target'), {
+          ret: ['FAIL_SYS_USER_VALIDATE', 'RGV587_ERROR::SM'],
+          data: {
+            url: 'https://h5api.m.taobao.com/punish?x5secdata=must-not-escape',
+          },
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        throw new Error('The page runtime rejected the request.');
+      },
+    )).rejects.toMatchObject({
+      code: 'RISK_CONTROL',
+      exitCode: 4,
+      details: expect.objectContaining({
+        category: 'risk_challenge',
+        retryable: false,
+        actionRequired: 'risk-control',
+        recoveryAction: 'pause_for_manual_challenge',
+      }),
+    });
+    expect(page.listenerCount('response')).toBe(0);
+  });
+
+  it('preserves the risk stop when raw archive persistence also fails', async () => {
+    const page = new MockPage() as Page & MockPage;
+    await expect(captureSupplierQualificationForAction(
+      page,
+      {
+        memberId: 'b2b-target',
+        timeoutMs: 50,
+        onRawResponse: async () => {
+          throw new Error('fixture archive failure');
+        },
+      },
+      async () => {
+        page.emit('response', response(url('b2b-target'), {
+          ret: ['RISK_CONTROL'],
+          data: {},
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        throw new Error('The page runtime rejected the request.');
+      },
+    )).rejects.toMatchObject({
+      code: 'RISK_CONTROL',
+      details: expect.objectContaining({ retryable: false }),
+    });
+    expect(page.listenerCount('response')).toBe(0);
   });
 
   it('turns a missing correlated response into a bounded structured timeout', async () => {

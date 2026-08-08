@@ -67,6 +67,19 @@ describe('Collector immutable sanitized raw archives', () => {
     )).toEqual({ data: { userId: '[redacted]', memberId: 'member-1' } });
   });
 
+  it('redacts challenge and signed URL values before archiving them', () => {
+    const sanitized = sanitizeCollectorPayloadV1({
+      url: 'https://h5api.m.taobao.com/h5/api/1.0/punish?x5secdata=secret&action=captcha',
+      imageUrl: 'https://cbu01.alicdn.com/img.jpg?token=secret&v=1',
+    });
+
+    expect(sanitized).toEqual({
+      url: 'https://h5api.m.taobao.com/h5/api/1.0/punish?x5secdata=%5Bredacted%5D&action=%5Bredacted%5D',
+      imageUrl: 'https://cbu01.alicdn.com/img.jpg?token=%5Bredacted%5D&v=1',
+    });
+    expect(JSON.stringify(sanitized)).not.toContain('secret');
+  });
+
   it('writes one private content-addressed immutable artifact', async () => {
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collector-raw-'));
     const archive = createCollectorRawArchiveV1({
