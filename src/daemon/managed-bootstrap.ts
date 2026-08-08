@@ -35,6 +35,7 @@ export interface ManagedSupervisorDaemonConfigV2 {
   credentialKeys: Readonly<Record<string, string>>;
   pageActionVerification: PageActionVerificationConfigV1;
   artifactDirectory: string;
+  artifactReadDirectories: readonly string[];
   acceptanceJournalPath?: string;
   runtimeEventPath?: string;
   storeSampleFreshnessMs?: number;
@@ -88,6 +89,7 @@ export async function loadManagedServerOptions(
   const executor = dependencies.executorFactory?.(config, now)
     ?? new ProductionPageActionExecutor({
       artifactDirectory: config.artifactDirectory,
+      artifactReadDirectories: config.artifactReadDirectories,
       now,
       ...(config.storeSampleFreshnessMs === undefined
         ? {}
@@ -143,7 +145,7 @@ function parseManagedConfig(value: unknown): ManagedSupervisorDaemonConfigV2 {
     'schema', 'profileId', 'profileName', 'daemonInstanceId',
     'supervisorGeneration', 'contextGeneration', 'databaseNow',
     'databaseTimeSampledAt', 'credentialKeys', 'pageActionVerification',
-    'artifactDirectory', 'acceptanceJournalPath', 'runtimeEventPath',
+    'artifactDirectory', 'artifactReadDirectories', 'acceptanceJournalPath', 'runtimeEventPath',
     'storeSampleFreshnessMs', 'transportAuthority',
   ]);
   if (record['schema'] !== 'profile-supervisor.daemon-config.v2') {
@@ -169,6 +171,10 @@ function parseManagedConfig(value: unknown): ManagedSupervisorDaemonConfigV2 {
     credentialKeys,
     pageActionVerification: verification,
     artifactDirectory: absolutePath(record['artifactDirectory'], 'artifactDirectory'),
+    artifactReadDirectories: absolutePathArray(
+      record['artifactReadDirectories'],
+      'artifactReadDirectories',
+    ),
     ...(record['acceptanceJournalPath'] === undefined
       ? {}
       : { acceptanceJournalPath: absolutePath(record['acceptanceJournalPath'], 'acceptanceJournalPath') }),
@@ -289,6 +295,18 @@ function absolutePath(value: unknown, name: string): string {
     throw new Error(`${name} must be absolute.`);
   }
   return value;
+}
+
+function absolutePathArray(value: unknown, name: string): readonly string[] {
+  if (value === undefined) return Object.freeze([]);
+  if (
+    !Array.isArray(value)
+    || value.some((item) => typeof item !== 'string' || !path.isAbsolute(item))
+    || new Set(value).size !== value.length
+  ) {
+    throw new Error(`${name} must contain unique absolute paths.`);
+  }
+  return Object.freeze(value.map((item) => String(item)));
 }
 
 function timestamp(value: unknown, name: string): string {

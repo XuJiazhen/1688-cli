@@ -117,6 +117,7 @@ import { CliError } from '../io/errors.js';
 
 export interface ProductionPageActionExecutorOptions {
   artifactDirectory: string;
+  artifactReadDirectories?: readonly string[];
   storeSampleFreshnessMs?: number;
   now?: () => Date;
   idFactory?: () => string;
@@ -215,6 +216,13 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
   constructor(private readonly options: ProductionPageActionExecutorOptions) {
     if (!path.isAbsolute(options.artifactDirectory)) {
       throw new TypeError('Collector artifact directory must be absolute.');
+    }
+    if (
+      options.artifactReadDirectories?.some((directory) => !path.isAbsolute(directory))
+      || new Set(options.artifactReadDirectories ?? []).size
+        !== (options.artifactReadDirectories ?? []).length
+    ) {
+      throw new TypeError('Collector artifact read directories must be unique absolute paths.');
     }
     this.now = options.now ?? (() => new Date());
     this.idFactory = options.idFactory ?? randomUUID;
@@ -1292,17 +1300,39 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
   }
 
   private async readArtifact(reference: string): Promise<unknown> {
+    const roots = [
+      this.options.artifactDirectory,
+      ...(this.options.artifactReadDirectories ?? []),
+    ];
     if (/^sha256:[0-9a-f]{64}$/u.test(reference)) {
-      return readContentAddressedArtifactV1(this.options.artifactDirectory, reference);
+      let missing: unknown;
+      for (const root of roots) {
+        try {
+          return await readContentAddressedArtifactV1(root, reference);
+        } catch (error) {
+          if (collectorErrorCode(error) !== 'COLLECTOR_ARTIFACT_NOT_FOUND') throw error;
+          missing = error;
+        }
+      }
+      throw missing;
     }
     const match = reference.match(/^artifact:([A-Za-z0-9._-]+)$/u);
     if (!match?.[1]) throw new Error('Collector artifact reference is invalid.');
-    const resolved = path.join(this.options.artifactDirectory, `${match[1]}.json`);
-    const relative = path.relative(this.options.artifactDirectory, resolved);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      throw new Error('Collector artifact reference escapes its configured root.');
+    let missing: unknown;
+    for (const root of roots) {
+      const resolved = path.join(root, `${match[1]}.json`);
+      const relative = path.relative(root, resolved);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error('Collector artifact reference escapes its configured root.');
+      }
+      try {
+        return JSON.parse(await fs.readFile(resolved, 'utf8')) as unknown;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        missing = error;
+      }
     }
-    return JSON.parse(await fs.readFile(resolved, 'utf8')) as unknown;
+    throw missing;
   }
 
   private async persistRawArchive(input: {
@@ -2820,6 +2850,10 @@ function collectorCategory(value: unknown): CollectorErrorV1['category'] {
   ].includes(String(value))
     ? value as CollectorErrorV1['category']
     : 'protocol';
+}
+
+function collectorErrorCode(error: unknown): string | null {
+  return error instanceof CliError ? error.code : null;
 }
 
 export function collectorRemoteFailureV1(error: unknown): CollectorErrorV1 {
