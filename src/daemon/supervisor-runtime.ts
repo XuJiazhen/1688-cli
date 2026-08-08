@@ -702,6 +702,20 @@ export class ProfileDaemonRuntime {
         active.authorizedRequest.binding.workUnit,
         renewal.binding.workUnit,
       )
+      || !nonRegressingFence(
+        active.authorizedRequest.binding.supervisor,
+        renewal.binding.supervisor,
+      )
+      || !nonRegressingFence(
+        active.authorizedRequest.binding.reservation,
+        renewal.binding.reservation,
+      )
+      || !nonRegressingFence(
+        active.authorizedRequest.binding.workUnit,
+        renewal.binding.workUnit,
+      )
+      || Date.parse(renewal.deadlineAt)
+        < Date.parse(active.authorizedRequest.deadlineAt)
     ) {
       throw new SupervisorRuntimeError(
         'EXECUTION_RENEWAL_BINDING_MISMATCH',
@@ -2321,6 +2335,11 @@ function sameFenceIdentity(left: LeaseFenceV1 | null, right: LeaseFenceV1 | null
   return left.leaseId === right.leaseId
     && left.generation === right.generation
     && left.fencingToken === right.fencingToken;
+}
+
+function nonRegressingFence(previous: LeaseFenceV1 | null, current: LeaseFenceV1 | null): boolean {
+  if (previous === null || current === null) return previous === current;
+  return Date.parse(current.leaseNotAfter) >= Date.parse(previous.leaseNotAfter);
 }
 
 function assertFenceDigest(

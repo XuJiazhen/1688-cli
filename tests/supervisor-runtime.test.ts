@@ -726,14 +726,18 @@ describe('ProfileDaemonRuntime', () => {
     await runtime.ensureWarm();
     const initial = signedExecuteRequest(1, {
       credentialExpiresAt: '2026-07-31T08:01:00.000Z',
+      payloadDeadlineAt: '2026-07-31T08:20:00.000Z',
     });
     const execution = handleExecute(runtime, initial);
     await pageEntered;
     const renewal = signedExecuteRequest(1, {
-      credentialExpiresAt: '2026-07-31T08:05:00.000Z',
+      credentialExpiresAt: '2026-07-31T08:12:00.000Z',
+      transportLeaseNotAfter: '2026-07-31T08:12:00.000Z',
+      requestDeadlineAt: '2026-07-31T08:11:00.000Z',
+      payloadDeadlineAt: '2026-07-31T08:20:00.000Z',
     });
     await runtime.renewExecution(initial.rpcId, renewal);
-    current += 2 * 60_000;
+    current += 9 * 60_000;
     resume();
     await expect(execution).resolves.toMatchObject({ ok: true });
   });
@@ -1563,6 +1567,9 @@ function signedExecuteRequest(
   credentialOverrides: {
     credentialExpiresAt?: string;
     actionKind?: 'offer-detail' | 'store-qualification' | 'store-sample';
+    transportLeaseNotAfter?: string;
+    requestDeadlineAt?: string;
+    payloadDeadlineAt?: string;
   } = {},
 ): ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' } {
   const requestId = `request-${ordinal}`;
@@ -1661,7 +1668,8 @@ function signedExecuteRequest(
     pageActionBusinessHash,
     actionKind,
     startNotBefore: now.toISOString(),
-    deadlineAt: '2026-07-31T08:07:00.000Z',
+    deadlineAt: credentialOverrides.payloadDeadlineAt
+      ?? '2026-07-31T08:07:00.000Z',
     leaseNotAfter: '2026-07-31T08:08:00.000Z',
     logicalLineage,
     logicalLineageHash,
@@ -1672,14 +1680,30 @@ function signedExecuteRequest(
     schema: 'profile-supervisor.rpc.v2' as const,
     rpcId: `rpc-${ordinal}`,
     method: 'collector.pageAction.execute' as const,
-    deadlineAt: '2026-07-31T08:07:00.000Z',
+    deadlineAt: credentialOverrides.requestDeadlineAt
+      ?? '2026-07-31T08:07:00.000Z',
     binding: {
       profileId: PROFILE_ID,
       daemonInstanceId: DAEMON_ID,
       contextGeneration: 1,
-      supervisor: supervisorFence(),
-      reservation: reservationFence(),
-      workUnit: workUnitFence(),
+      supervisor: {
+        ...supervisorFence(),
+        ...(credentialOverrides.transportLeaseNotAfter === undefined
+          ? {}
+          : { leaseNotAfter: credentialOverrides.transportLeaseNotAfter }),
+      },
+      reservation: {
+        ...reservationFence(),
+        ...(credentialOverrides.transportLeaseNotAfter === undefined
+          ? {}
+          : { leaseNotAfter: credentialOverrides.transportLeaseNotAfter }),
+      },
+      workUnit: {
+        ...workUnitFence(),
+        ...(credentialOverrides.transportLeaseNotAfter === undefined
+          ? {}
+          : { leaseNotAfter: credentialOverrides.transportLeaseNotAfter }),
+      },
       transportAuthority,
       renewalCredential: null,
       controlCredential: null,
@@ -1710,7 +1734,8 @@ function signedExecuteRequest(
       credentialNotBefore: '2026-07-31T07:59:00.000Z',
       credentialExpiresAt:
         credentialOverrides.credentialExpiresAt ?? '2026-07-31T08:05:00.000Z',
-      leaseNotAfter: '2026-07-31T08:08:00.000Z',
+      leaseNotAfter: credentialOverrides.transportLeaseNotAfter
+        ?? '2026-07-31T08:08:00.000Z',
       keyId: 'key1',
     },
     algorithm: 'HMAC-SHA256',

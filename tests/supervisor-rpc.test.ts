@@ -338,19 +338,36 @@ describe('Profile Supervisor RPC protocol', () => {
     await authorize(lookup, 'lookup_receipt', '2026-07-31T08:11:00.000Z');
   });
 
-  it('binds an execution renewal to the parent RPC while allowing a fresh inner RPC id', () => {
-    const payload = schedulerPageAction();
+  it('binds an extended execution renewal to the parent RPC and immutable payload', () => {
+    const payload = {
+      ...schedulerPageAction(),
+      deadlineAt: '2026-07-31T08:30:00.000Z',
+    };
     const initial = workRequest('collector.pageAction.execute', payload, {
-      deadlineAt: payload.deadlineAt,
+      deadlineAt: '2026-07-31T08:04:00.000Z',
       fences: payload.executionLineage.fences,
       issuedAt: '2026-07-31T08:00:00.000Z',
       credentialExpiresAt: '2026-07-31T08:04:00.000Z',
     });
+    const extendedFences = {
+      supervisor: {
+        ...payload.executionLineage.fences.supervisor,
+        leaseNotAfter: '2026-07-31T08:20:00.000Z',
+      },
+      reservation: {
+        ...payload.executionLineage.fences.reservation,
+        leaseNotAfter: '2026-07-31T08:20:00.000Z',
+      },
+      workUnit: {
+        ...payload.executionLineage.fences.workUnit,
+        leaseNotAfter: '2026-07-31T08:20:00.000Z',
+      },
+    };
     const renewal = workRequest('collector.pageAction.execute', payload, {
-      deadlineAt: payload.deadlineAt,
-      fences: payload.executionLineage.fences,
+      deadlineAt: '2026-07-31T08:12:00.000Z',
+      fences: extendedFences,
       issuedAt: '2026-07-31T08:02:00.000Z',
-      credentialExpiresAt: '2026-07-31T08:06:00.000Z',
+      credentialExpiresAt: '2026-07-31T08:12:00.000Z',
     });
 
     const parsed = parseExecutionRenewalFrame({
@@ -365,6 +382,73 @@ describe('Profile Supervisor RPC protocol', () => {
     expect(parsed.rpcId).toBe(initial.rpcId);
     expect(parsed.request.rpcId).toBe(renewal.rpcId);
     expect(parsed.request.rpcId).not.toBe(parsed.rpcId);
+    expect(parsed.request.payload).toEqual(initial.payload);
+    expect(parsed.request.binding.workUnit?.leaseNotAfter)
+      .toBe('2026-07-31T08:20:00.000Z');
+    expect(() => validateRpcBinding(
+      parsed.request,
+      expectedAt('2026-07-31T08:03:00.000Z'),
+    )).not.toThrow();
+  });
+
+  it('rejects renewal horizons that regress or exceed the immutable action deadline', () => {
+    const payload = schedulerPageAction();
+    const regressedFences = {
+      supervisor: {
+        ...payload.executionLineage.fences.supervisor,
+        leaseNotAfter: '2026-07-31T08:06:00.000Z',
+      },
+      reservation: {
+        ...payload.executionLineage.fences.reservation,
+        leaseNotAfter: '2026-07-31T08:06:00.000Z',
+      },
+      workUnit: {
+        ...payload.executionLineage.fences.workUnit,
+        leaseNotAfter: '2026-07-31T08:06:00.000Z',
+      },
+    };
+    const regressed = parseSupervisorRpcRequest(
+      workRequest('collector.pageAction.execute', payload, {
+        deadlineAt: '2026-07-31T08:05:00.000Z',
+        fences: regressedFences,
+        issuedAt: '2026-07-31T08:02:00.000Z',
+        credentialExpiresAt: '2026-07-31T08:05:00.000Z',
+      }),
+      {
+        verification: schedulerVerification(payload),
+        now: new Date('2026-07-31T08:02:00.000Z'),
+      },
+    );
+    expect(() => validateRpcBinding(
+      regressed,
+      expectedAt('2026-07-31T08:03:00.000Z'),
+    )).toThrowError(expect.objectContaining({ code: 'LEASE_RENEWAL_REGRESSION' }));
+
+    const extendedPayload = {
+      ...payload,
+      deadlineAt: '2026-07-31T08:05:00.000Z',
+    };
+    const currentFences = {
+      supervisor: { ...payload.executionLineage.fences.supervisor },
+      reservation: { ...payload.executionLineage.fences.reservation },
+      workUnit: { ...payload.executionLineage.fences.workUnit },
+    };
+    const outsideDeadline = parseSupervisorRpcRequest(
+      workRequest('collector.pageAction.execute', extendedPayload, {
+        deadlineAt: '2026-07-31T08:06:00.000Z',
+        fences: currentFences,
+        issuedAt: '2026-07-31T08:02:00.000Z',
+        credentialExpiresAt: '2026-07-31T08:06:00.000Z',
+      }),
+      {
+        verification: schedulerVerification(extendedPayload),
+        now: new Date('2026-07-31T08:02:00.000Z'),
+      },
+    );
+    expect(() => validateRpcBinding(
+      outsideDeadline,
+      expectedAt('2026-07-31T08:03:00.000Z'),
+    )).toThrowError(expect.objectContaining({ code: 'RPC_DEADLINE_OUTSIDE_LEASE' }));
   });
 });
 

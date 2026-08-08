@@ -711,9 +711,9 @@ export function validateRpcBinding(
   if (request.method === 'collector.pageAction.execute') {
     const payload = request.payload as PageActionRequestV1;
     const fences = payload.executionLineage.fences;
-    assertFenceEqual(binding.supervisor, fences.supervisor, 'supervisor');
-    assertFenceEqual(binding.reservation!, fences.reservation, 'reservation');
-    assertFenceEqual(binding.workUnit!, fences.workUnit, 'workUnit');
+    assertCurrentFence(binding.supervisor, fences.supervisor, 'supervisor');
+    assertCurrentFence(binding.reservation!, fences.reservation, 'reservation');
+    assertCurrentFence(binding.workUnit!, fences.workUnit, 'workUnit');
     equal(payload.executionLineage.profile.profileId, expected.profileId, 'execution profileId');
     equal(
       payload.executionLineage.profile.daemonInstanceId,
@@ -725,27 +725,31 @@ export function validateRpcBinding(
       expected.contextGeneration,
       'execution contextGeneration',
     );
-    const topLease = earliestBindingLease;
-    if (Date.parse(payload.leaseNotAfter) !== topLease) {
+    const frozenTopLease = Math.min(
+      Date.parse(fences.supervisor.leaseNotAfter),
+      Date.parse(fences.reservation.leaseNotAfter),
+      Date.parse(fences.workUnit.leaseNotAfter),
+    );
+    if (Date.parse(payload.leaseNotAfter) !== frozenTopLease) {
       throw new SupervisorRpcError(
         'LEASE_NOT_AFTER_MISMATCH',
-        'PageAction leaseNotAfter must equal the earliest presented lease boundary.',
+        'PageAction leaseNotAfter must equal its earliest immutable lease boundary.',
         false,
       );
     }
     if (rpcDeadline > Date.parse(payload.deadlineAt)) {
       throw new SupervisorRpcError(
         'RPC_DEADLINE_OUTSIDE_LEASE',
-        'RPC deadline exceeds the PageAction or lease boundary.',
+        'RPC deadline exceeds the immutable PageAction deadline.',
         false,
       );
     }
   } else if (request.method === 'collector.pageAction.cancel') {
     const payload = request.payload as PageActionCancelV1;
     const fences = payload.executionLineage.fences;
-    assertFenceEqual(binding.supervisor, fences.supervisor, 'cancel supervisor');
-    assertFenceEqual(binding.reservation!, fences.reservation, 'cancel reservation');
-    assertFenceEqual(binding.workUnit!, fences.workUnit, 'cancel workUnit');
+    assertCurrentFence(binding.supervisor, fences.supervisor, 'cancel supervisor');
+    assertCurrentFence(binding.reservation!, fences.reservation, 'cancel reservation');
+    assertCurrentFence(binding.workUnit!, fences.workUnit, 'cancel workUnit');
     equal(payload.executionLineage.profile.profileId, expected.profileId, 'cancel profileId');
     equal(
       payload.executionLineage.profile.daemonInstanceId,
@@ -1323,6 +1327,23 @@ function assertFenceEqual(left: LeaseFenceV1, right: LeaseFenceV1, name: string)
     || left.leaseNotAfter !== right.leaseNotAfter
   ) {
     throw new SupervisorRpcError('STALE_FENCE', `${name} fence does not match.`, false);
+  }
+}
+
+function assertCurrentFence(current: LeaseFenceV1, frozen: LeaseFenceV1, name: string): void {
+  if (
+    current.leaseId !== frozen.leaseId
+    || current.generation !== frozen.generation
+    || current.fencingToken !== frozen.fencingToken
+  ) {
+    throw new SupervisorRpcError('STALE_FENCE', `${name} fence identity does not match.`, false);
+  }
+  if (Date.parse(current.leaseNotAfter) < Date.parse(frozen.leaseNotAfter)) {
+    throw new SupervisorRpcError(
+      'LEASE_RENEWAL_REGRESSION',
+      `${name} fence lease boundary regressed.`,
+      false,
+    );
   }
 }
 
