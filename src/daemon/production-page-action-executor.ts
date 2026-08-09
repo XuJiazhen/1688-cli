@@ -84,6 +84,7 @@ import {
   type SearchRuntimeResultV1,
 } from '../session/search-runtime.js';
 import {
+  startSearchFilterConfigCaptureV1,
   startSearchPageCaptureV1,
   type SearchPageCaptureV1,
 } from '../session/search-capture.js';
@@ -116,6 +117,7 @@ import { CliError } from '../io/errors.js';
 
 export interface ProductionPageActionExecutorOptions {
   artifactDirectory: string;
+  artifactReadDirectories?: readonly string[];
   storeSampleFreshnessMs?: number;
   now?: () => Date;
   idFactory?: () => string;
@@ -214,6 +216,13 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
   constructor(private readonly options: ProductionPageActionExecutorOptions) {
     if (!path.isAbsolute(options.artifactDirectory)) {
       throw new TypeError('Collector artifact directory must be absolute.');
+    }
+    if (
+      options.artifactReadDirectories?.some((directory) => !path.isAbsolute(directory))
+      || new Set(options.artifactReadDirectories ?? []).size
+        !== (options.artifactReadDirectories ?? []).length
+    ) {
+      throw new TypeError('Collector artifact read directories must be unique absolute paths.');
     }
     this.now = options.now ?? (() => new Date());
     this.idFactory = options.idFactory ?? randomUUID;
@@ -461,6 +470,18 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
                 const evidenceRef = await this.persistRawArchive({
                   kind: 'search-response',
                   parserRevision: 'search-response-v1@1',
+                  request,
+                  ordinal,
+                  requestBusinessHash: compiledRequest.requestBusinessHash,
+                  payload: rawResponseText,
+                });
+                rawEvidenceRefs.push(evidenceRef);
+                evidenceRefsByAttempt.set(ordinal, [...rawEvidenceRefs]);
+              },
+              onRawFilterConfigResponse: async (rawResponseText) => {
+                const evidenceRef = await this.persistRawArchive({
+                  kind: 'search-filter-config',
+                  parserRevision: 'search-filter-config-v1@1',
                   request,
                   ordinal,
                   requestBusinessHash: compiledRequest.requestBusinessHash,
@@ -1319,17 +1340,39 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
   }
 
   private async readArtifact(reference: string): Promise<unknown> {
+    const roots = [
+      this.options.artifactDirectory,
+      ...(this.options.artifactReadDirectories ?? []),
+    ];
     if (/^sha256:[0-9a-f]{64}$/u.test(reference)) {
-      return readContentAddressedArtifactV1(this.options.artifactDirectory, reference);
+      let missing: unknown;
+      for (const root of roots) {
+        try {
+          return await readContentAddressedArtifactV1(root, reference);
+        } catch (error) {
+          if (collectorErrorCode(error) !== 'COLLECTOR_ARTIFACT_NOT_FOUND') throw error;
+          missing = error;
+        }
+      }
+      throw missing;
     }
     const match = reference.match(/^artifact:([A-Za-z0-9._-]+)$/u);
     if (!match?.[1]) throw new Error('Collector artifact reference is invalid.');
-    const resolved = path.join(this.options.artifactDirectory, `${match[1]}.json`);
-    const relative = path.relative(this.options.artifactDirectory, resolved);
-    if (relative.startsWith('..') || path.isAbsolute(relative)) {
-      throw new Error('Collector artifact reference escapes its configured root.');
+    let missing: unknown;
+    for (const root of roots) {
+      const resolved = path.join(root, `${match[1]}.json`);
+      const relative = path.relative(root, resolved);
+      if (relative.startsWith('..') || path.isAbsolute(relative)) {
+        throw new Error('Collector artifact reference escapes its configured root.');
+      }
+      try {
+        return JSON.parse(await fs.readFile(resolved, 'utf8')) as unknown;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+        missing = error;
+      }
     }
-    return JSON.parse(await fs.readFile(resolved, 'utf8')) as unknown;
+    throw missing;
   }
 
   private async persistRawArchive(input: {
@@ -2278,8 +2321,16 @@ export async function navigateCompiledSearchPageV1(input: {
   admitRemoteAttempt(): Promise<void>;
   assertCheckpointAuthorized(operation: 'checkpoint'): Promise<void>;
   onRawResponse?: (rawResponseText: string) => Promise<void>;
+  onRawFilterConfigResponse?: (rawResponseText: string) => Promise<void>;
 }) {
   await input.admitRemoteAttempt();
+  const filterConfigCapture = input.onRawFilterConfigResponse === undefined
+    ? null
+    : startSearchFilterConfigCaptureV1({
+        page: input.page,
+        timeoutMs: 20_000,
+        onRawResponse: input.onRawFilterConfigResponse,
+      });
   const capture = startSearchPageCaptureV1({
     page: input.page,
     compiledRequest: input.compiledRequest,
@@ -2314,6 +2365,8 @@ export async function navigateCompiledSearchPageV1(input: {
     if (authorizationFailed) throw error;
     if (navigationFailed) throw typedNavigationFailure(error, 'SEARCH_NAVIGATION_FAILED');
     throw typedSearchCaptureFailureV1(error);
+  } finally {
+    await filterConfigCapture?.disposeAndDrain();
   }
   await input.assertCheckpointAuthorized('checkpoint');
   return observed;
@@ -2837,6 +2890,10 @@ function collectorCategory(value: unknown): CollectorErrorV1['category'] {
   ].includes(String(value))
     ? value as CollectorErrorV1['category']
     : 'protocol';
+}
+
+function collectorErrorCode(error: unknown): string | null {
+  return error instanceof CliError ? error.code : null;
 }
 
 export function collectorRemoteFailureV1(error: unknown): CollectorErrorV1 {

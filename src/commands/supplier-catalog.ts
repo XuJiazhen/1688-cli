@@ -712,7 +712,13 @@ export function createPlaywrightCatalogAdapter(
         if (
           transportMode !== 'auto' ||
           !(error instanceof CliError) ||
-          error.details.fallbackAllowed !== true
+          (
+            error.details.fallbackAllowed !== true
+            && !(
+              error.code === 'CATALOG_MTOP_RUNTIME_UNAVAILABLE'
+              && error.details.failureKind === 'runtime-unavailable'
+            )
+          )
         ) {
           throw error;
         }

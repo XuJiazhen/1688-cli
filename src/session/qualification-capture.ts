@@ -337,7 +337,13 @@ export async function captureSupplierQualificationForAction<TResult>(
     },
     parse: async (response) => {
       const rawResponseText = await response.text();
-      const rawPayload = parseMtopJsonp(rawResponseText);
+      let rawPayload: unknown;
+      try {
+        rawPayload = parseMtopJsonp(rawResponseText);
+      } catch (error) {
+        await options.onRawResponse?.(rawResponseText);
+        throw error;
+      }
       riskControlDetected ||= qualificationResponseSignalsRiskControl(rawPayload);
       await options.onRawResponse?.(rawResponseText);
       return {

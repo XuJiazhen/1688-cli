@@ -96,6 +96,28 @@ function intent(overrides: Partial<SearchIntentV1> = {}): SearchIntentV1 {
 }
 
 describe('Search Contract Resolver and Compiler V1', () => {
+  it('discovers the live sortType catalog with its exact supported directions', () => {
+    const parsed = parseSearchFilterConfigSnapshotV1({
+      snapshotId: 'live-sort-catalog-1', keyword: '暖炉',
+      observedAt: NOW, expiresAt: LATER,
+      payload: { data: { data: { filterData: {
+        filtbarBottom: [
+          { label: '综合', type: 'sort', urlKey: 'sortType', value: 'normal', supportAsc: 'false', supportDesc: 'true' },
+          { label: '销量', type: 'sort', urlKey: 'sortType', value: 'va_sales360', supportAsc: 'false', supportDesc: 'true' },
+          { label: '价格', type: 'sort', urlKey: 'sortType', value: 'price', supportAsc: 'true', supportDesc: 'true' },
+        ],
+        filtbarLeft: [], filtbarRight: [],
+        filters: [{ label: '起订量', type: 'quantityBegin', urlKey: 'quantityBegin' }],
+      } } } },
+    });
+    expect(parsed.sortNodes).toEqual([
+      { label: '综合', sortType: 'normal', descendOrder: true },
+      { label: '销量', sortType: 'va_sales360', descendOrder: true },
+      { label: '价格', sortType: 'price', descendOrder: false },
+      { label: '价格', sortType: 'price', descendOrder: true },
+    ]);
+  });
+
   it('resolves opaque atoms and all typed numeric/parent keys against one snapshot', () => {
     const filterSnapshot = snapshot();
     const resolved = resolveSearchIntentV1({

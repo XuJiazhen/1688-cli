@@ -3,7 +3,11 @@ import {
   mapConsignmentPayload,
   mapShopCardPayload,
 } from '../src/session/offer-evidence.js';
-import { readOfferSourceCorrelationScopeV1 } from '../src/commands/offer.js';
+import {
+  matchesOfferDetailServiceResponseV1,
+  readOfferSourceCorrelationScopeV1,
+  resolveOfferSourceCorrelationScopeV1,
+} from '../src/commands/offer.js';
 
 describe('offer source response scope', () => {
   it('derives correlation only from the captured request and response identities', () => {
@@ -29,6 +33,71 @@ describe('offer source response scope', () => {
       }))}`,
       { data: { offerId: '100', sellerLoginId: 'member-1' } },
     )).toEqual({ correlatedOfferId: '100', correlatedMemberId: null });
+  });
+
+  it('binds a store-scoped response through the observed offer seller identity', () => {
+    const requestUrl = `https://h5api.m.1688.com/h5/source/1.0/?data=${encodeURIComponent(JSON.stringify({
+      sellerLoginId: 'seller-login-1',
+    }))}`;
+    expect(resolveOfferSourceCorrelationScopeV1({
+      requestUrl,
+      rawPayload: { data: { model: { shopName: 'Shop' } } },
+      observedOfferId: '100',
+      observedSellerLoginId: 'seller-login-1',
+      observedSellerMemberId: 'member-1',
+    })).toEqual({ correlatedOfferId: '100', correlatedMemberId: 'member-1' });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      requestUrl,
+      rawPayload: { data: { model: { shopName: 'Shop' } } },
+      observedOfferId: '100',
+      observedSellerLoginId: 'another-login',
+      observedSellerMemberId: 'member-1',
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      requestUrl: 'https://h5api.m.1688.com/h5/source/1.0/',
+      rawPayload: { data: { sellerLoginId: 'seller-login-1' } },
+      observedOfferId: '100',
+      observedSellerLoginId: 'seller-login-1',
+      observedSellerMemberId: 'member-1',
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      requestUrl: `https://h5api.m.1688.com/h5/source/1.0/?data=${encodeURIComponent(JSON.stringify({
+        offerId: '999', sellerLoginId: 'seller-login-1',
+      }))}`,
+      rawPayload: {},
+      observedOfferId: '100',
+      observedSellerLoginId: 'seller-login-1',
+      observedSellerMemberId: 'member-1',
+    })).toEqual({ correlatedOfferId: '999', correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      requestUrl,
+      rawPayload: { data: { offerIds: [{ offerId: '100' }, { offerId: '999' }] } },
+      observedOfferId: '100',
+      observedSellerLoginId: 'seller-login-1',
+      observedSellerMemberId: 'member-1',
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+  });
+
+  it('recognizes a percent-encoded offer detail service request exactly', () => {
+    const requestUrl = `https://h5api.m.1688.com/h5/mtop.1688.mmga.offerdetail.service/1.0/?data=${encodeURIComponent(JSON.stringify({
+      mmgaRequest: { serviceName: 'offerPCConsignInfoService' },
+    }))}`;
+    expect(matchesOfferDetailServiceResponseV1(
+      requestUrl,
+      'offerPCConsignInfoService',
+    )).toBe(true);
+    expect(matchesOfferDetailServiceResponseV1(
+      requestUrl,
+      'anotherService',
+    )).toBe(false);
+    expect(matchesOfferDetailServiceResponseV1(
+      'https://h5api.m.1688.com/h5/mtop.1688.mmga.offerdetail.service/1.0/?serviceName=offerPCConsignInfoService',
+      'offerPCConsignInfoService',
+    )).toBe(true);
+    expect(matchesOfferDetailServiceResponseV1(
+      `https://example.com/?next=${encodeURIComponent(requestUrl)}`,
+      'offerPCConsignInfoService',
+    )).toBe(false);
   });
 });
 

@@ -603,6 +603,7 @@ describe('Production PageAction bridge', () => {
   it('resolves shared content-addressed Search artifacts and fails closed when bytes are missing or tampered', async () => {
     const now = new Date('2026-07-31T08:00:00.000Z');
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-cas-'));
+    const artifactReadDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'production-search-cas-read-'));
     const parameterSet = compileSearchParameterSetV1({
       keyword: 'fixture', sort: 'relevance',
       filterConfigSnapshotId: 'filter-1', filterConfigSnapshotHash: `sha256:${'a'.repeat(64)}`,
@@ -613,12 +614,13 @@ describe('Production PageAction bridge', () => {
     const bytes = Buffer.from(JSON.stringify(parameterSet));
     const digest = createHash('sha256').update(bytes).digest('hex');
     const artifactRef = `sha256:${digest}`;
-    const artifactPath = path.join(artifactDirectory, digest.slice(0, 2), digest);
+    const artifactPath = path.join(artifactReadDirectory, digest.slice(0, 2), digest);
     const compiled = compileSearchPageRequestV1({
       parameterSet, page: 1, pageSessionId: 'content-addressed-page-session-1',
     });
     const executor = new ProductionPageActionExecutor({
-      artifactDirectory, now: () => now, idFactory: () => 'content-addressed-artifact',
+      artifactDirectory, artifactReadDirectories: [artifactReadDirectory],
+      now: () => now, idFactory: () => 'content-addressed-artifact',
       pace: async () => {},
     });
     const execute = async () => {
@@ -682,6 +684,7 @@ describe('Production PageAction bridge', () => {
       });
     } finally {
       await fs.rm(artifactDirectory, { recursive: true, force: true });
+      await fs.rm(artifactReadDirectory, { recursive: true, force: true });
     }
   });
 

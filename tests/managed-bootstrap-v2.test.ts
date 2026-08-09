@@ -50,9 +50,18 @@ async function writeConfig(override: Record<string, unknown> = {}): Promise<stri
 
 describe('managed daemon v2 config authority', () => {
   it('loads the exact immutable transport authority', async () => {
-    const config = await loadManagedSupervisorConfig(await writeConfig());
+    const configPath = await writeConfig();
+    const artifactReadDirectory = path.join(path.dirname(configPath), 'predecessor-artifacts');
+    await fs.mkdir(artifactReadDirectory);
+    const value = JSON.parse(await fs.readFile(configPath, 'utf8')) as Record<string, unknown>;
+    await fs.writeFile(configPath, JSON.stringify({
+      ...value,
+      artifactReadDirectories: [artifactReadDirectory],
+    }));
+    const config = await loadManagedSupervisorConfig(configPath);
     expect(config.schema).toBe('profile-supervisor.daemon-config.v2');
     expect(config.transportAuthority).toEqual(authority());
+    expect(config.artifactReadDirectories).toEqual([artifactReadDirectory]);
   });
 
   it('rejects missing or lossy authority before runtime construction', async () => {
@@ -62,5 +71,8 @@ describe('managed daemon v2 config authority', () => {
     await expect(loadManagedSupervisorConfig(await writeConfig({
       transportAuthority: { ...authority(), networkAllowed: false },
     }))).rejects.toThrow(/unknown fields/u);
+    await expect(loadManagedSupervisorConfig(await writeConfig({
+      artifactReadDirectories: ['relative-artifacts'],
+    }))).rejects.toThrow(/unique absolute paths/u);
   });
 });

@@ -80,6 +80,14 @@ describe('Collector immutable sanitized raw archives', () => {
     expect(JSON.stringify(sanitized)).not.toContain('secret');
   });
 
+  it('preserves identity-bearing URL hosts while redacting unknown query values', () => {
+    expect(sanitizeCollectorPayloadV1({
+      shopUrl: 'http://shop13800138000.1688.com/catalog?phone=13800138000#top',
+    })).toEqual({
+      shopUrl: 'http://shop13800138000.1688.com/catalog?phone=%5Bredacted%5D',
+    });
+  });
+
   it('writes one private content-addressed immutable artifact', async () => {
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collector-raw-'));
     const archive = createCollectorRawArchiveV1({

@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { describe, expect, it } from 'vitest';
 import {
+  assertOfferPageIdentityV1,
   executeRaw,
   bindShopCardSourceToPageContextV1,
   mapContextSkuBizModel,
@@ -32,6 +33,16 @@ function diagnostics(
 }
 
 describe('requireSkuSelectorModel', () => {
+  it('rejects an unproven or mismatched canonical Offer page identity', () => {
+    expect(() => assertOfferPageIdentityV1('1001', '1001')).not.toThrow();
+    expect(() => assertOfferPageIdentityV1(null, '1001')).toThrowError(
+      expect.objectContaining({ code: 'OFFER_PAGE_SCOPE_MISMATCH' }),
+    );
+    expect(() => assertOfferPageIdentityV1('1002', '1001')).toThrowError(
+      expect.objectContaining({ code: 'OFFER_PAGE_SCOPE_MISMATCH' }),
+    );
+  });
+
   it('drains a deferred component archive before early navigation failure returns', async () => {
     const page = new EarlyFailureOfferPage();
     let archiveStarted!: () => void;

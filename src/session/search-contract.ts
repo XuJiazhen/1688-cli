@@ -468,19 +468,44 @@ function discoverSortNodes(filterData: Record<string, unknown>): SearchFilterCon
     if (Array.isArray(value)) return void value.forEach(visit);
     const record = asRecord(value);
     if (!record) return;
-    const sortType = firstText(record.sortType);
-    const descendOrder = record.descendOrder;
-    if (sortType && typeof descendOrder === 'boolean') {
-      found.push({
-        label: firstText(record.label, record.text, record.name) ?? sortType,
-        sortType,
-        descendOrder,
-      });
+    const legacySortType = firstText(record.sortType);
+    const legacyDescendOrder = booleanLike(record.descendOrder);
+    const catalogSortType = record.urlKey === 'sortType'
+      ? firstText(record.value)
+      : undefined;
+    const sortType = legacySortType ?? catalogSortType;
+    if (sortType && legacyDescendOrder !== undefined) {
+      found.push(sortNode(record, sortType, legacyDescendOrder));
+    } else if (sortType) {
+      if (booleanLike(record.supportAsc) === true) {
+        found.push(sortNode(record, sortType, false));
+      }
+      if (booleanLike(record.supportDesc) === true) {
+        found.push(sortNode(record, sortType, true));
+      }
     }
     Object.values(record).forEach(visit);
   };
   visit(filterData);
   return [...new Map(found.map((node) => [`${node.sortType}:${node.descendOrder}`, node])).values()];
+}
+
+function sortNode(
+  record: Record<string, unknown>,
+  sortType: string,
+  descendOrder: boolean,
+): SearchFilterConfigSnapshotV1['sortNodes'][number] {
+  return {
+    label: firstText(record.label, record.text, record.name) ?? sortType,
+    sortType,
+    descendOrder,
+  };
+}
+
+function booleanLike(value: unknown): boolean | undefined {
+  if (value === true || value === 'true') return true;
+  if (value === false || value === 'false') return false;
+  return undefined;
 }
 
 function composeOptions(

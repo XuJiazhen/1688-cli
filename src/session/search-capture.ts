@@ -300,6 +300,71 @@ export interface SearchPageCaptureV1 {
   };
 }
 
+/** Captures the server-published dynamic catalog without treating it as UI authority. */
+export function startSearchFilterConfigCaptureV1(input: {
+  page: Page;
+  timeoutMs: number;
+  onRawResponse(rawResponseText: string): Promise<void>;
+}) {
+  const inFlight = new Set<Promise<void>>();
+  const deadlineAt = Date.now() + input.timeoutMs;
+  let captured = false;
+  let disposed = false;
+  let captureError: unknown;
+  const handleResponse = async (response: PWResponse): Promise<void> => {
+    if (captured || disposed || !isPotentialSearchConfigResponse(response.url())) return;
+    try {
+      const rawResponseText = await response.text();
+      if (!containsSearchFilterConfigV1(rawResponseText)) return;
+      captured = true;
+      await input.onRawResponse(rawResponseText);
+    } catch (error) {
+      if (captured) captureError = error;
+    }
+  };
+  const onResponse = (response: PWResponse) => {
+    const task = handleResponse(response);
+    inFlight.add(task);
+    void task.finally(() => inFlight.delete(task));
+  };
+  const dispose = () => {
+    if (disposed) return;
+    disposed = true;
+    input.page.off('response', onResponse);
+  };
+  const disposeAndDrain = async (): Promise<void> => {
+    dispose();
+    while (inFlight.size > 0) {
+      const remainingMs = deadlineAt - Date.now();
+      if (remainingMs <= 0) throw strictSearchDrainTimeoutError();
+      await Promise.race([
+        Promise.allSettled([...inFlight]),
+        new Promise<never>((_resolve, reject) => {
+          const timer = setTimeout(
+            () => reject(strictSearchDrainTimeoutError()),
+            remainingMs,
+          );
+          timer.unref?.();
+        }),
+      ]);
+    }
+    if (captureError !== undefined) throw captureError;
+  };
+  input.page.on('response', onResponse);
+  return { captured: () => captured, dispose, disposeAndDrain };
+}
+
+export function containsSearchFilterConfigV1(rawResponseText: string): boolean {
+  try {
+    const root = asRecord(parseMtopJsonp(rawResponseText));
+    const data = asRecord(root?.['data']);
+    const inner = asRecord(data?.['data']);
+    return asRecord(inner?.['filterData']) !== null;
+  } catch {
+    return false;
+  }
+}
+
 /** Strict production capture: request parity and response completeness settle atomically. */
 export function startSearchPageCaptureV1(input: {
   page: Page;
@@ -435,4 +500,23 @@ function strictSearchDrainTimeoutError(): CliError {
       recoveryAction: 'quarantine-capture-and-inspect-archive-writer',
     },
   );
+}
+
+function isPotentialSearchConfigResponse(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:'
+      && /(?:^|\.)1688\.com$/iu.test(url.hostname)
+      && /(?:h5api|mtop|offer_search|selloffer|search)/iu.test(
+        `${url.hostname}${url.pathname}`,
+      );
+  } catch {
+    return false;
+  }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
 }

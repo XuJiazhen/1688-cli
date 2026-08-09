@@ -28,6 +28,7 @@ const INLINE_SECRET = /\b(?:authorization|cookie|mh5tk|password|secret|sign(?:at
 
 export type CollectorRawArchiveKindV1 =
   | 'search-response'
+  | 'search-filter-config'
   | 'offer-core'
   | 'offer-sku'
   | 'offer-detail'
@@ -74,6 +75,12 @@ export function sanitizeCollectorPayloadV1(
   if (typeof value === 'string') {
     if (/^https?:\/\//iu.test(value)) {
       return redactUrlForDiagnostics(value);
+    }
+    if (normalizedKey.endsWith('url')) {
+      const diagnosticUrl = redactUrlForDiagnostics(
+        value.startsWith('//') ? `https:${value}` : value,
+      );
+      if (diagnosticUrl !== '[redacted-url]') return diagnosticUrl;
     }
     const structured = parseStructuredCollectorTextV1(value);
     return structured === undefined

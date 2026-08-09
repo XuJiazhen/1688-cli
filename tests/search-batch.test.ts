@@ -111,7 +111,11 @@ describe('incremental search batches', () => {
         offerId: '1001',
         offer: {
           ...sourceOffer,
-          supplier: { ...sourceOffer.supplier, loginId: '[redacted]' },
+          supplier: {
+            ...sourceOffer.supplier,
+            loginId: '[redacted]',
+            shopUrl: 'https://supplier-1001.1688.com/',
+          },
         },
         sourcePage: 1,
         remoteSort: 'va_sales_amount_desc',
@@ -135,6 +139,26 @@ describe('incremental search batches', () => {
       completedPages: [1],
       seenOfferIds: ['1001'],
     });
+  });
+
+  it('does not corrupt numeric shop hostnames while sanitizing observations', () => {
+    const sourceOffer = offer('1002');
+    sourceOffer.supplier.shopUrl = 'http://shop13800138000.1688.com';
+
+    const batch = createSearchPageBatch({
+      unit,
+      batchId: 'batch-numeric-shop-host',
+      page: 1,
+      remoteSort: 'normal',
+      offers: [sourceOffer],
+      hasMore: false,
+      startedAt: '2026-07-22T02:00:00Z',
+      collectedAt: '2026-07-22T02:00:01Z',
+      completedAt: '2026-07-22T02:00:02Z',
+    });
+
+    expect(batch.observations[0]?.offer.supplier.shopUrl)
+      .toBe('http://shop13800138000.1688.com/');
   });
 
   it('deduplicates offerIds across pages and preserves duplicate observations', () => {
