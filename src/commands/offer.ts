@@ -514,43 +514,13 @@ export async function executeRaw(
           result.supplier.memberId,
         ) ?? captureEvidence(null, result)
       : captureEvidence(consignmentResponse, result);
-    const coreSellerShopUrlWithoutLogin = readOfferCoreSellerShopUrlAuthorityV1(
-      pageInfo.rawPayload,
-      result.offerId,
-      result.supplier.memberId,
-    );
-    const coreSellerShopUrlWithLogin = readOfferCoreSellerShopUrlAuthorityV1(
-      pageInfo.rawPayload,
-      result.offerId,
-      result.supplier.memberId,
-      result.supplier.loginId,
-    );
     const sellerShopUrlAuthority = pageInfo.sellerShopUrl
-      ?? coreSellerShopUrlWithLogin;
-    if (
-      process.env.BB1688_OFFER_AUTHORITY_DIAGNOSTICS === '1'
-      && sellerShopUrlAuthority === null
-    ) {
-      process.stderr.write(
-        `[DEBUG-offer-core-authority] ${JSON.stringify({
-          pageInfoShopUrlPresent: pageInfo.sellerShopUrl !== null,
-          rawPayloadIsObject:
-            pageInfo.rawPayload !== null
-            && typeof pageInfo.rawPayload === 'object'
-            && !Array.isArray(pageInfo.rawPayload),
-          sellerMemberPresent: result.supplier.memberId !== null,
-          sellerLoginPresent: result.supplier.loginId !== null,
-          coreWithoutLoginPresent: coreSellerShopUrlWithoutLogin !== null,
-          coreWithLoginPresent: coreSellerShopUrlWithLogin !== null,
-          core: offerCoreSellerShopUrlAuthorityDiagnosticsV1(
-            pageInfo.rawPayload,
-            result.offerId,
-            result.supplier.memberId,
-            result.supplier.loginId,
-          ),
-        })}\n`,
+      ?? readOfferCoreSellerShopUrlAuthorityV1(
+        pageInfo.rawPayload,
+        result.offerId,
+        result.supplier.memberId,
+        result.supplier.loginId,
       );
-    }
     OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
       shopCard: captureEvidence(shopCardResponse, result, {
         observedSellerShopUrl: sellerShopUrlAuthority,
@@ -634,28 +604,6 @@ function captureEvidence<T>(
         observedSellerShopUrl: options.observedSellerShopUrl ?? null,
         allowSellerShopUrlBinding: options.allowSellerShopUrlBinding ?? false,
       });
-  if (
-    captured !== null
-    && options.allowSellerShopUrlBinding === true
-    && process.env.BB1688_OFFER_AUTHORITY_DIAGNOSTICS === '1'
-    && (
-      correlation.correlatedOfferId !== offer.offerId
-      || correlation.correlatedMemberId !== offer.supplier.memberId
-    )
-  ) {
-    const diagnostics = offerSourceCorrelationDiagnosticsV1({
-      requestUrl: captured.requestUrl,
-      rawPayload: captured.rawPayload,
-      observedOfferId: offer.offerId,
-      observedSellerLoginId: offer.supplier.loginId,
-      observedSellerMemberId: offer.supplier.memberId,
-      observedSellerShopUrl: options.observedSellerShopUrl ?? null,
-      allowSellerShopUrlBinding: true,
-    });
-    process.stderr.write(
-      `[DEBUG-offer-correlation] ${JSON.stringify(diagnostics)}\n`,
-    );
-  }
   return {
     responseObserved: captured !== null,
     responseSucceeded: captured?.responseSucceeded ?? false,
@@ -775,200 +723,6 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
   };
 }
 
-type CorrelationIdentityState = 'none' | 'match' | 'mismatch' | 'conflict';
-
-export function offerSourceCorrelationDiagnosticsV1(input: {
-  requestUrl: string;
-  rawPayload: unknown;
-  observedOfferId: string;
-  observedSellerLoginId: string | null;
-  observedSellerMemberId: string | null;
-  observedSellerShopUrl?: string | null;
-  allowSellerShopUrlBinding?: boolean;
-}): Readonly<{
-  request: Readonly<{
-    offer: CorrelationIdentityState;
-    member: CorrelationIdentityState;
-    login: CorrelationIdentityState;
-    scopeUnambiguous: boolean;
-    scopeMatchesObserved: boolean;
-    sellerMatched: boolean;
-  }>;
-  response: Readonly<{
-    offer: CorrelationIdentityState;
-    member: CorrelationIdentityState;
-    login: CorrelationIdentityState;
-    scopeUnambiguous: boolean;
-    scopeMatchesObserved: boolean;
-    shopUrlMatched: boolean;
-  }>;
-  canonical: Readonly<{
-    offer: CorrelationIdentityState;
-    member: CorrelationIdentityState;
-    login: CorrelationIdentityState;
-    scopeUnambiguous: boolean;
-    scopeMatchesObserved: boolean;
-  }>;
-  predicates: Readonly<{
-    observedMemberPresent: boolean;
-    observedShopUrlPresent: boolean;
-    urlBranchEligible: boolean;
-    loginBranchEligible: boolean;
-  }>;
-}> {
-  const canonical = readOfferSourceCorrelationEvidenceV1(
-    input.requestUrl,
-    input.rawPayload,
-  );
-  const request = readOfferSourceCorrelationEvidenceV1(input.requestUrl, null);
-  const response = readOfferCorrelationEvidenceV1([input.rawPayload]);
-  const requestScopeUnambiguous = correlationScopeUnambiguous(request);
-  const requestScopeMatchesObserved = correlationScopeMatchesObserved(
-    request,
-    input,
-  );
-  const responseScopeUnambiguous = correlationScopeUnambiguous(response);
-  const responseScopeMatchesObserved = correlationScopeMatchesObserved(
-    response,
-    input,
-  );
-  const canonicalScopeUnambiguous = correlationScopeUnambiguous(canonical);
-  const canonicalScopeMatchesObserved = correlationScopeMatchesObserved(
-    canonical,
-    input,
-  );
-  const sellerMatched = input.observedSellerLoginId !== null
-    && input.observedSellerMemberId !== null
-    && !request.loginIdentityConflict
-    && request.correlatedLoginId === input.observedSellerLoginId;
-  const observedShopUrlPresent = input.observedSellerShopUrl !== null
-    && input.observedSellerShopUrl !== undefined;
-  const shopUrlMatched = input.allowSellerShopUrlBinding === true
-    && observedShopUrlPresent
-    && exactCanonicalShopUrlMatch(
-      input.rawPayload,
-      input.observedSellerShopUrl!,
-    );
-  return Object.freeze({
-    request: Object.freeze({
-      offer: correlationIdentityState(
-        request.correlatedOfferId,
-        request.offerIdentityConflict,
-        input.observedOfferId,
-      ),
-      member: correlationIdentityState(
-        request.correlatedMemberId,
-        request.memberIdentityConflict,
-        input.observedSellerMemberId,
-      ),
-      login: correlationIdentityState(
-        request.correlatedLoginId,
-        request.loginIdentityConflict,
-        input.observedSellerLoginId,
-      ),
-      scopeUnambiguous: requestScopeUnambiguous,
-      scopeMatchesObserved: requestScopeMatchesObserved,
-      sellerMatched,
-    }),
-    response: Object.freeze({
-      offer: correlationIdentityState(
-        response.correlatedOfferId,
-        response.offerIdentityConflict,
-        input.observedOfferId,
-      ),
-      member: correlationIdentityState(
-        response.correlatedMemberId,
-        response.memberIdentityConflict,
-        input.observedSellerMemberId,
-      ),
-      login: correlationIdentityState(
-        response.correlatedLoginId,
-        response.loginIdentityConflict,
-        input.observedSellerLoginId,
-      ),
-      scopeUnambiguous: responseScopeUnambiguous,
-      scopeMatchesObserved: responseScopeMatchesObserved,
-      shopUrlMatched,
-    }),
-    canonical: Object.freeze({
-      offer: correlationIdentityState(
-        canonical.correlatedOfferId,
-        canonical.offerIdentityConflict,
-        input.observedOfferId,
-      ),
-      member: correlationIdentityState(
-        canonical.correlatedMemberId,
-        canonical.memberIdentityConflict,
-        input.observedSellerMemberId,
-      ),
-      login: correlationIdentityState(
-        canonical.correlatedLoginId,
-        canonical.loginIdentityConflict,
-        input.observedSellerLoginId,
-      ),
-      scopeUnambiguous: canonicalScopeUnambiguous,
-      scopeMatchesObserved: canonicalScopeMatchesObserved,
-    }),
-    predicates: Object.freeze({
-      observedMemberPresent: input.observedSellerMemberId !== null,
-      observedShopUrlPresent,
-      urlBranchEligible: shopUrlMatched
-        && input.observedSellerMemberId !== null
-        && requestScopeUnambiguous
-        && requestScopeMatchesObserved
-        && responseScopeUnambiguous
-        && responseScopeMatchesObserved,
-      loginBranchEligible: sellerMatched
-        && canonicalScopeUnambiguous
-        && canonicalScopeMatchesObserved,
-    }),
-  });
-}
-
-function correlationScopeUnambiguous(input: {
-  offerIdentityConflict: boolean;
-  memberIdentityConflict: boolean;
-  loginIdentityConflict: boolean;
-}): boolean {
-  return !input.offerIdentityConflict
-    && !input.memberIdentityConflict
-    && !input.loginIdentityConflict;
-}
-
-function correlationScopeMatchesObserved(
-  correlation: {
-    correlatedOfferId: string | null;
-    correlatedMemberId: string | null;
-    correlatedLoginId: string | null;
-  },
-  observed: {
-    observedOfferId: string;
-    observedSellerMemberId: string | null;
-    observedSellerLoginId: string | null;
-  },
-): boolean {
-  return (
-    correlation.correlatedOfferId === null
-      || correlation.correlatedOfferId === observed.observedOfferId
-  ) && (
-    correlation.correlatedMemberId === null
-      || correlation.correlatedMemberId === observed.observedSellerMemberId
-  ) && (
-    correlation.correlatedLoginId === null
-      || correlation.correlatedLoginId === observed.observedSellerLoginId
-  );
-}
-
-function correlationIdentityState(
-  value: string | null,
-  conflict: boolean,
-  observed: string | null,
-): CorrelationIdentityState {
-  if (conflict) return 'conflict';
-  if (value === null) return 'none';
-  return value === observed ? 'match' : 'mismatch';
-}
-
 export function preferredCanonicalSellerShopUrlV1(input: {
   sellerWinportUrl?: unknown;
   sellerWinportUrlMapDefaultUrl?: unknown;
@@ -1019,51 +773,6 @@ export function readOfferCoreSellerShopUrlAuthorityV1(
     sellerWinportUrlMapDefaultUrl:
       asRecord(seller?.sellerWinportUrlMap)?.defaultUrl,
     winportUrl: seller?.winportUrl,
-  });
-}
-
-function offerCoreSellerShopUrlAuthorityDiagnosticsV1(
-  rawPayload: unknown,
-  observedOfferId: string,
-  observedMemberId: string | null,
-  observedLoginId: string | null,
-): Readonly<{
-  structureComplete: boolean;
-  offer: CorrelationIdentityState;
-  member: CorrelationIdentityState;
-  login: CorrelationIdentityState;
-  candidates: ReturnType<typeof sellerShopUrlCandidateDiagnosticsV1>;
-}> {
-  const root = asRecord(rawPayload);
-  const contextResult = asRecord(root?.contextResult);
-  const data = asRecord(contextResult?.data);
-  const gallery = asRecord(asRecord(data?.gallery)?.fields);
-  const global = asRecord(contextResult?.global);
-  const globalData = asRecord(global?.globalData);
-  const model = asRecord(globalData?.model);
-  const seller = asRecord(model?.sellerModel);
-  const offerId = correlationScalar(gallery?.offerId);
-  const memberId = correlationScalar(seller?.memberId);
-  const loginId = correlationScalar(seller?.loginId);
-  return Object.freeze({
-    structureComplete:
-      root !== null
-      && contextResult !== null
-      && data !== null
-      && gallery !== null
-      && global !== null
-      && globalData !== null
-      && model !== null
-      && seller !== null,
-    offer: correlationIdentityState(offerId, false, observedOfferId),
-    member: correlationIdentityState(memberId, false, observedMemberId),
-    login: correlationIdentityState(loginId, false, observedLoginId),
-    candidates: sellerShopUrlCandidateDiagnosticsV1({
-      sellerWinportUrl: seller?.sellerWinportUrl,
-      sellerWinportUrlMapDefaultUrl:
-        asRecord(seller?.sellerWinportUrlMap)?.defaultUrl,
-      winportUrl: seller?.winportUrl,
-    }),
   });
 }
 
@@ -2007,14 +1716,7 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     }, debug)
     .catch(() => null);
 
-  if (!fromContext) {
-    if (process.env.BB1688_OFFER_AUTHORITY_DIAGNOSTICS === '1') {
-      process.stderr.write(
-        '[DEBUG-offer-page-info] {"contextExtraction":"fallback"}\n',
-      );
-    }
-    return scrapeDomFallback(page);
-  }
+  if (!fromContext) return scrapeDomFallback(page);
 
   // Title from <title> as backup when subject empty.
   let title = fromContext.title;
@@ -2031,16 +1733,6 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
   const sellerShopUrl = preferredCanonicalSellerShopUrlV1(
     sellerShopUrlCandidates,
   );
-  if (
-    process.env.BB1688_OFFER_AUTHORITY_DIAGNOSTICS === '1'
-    && sellerShopUrl === null
-  ) {
-    process.stderr.write(
-      `[DEBUG-offer-page-info] ${JSON.stringify(
-        sellerShopUrlCandidateDiagnosticsV1(sellerShopUrlCandidates),
-      )}\n`,
-    );
-  }
   return {
     ...pageInfo,
     title,
@@ -2049,55 +1741,6 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     rawPayload: sourcePayload,
     skuRawPayload: skuContext,
   };
-}
-
-function sellerShopUrlCandidateDiagnosticsV1(input: {
-  sellerWinportUrl?: unknown;
-  sellerWinportUrlMapDefaultUrl?: unknown;
-  winportUrl?: unknown;
-}): Readonly<{
-  sellerWinportUrl: 'missing' | 'canonical' | 'invalid';
-  sellerWinportUrlType: string;
-  sellerWinportUrlShape: string;
-  sellerWinportUrlMapDefaultUrl: 'missing' | 'canonical' | 'invalid';
-  sellerWinportUrlMapDefaultUrlType: string;
-  sellerWinportUrlMapDefaultUrlShape: string;
-  winportUrl: 'missing' | 'canonical' | 'invalid';
-  winportUrlType: string;
-  winportUrlShape: string;
-  uniqueCanonicalCount: number;
-}> {
-  const canonicalUrls = new Set<string>();
-  const state = (candidate: unknown): 'missing' | 'canonical' | 'invalid' => {
-    if (candidate === null || candidate === undefined) return 'missing';
-    try {
-      canonicalUrls.add(canonicalSellerShopUrlCandidateV1(candidate));
-      return 'canonical';
-    } catch {
-      return 'invalid';
-    }
-  };
-  const sellerWinportUrl = state(input.sellerWinportUrl);
-  const sellerWinportUrlMapDefaultUrl = state(
-    input.sellerWinportUrlMapDefaultUrl,
-  );
-  const winportUrl = state(input.winportUrl);
-  return Object.freeze({
-    sellerWinportUrl,
-    sellerWinportUrlType: safeValueType(input.sellerWinportUrl),
-    sellerWinportUrlShape: safeUrlValueShape(input.sellerWinportUrl),
-    sellerWinportUrlMapDefaultUrl,
-    sellerWinportUrlMapDefaultUrlType: safeValueType(
-      input.sellerWinportUrlMapDefaultUrl,
-    ),
-    sellerWinportUrlMapDefaultUrlShape: safeUrlValueShape(
-      input.sellerWinportUrlMapDefaultUrl,
-    ),
-    winportUrl,
-    winportUrlType: safeValueType(input.winportUrl),
-    winportUrlShape: safeUrlValueShape(input.winportUrl),
-    uniqueCanonicalCount: canonicalUrls.size,
-  });
 }
 
 function canonicalSellerShopUrlCandidateV1(value: unknown): string {
@@ -2111,26 +1754,6 @@ function canonicalSellerShopUrlCandidateV1(value: unknown): string {
   return canonicalProfileShopUrl(
     normalized,
   );
-}
-
-function safeValueType(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value;
-}
-
-function safeUrlValueShape(value: unknown): string {
-  if (value === null || value === undefined) return 'missing';
-  if (typeof value !== 'string') return 'non-string';
-  if (value.trim() !== value) return 'padded';
-  if (value.includes('\\')) return 'backslash';
-  if (value.startsWith('//')) return 'scheme-relative';
-  if (/^https:\/\/[^/?#]+$/u.test(value)) return 'https-no-root-slash';
-  if (/^https:\/\//u.test(value)) return 'https';
-  if (/^http:\/\//u.test(value)) return 'http';
-  if (value.startsWith('"')) return 'quoted';
-  if (/^[A-Za-z0-9.-]+\.1688\.com\/?$/u.test(value)) return 'bare-host';
-  return 'other';
 }
 
 async function scrapeDomFallback(page: Page): Promise<PageInfo> {
