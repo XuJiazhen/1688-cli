@@ -600,6 +600,19 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
       input.rawPayload,
       input.observedSellerShopUrl,
     );
+  const responseCorrelation = readOfferCorrelationEvidenceV1([
+    input.rawPayload,
+  ]);
+  const responseScopeUnambiguous = !responseCorrelation.offerIdentityConflict
+    && !responseCorrelation.memberIdentityConflict;
+  const responseScopeMatchesObserved = (
+    responseCorrelation.correlatedOfferId === null
+      || responseCorrelation.correlatedOfferId === input.observedOfferId
+  ) && (
+    responseCorrelation.correlatedMemberId === null
+      || responseCorrelation.correlatedMemberId
+        === input.observedSellerMemberId
+  );
   const canonicalScopeUnambiguous = !correlation.offerIdentityConflict
     && !correlation.memberIdentityConflict;
   const canonicalScopeMatchesObserved = (
@@ -610,9 +623,16 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
       || correlation.correlatedMemberId === input.observedSellerMemberId
   );
   if (
-    (requestSellerMatched || responseShopUrlMatched)
-    && canonicalScopeUnambiguous
-    && canonicalScopeMatchesObserved
+    (
+      responseShopUrlMatched
+      && input.observedSellerMemberId !== null
+      && responseScopeUnambiguous
+      && responseScopeMatchesObserved
+    ) || (
+      requestSellerMatched
+      && canonicalScopeUnambiguous
+      && canonicalScopeMatchesObserved
+    )
   ) {
     return {
       correlatedOfferId: input.observedOfferId,
@@ -798,10 +818,21 @@ function readOfferSourceCorrelationEvidenceV1(
       loginIdentityConflict: false,
     };
   }
+  return readOfferCorrelationEvidenceV1([...requestPayloads, rawPayload]);
+}
+
+function readOfferCorrelationEvidenceV1(payloads: readonly unknown[]): {
+  correlatedOfferId: string | null;
+  correlatedMemberId: string | null;
+  correlatedLoginId: string | null;
+  offerIdentityConflict: boolean;
+  memberIdentityConflict: boolean;
+  loginIdentityConflict: boolean;
+} {
   const offerIds = new Set<string>();
   const memberIds = new Set<string>();
   const loginIds = new Set<string>();
-  for (const payload of [...requestPayloads, rawPayload]) {
+  for (const payload of payloads) {
     collectCorrelationValues(payload, offerIds, memberIds, loginIds);
   }
   return {

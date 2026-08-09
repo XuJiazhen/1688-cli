@@ -124,6 +124,43 @@ describe('offer source response scope', () => {
     })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
   });
 
+  it('keeps response-owned Store URL authority separate from request identities', () => {
+    const input = {
+      requestUrl:
+        'https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/'
+        + `?data=${encodeURIComponent(JSON.stringify({
+          offerId: 'request-offer',
+          memberId: 'request-member',
+        }))}`,
+      rawPayload: {
+        data: { model: { shopUrl: 'https://supplier.1688.com/' } },
+      },
+      observedOfferId: '100',
+      observedSellerLoginId: null,
+      observedSellerMemberId: 'member-1',
+      observedSellerShopUrl: 'https://supplier.1688.com/',
+      allowSellerShopUrlBinding: true,
+    };
+    expect(resolveOfferSourceCorrelationScopeV1(input)).toEqual({
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+    });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      rawPayload: {
+        data: {
+          model: {
+            memberId: 'response-member-conflict',
+            shopUrl: 'https://supplier.1688.com/',
+          },
+        },
+      },
+    })).toEqual({
+      correlatedOfferId: 'request-offer',
+      correlatedMemberId: null,
+    });
+  });
+
   it('prefers canonical Seller shop authority over a mobile winport URL', () => {
     expect(preferredCanonicalSellerShopUrlV1({
       sellerWinportUrl: 'https://shop97766603w5446.1688.com/',
