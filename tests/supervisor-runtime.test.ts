@@ -1030,8 +1030,69 @@ describe('ProfileDaemonRuntime', () => {
     });
   });
 
+  it('cuts off a hung admitted executor before the RPC deadline and leaves a lookup receipt', async () => {
+    const repository = new InMemoryPageActionAcceptanceRepository();
+    const host = new FakeHost();
+    const wallClockStartedAt = Date.now();
+    const deadlineAt = new Date(now.getTime() + 150).toISOString();
+    const request = signedExecuteRequest(1, { deadlineAt });
+    let executorObservedAbort = false;
+    const runtime = makeRuntime(host, {
+      async execute(_pageAction, scope) {
+        await scope.admitRemoteAttempt({
+          remoteRequestAttemptId: 'remote-attempt-1-1',
+          ordinal: 1,
+          purpose: 'single-target',
+          requestBusinessHash: canonicalCollectorSha256V1('remote-request-1'),
+        });
+        return new Promise(() => {
+          scope.signal.addEventListener('abort', () => {
+            executorObservedAbort = true;
+          }, { once: true });
+        });
+      },
+    }, {
+      acceptanceRepository: repository,
+      cleanupGraceMs: 50,
+      now: () => new Date(now.getTime() + (Date.now() - wallClockStartedAt)),
+    });
+    await runtime.ensureWarm();
+
+    const response = await handleExecute(runtime, request);
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'RPC_DEADLINE_EXCEEDED', retryable: false },
+    });
+    expect(executorObservedAbort).toBe(true);
+    expect(host.ownedPages).toHaveLength(1);
+    expect(host.ownedPages[0]?.closed).toBe(true);
+    expect(runtime.status().runtimeState).toBe('draining');
+    await expect(handleExecute(runtime, signedExecuteRequest(2))).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'DAEMON_NOT_WARM' },
+    });
+    expect(host.createCount).toBe(1);
+    await expect(repository.inspect(signedLookupRequest(request).payload))
+      .resolves.toMatchObject({ response: null });
+    await expect(runtime.handle(signedLookupRequest(request))).resolves.toMatchObject({
+      ok: true,
+      data: {
+        executionAttemptReceipt: {
+          outcome: 'failed',
+          remoteRequestAttempts: [{
+            remoteRequestAttemptId: 'remote-attempt-1-1',
+            status: 'failed',
+            error: { code: 'REMOTE_ATTEMPT_OUTCOME_UNKNOWN', retryable: false },
+          }],
+          error: { code: 'EXECUTION_OUTCOME_UNKNOWN', retryable: false },
+        },
+      },
+    });
+  });
+
   it('does not cross the network boundary when durable admission journaling reaches expiry', async () => {
-    let current = new Date('2026-07-31T08:06:59.999Z');
+    let current = new Date('2026-07-31T08:06:59.900Z');
     let networkStarts = 0;
     const repository = new class extends InMemoryPageActionAcceptanceRepository {
       override async recordRemoteAttemptAdmission(
@@ -1060,7 +1121,11 @@ describe('ProfileDaemonRuntime', () => {
           return fakeResponse(_pageAction);
         },
       },
-      { acceptanceRepository: repository, now: () => new Date(current) },
+      {
+        acceptanceRepository: repository,
+        cleanupGraceMs: 1,
+        now: () => new Date(current),
+      },
     );
     await runtime.ensureWarm();
 
@@ -1563,6 +1628,7 @@ function signedExecuteRequest(
   credentialOverrides: {
     credentialExpiresAt?: string;
     actionKind?: 'offer-detail' | 'store-qualification' | 'store-sample';
+    deadlineAt?: string;
   } = {},
 ): ParsedSupervisorRpcRequestV2 & { method: 'collector.pageAction.execute' } {
   const requestId = `request-${ordinal}`;
@@ -1661,7 +1727,7 @@ function signedExecuteRequest(
     pageActionBusinessHash,
     actionKind,
     startNotBefore: now.toISOString(),
-    deadlineAt: '2026-07-31T08:07:00.000Z',
+    deadlineAt: credentialOverrides.deadlineAt ?? '2026-07-31T08:07:00.000Z',
     leaseNotAfter: '2026-07-31T08:08:00.000Z',
     logicalLineage,
     logicalLineageHash,
@@ -1672,7 +1738,7 @@ function signedExecuteRequest(
     schema: 'profile-supervisor.rpc.v2' as const,
     rpcId: `rpc-${ordinal}`,
     method: 'collector.pageAction.execute' as const,
-    deadlineAt: '2026-07-31T08:07:00.000Z',
+    deadlineAt: credentialOverrides.deadlineAt ?? '2026-07-31T08:07:00.000Z',
     binding: {
       profileId: PROFILE_ID,
       daemonInstanceId: DAEMON_ID,

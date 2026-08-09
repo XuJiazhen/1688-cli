@@ -122,6 +122,15 @@ model; a captcha page is a risk-control state, not an empty product. Missing
 correlated responses return `OFFER_SKU_RESPONSE_TIMEOUT` or
 `QUALIFICATION_RESPONSE_TIMEOUT` with capture diagnostics.
 
+The managed PageAction executor is cut off before the RPC deadline by the
+configured cleanup grace. The daemon aborts the execution, closes its owned
+Page, and leaves any durable remote-attempt admission for receipt lookup to
+reconcile after active cleanup releases ownership. A deadline cutoff
+quarantines the runtime in `draining`, so an abort-delayed executor cannot
+overlap a later PageAction. A fenced drain or Context restart recovers runtime
+availability; receipt lookup recovers the immutable attempt outcome. This path
+never extends the frozen request deadline or starts a replacement attempt.
+
 When an external adapter cancels or times out `collect`, the process runner
 terminates the POSIX process group so Chromium descendants cannot retain
 stdio and delay the authoritative terminal result. The caller-supplied

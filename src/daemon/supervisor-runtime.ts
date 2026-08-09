@@ -1328,7 +1328,11 @@ export class ProfileDaemonRuntime {
           requestedCloseReason = reason;
         },
       };
-      const candidateResponse = await this.options.executor.execute(request, scope);
+      const candidateResponse = await this.executeBeforeCleanupBoundary(
+        request,
+        active,
+        () => this.options.executor.execute(request, scope),
+      );
       const interventionPending = responseRequiresIntervention(candidateResponse);
       let pageLifecycle: PageLifecycleReceiptV1;
       if (interventionPending) {
@@ -1416,6 +1420,38 @@ export class ProfileDaemonRuntime {
         });
       }
       if (!retainForIntervention && this.active === active) this.active = null;
+    }
+  }
+
+  private async executeBeforeCleanupBoundary<T>(
+    request: PageActionRequestV1,
+    active: ActiveExecution,
+    execute: () => Promise<T>,
+  ): Promise<T> {
+    const cleanupBoundary = Math.min(
+      Date.parse(request.deadlineAt),
+      Date.parse(active.authorizedRequest.deadlineAt),
+    ) - this.cleanupGraceMs;
+    const remainingMs = cleanupBoundary - this.now().getTime();
+    if (remainingMs <= 0) {
+      this.state = 'draining';
+      active.abort.abort();
+      throw pageActionExecutionDeadlineReached();
+    }
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const deadline = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        this.state = 'draining';
+        reject(pageActionExecutionDeadlineReached());
+        active.abort.abort();
+      }, remainingMs);
+      timer.unref();
+    });
+    try {
+      return await Promise.race([execute(), deadline]);
+    } finally {
+      if (timer !== null) clearTimeout(timer);
     }
   }
 
@@ -2810,6 +2846,14 @@ function recoveryTimestamp(value: unknown, path: string): string {
 
 function recoveryStateInvalid(message: string): SupervisorRuntimeError {
   return new SupervisorRuntimeError('RECOVERY_STATE_INVALID', message, false);
+}
+
+function pageActionExecutionDeadlineReached(): SupervisorRuntimeError {
+  return new SupervisorRuntimeError(
+    'RPC_DEADLINE_EXCEEDED',
+    'PageAction execution reached its cleanup boundary before the RPC deadline.',
+    false,
+  );
 }
 
 function positiveInteger(value: number, name: string): number {
