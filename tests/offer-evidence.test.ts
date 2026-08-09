@@ -5,6 +5,7 @@ import {
 } from '../src/session/offer-evidence.js';
 import {
   matchesOfferDetailServiceResponseV1,
+  preferredCanonicalSellerShopUrlV1,
   readOfferCoreConsignmentAbsenceV1,
   readOfferSourceCorrelationScopeV1,
   resolveOfferSourceCorrelationScopeV1,
@@ -121,6 +122,27 @@ describe('offer source response scope', () => {
         },
       },
     })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+  });
+
+  it('prefers canonical Seller shop authority over a mobile winport URL', () => {
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: 'https://shop97766603w5446.1688.com/',
+      sellerWinportUrlMapDefaultUrl: 'https://shop97766603w5446.1688.com/',
+      winportUrl:
+        'https://winport.m.1688.com/page/index.html?memberId=b2b-32168485931208e',
+    })).toBe('https://shop97766603w5446.1688.com/');
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl: 'https://shop97766603w5446.1688.com/',
+      winportUrl:
+        'https://winport.m.1688.com/page/index.html?memberId=b2b-32168485931208e',
+    })).toBe('https://shop97766603w5446.1688.com/');
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl: null,
+      winportUrl:
+        'https://winport.m.1688.com/page/index.html?memberId=b2b-32168485931208e',
+    })).toBeNull();
   });
 
   it('derives consignment not-present only from exact Offer core authority', () => {

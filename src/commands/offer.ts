@@ -625,6 +625,25 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
   };
 }
 
+export function preferredCanonicalSellerShopUrlV1(input: {
+  sellerWinportUrl?: unknown;
+  sellerWinportUrlMapDefaultUrl?: unknown;
+  winportUrl?: unknown;
+}): string | null {
+  for (const candidate of [
+    input.sellerWinportUrl,
+    input.sellerWinportUrlMapDefaultUrl,
+    input.winportUrl,
+  ]) {
+    try {
+      return canonicalProfileShopUrl(candidate);
+    } catch {
+      // Continue to the next response-owned Seller URL candidate.
+    }
+  }
+  return null;
+}
+
 export function readOfferCoreConsignmentAbsenceV1(
   rawPayload: unknown,
   observedOfferId: string,
@@ -1267,6 +1286,7 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         memberId?: string;
         userId?: number | string;
         winportUrl?: string;
+        sellerWinportUrl?: string;
         sellerWinportUrlMap?: { defaultUrl?: string };
       };
       const w = window as unknown as {
@@ -1474,8 +1494,12 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         sellerMemberId: seller.memberId ?? feg.memberId ?? null,
         sellerUserId:
           seller.userId != null ? String(seller.userId) : null,
-        sellerShopUrl:
-          seller.winportUrl ?? seller.sellerWinportUrlMap?.defaultUrl ?? null,
+        sellerShopUrlCandidates: {
+          sellerWinportUrl: seller.sellerWinportUrl ?? null,
+          sellerWinportUrlMapDefaultUrl:
+            seller.sellerWinportUrlMap?.defaultUrl ?? null,
+          winportUrl: seller.winportUrl ?? null,
+        },
         saledCount: null,
         mainImage: imgs[0] ?? null,
         images: imgs,
@@ -1495,10 +1519,18 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     const raw = await page.title();
     title = raw.replace(/\s*-\s*阿里巴巴\s*$/, '').trim();
   }
-  const { sourcePayload, skuContext, ...pageInfo } = fromContext;
+  const {
+    sourcePayload,
+    skuContext,
+    sellerShopUrlCandidates,
+    ...pageInfo
+  } = fromContext;
   return {
     ...pageInfo,
     title,
+    sellerShopUrl: preferredCanonicalSellerShopUrlV1(
+      sellerShopUrlCandidates,
+    ),
     skuModel: mapContextSkuBizModel(skuContext),
     rawPayload: sourcePayload,
     skuRawPayload: skuContext,
