@@ -100,6 +100,15 @@ describe('offer source response scope', () => {
     });
     expect(resolveOfferSourceCorrelationScopeV1({
       ...input,
+      rawPayload: {
+        data: { model: { shopUrl: 'https://supplier.1688.com' } },
+      },
+    })).toEqual({
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+    });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
       observedSellerShopUrl: 'https://another.1688.com/',
     })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
     expect(resolveOfferSourceCorrelationScopeV1({

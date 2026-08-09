@@ -1114,7 +1114,7 @@ function collectCanonicalShopUrls(
     const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/gu, '');
     if (normalizedKey === 'shopurl') {
       try {
-        shopUrls.push(canonicalProfileShopUrl(child));
+        shopUrls.push(canonicalSellerShopUrlCandidateV1(child));
       } catch {
         return false;
       }
