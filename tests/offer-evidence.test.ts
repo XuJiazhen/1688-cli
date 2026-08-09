@@ -4,6 +4,7 @@ import {
   mapShopCardPayload,
 } from '../src/session/offer-evidence.js';
 import {
+  matchesOfferDetailsContentResponseV1,
   matchesOfferDetailServiceResponseV1,
   offerSourceCorrelationDiagnosticsV1,
   preferredCanonicalSellerShopUrlV1,
@@ -466,6 +467,56 @@ describe('offer source response scope', () => {
     expect(matchesOfferDetailServiceResponseV1(
       `https://example.com/?next=${encodeURIComponent(requestUrl)}`,
       'offerPCConsignInfoService',
+    )).toBe(false);
+  });
+
+  it('recognizes the identity-bound itemcdn description response used by current Offer pages', () => {
+    const requestUrl =
+      'https://itemcdn.tmall.com/desc/icoss!0971556389830!13076862629?var=desc';
+
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '971556389830',
+    )).toBe(true);
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '971556389831',
+    )).toBe(false);
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl.replace('https://itemcdn.tmall.com', 'https://example.com'),
+      '971556389830',
+    )).toBe(false);
+    for (const rejectedUrl of [
+      requestUrl.replace('https:', 'http:'),
+      requestUrl.replace('itemcdn.tmall.com', 'user@itemcdn.tmall.com'),
+      requestUrl.replace('itemcdn.tmall.com', 'itemcdn.tmall.com:8443'),
+      requestUrl.replace('!13076862629', '!seller'),
+      requestUrl.replace('?var=desc', '/extra?var=desc'),
+    ]) {
+      expect(matchesOfferDetailsContentResponseV1(
+        rejectedUrl,
+        '971556389830',
+      )).toBe(false);
+    }
+  });
+
+  it('requires the page-declared source URL for opaque legacy detail responses', () => {
+    const requestUrl =
+      'https://itemcdn.tmall.com/1688offer/icoss280584577749f7d4ee5bf1b052';
+
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '739304676936',
+    )).toBe(false);
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '739304676936',
+      `${requestUrl}?var=desc`,
+    )).toBe(true);
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '739304676936',
+      'https://itemcdn.tmall.com/1688offer/icoss-other',
     )).toBe(false);
   });
 });

@@ -222,7 +222,7 @@ const OFFER_DETAIL_SERVICE_PATH_RE =
   /^\/h5\/mtop\.1688\.mmga\.offerdetail\.service\/1\.0\/?$/i;
 const DEFAULT_OFFER_CAPTURE_TIMEOUT_MS = 18_000;
 const DEFAULT_OFFER_CONSIGNMENT_CAPTURE_TIMEOUT_MS = 30_000;
-const OFFER_DETAILS_CONTENT_RE = /itemcdn\.tmall\.com\/1688offer\//i;
+const LEGACY_OFFER_DETAILS_CONTENT_PATH_RE = /^\/1688offer\//i;
 let DETAIL_SEQ = 0;
 
 export function offerSourceCaptureTimeoutMsV1(
@@ -335,16 +335,18 @@ export async function executeRaw(
   const offerDetailsCapture = startResponseCapture<{
     evidence: OfferDetailsEvidence;
     rawPayload: string;
+    requestUrl: string;
   }>({
     page,
     timeoutMs: captureTimeoutMs,
-    matcher: OFFER_DETAILS_CONTENT_RE,
+    matcher: (resp) =>
+      isOfferDetailsContentCandidateResponseV1(resp.url(), args.offerId),
     parse: async (resp) => {
       const rawPayload = await resp.text();
-      await args.onRawComponent?.('detail', rawPayload);
       return {
         evidence: parseOfferDetailsEvidence(rawPayload, resp.url()),
         rawPayload,
+        requestUrl: resp.url(),
       };
     },
   });
@@ -496,6 +498,17 @@ export async function executeRaw(
         })(),
       ]);
     assertOfferPageIdentityV1(pageInfo.canonicalOfferId, args.offerId);
+    const authorizedOfferDetails = offerDetails !== null
+      && matchesOfferDetailsContentResponseV1(
+        offerDetails.requestUrl,
+        args.offerId,
+        pageInfo.detailUrl,
+      )
+      ? offerDetails
+      : null;
+    if (authorizedOfferDetails) {
+      await args.onRawComponent?.('detail', authorizedOfferDetails.rawPayload);
+    }
     const requiredSku = requireSkuSelectorModel(
       selectSkuSelectorModel(sku?.model ?? null, pageInfo.skuModel),
       skuCapture.diagnostics(),
@@ -509,10 +522,10 @@ export async function executeRaw(
       pageInfo,
       shopCard,
       consignment,
-      offerDetails?.evidence ?? null,
+      authorizedOfferDetails?.evidence ?? null,
       shopCardResponse !== null,
       consignmentResponse !== null,
-      offerDetailsCapture.diagnostics().matchedCount > 0,
+      authorizedOfferDetails !== null,
     );
     const consignmentEvidence = consignmentResponse === null
       ? readOfferCoreConsignmentAbsenceV1(
@@ -567,7 +580,7 @@ export async function executeRaw(
       components: {
         core: pageInfo.rawPayload,
         sku: sku?.rawPayload ?? pageInfo.skuRawPayload,
-        detail: offerDetails?.rawPayload ?? null,
+        detail: authorizedOfferDetails?.rawPayload ?? null,
       },
     });
     return result;
@@ -1163,6 +1176,68 @@ export function matchesOfferDetailServiceResponseV1(
     return false;
   }
   return serviceNames.size === 1 && serviceNames.has(expectedServiceName);
+}
+
+export function matchesOfferDetailsContentResponseV1(
+  requestUrl: string,
+  expectedOfferId: string,
+  declaredSourceUrl: string | null = null,
+): boolean {
+  const request = offerDetailsContentUrlV1(requestUrl);
+  if (!request || !/^\d+$/.test(expectedOfferId)) return false;
+  if (LEGACY_OFFER_DETAILS_CONTENT_PATH_RE.test(request.pathname)) {
+    const declared = offerDetailsContentUrlV1(declaredSourceUrl);
+    return declared !== null && declared.pathname === request.pathname;
+  }
+  return matchesIdentityBoundOfferDetailsPathV1(
+    request.pathname,
+    expectedOfferId,
+  );
+}
+
+function isOfferDetailsContentCandidateResponseV1(
+  requestUrl: string,
+  expectedOfferId: string,
+): boolean {
+  const request = offerDetailsContentUrlV1(requestUrl);
+  if (!request || !/^\d+$/.test(expectedOfferId)) return false;
+  return LEGACY_OFFER_DETAILS_CONTENT_PATH_RE.test(request.pathname)
+    || matchesIdentityBoundOfferDetailsPathV1(
+      request.pathname,
+      expectedOfferId,
+    );
+}
+
+function offerDetailsContentUrlV1(requestUrl: string | null): URL | null {
+  if (requestUrl === null) return null;
+  try {
+    const url = new URL(requestUrl);
+    if (
+      url.protocol !== 'https:'
+      || url.hostname !== 'itemcdn.tmall.com'
+      || url.port !== ''
+      || url.username !== ''
+      || url.password !== ''
+    ) {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function matchesIdentityBoundOfferDetailsPathV1(
+  pathname: string,
+  expectedOfferId: string,
+): boolean {
+  const match = /^\/desc\/icoss!(\d+)!\d+$/i.exec(pathname);
+  if (!match) return false;
+  const rawResponseOfferId = match[1];
+  if (!rawResponseOfferId) return false;
+  const responseOfferId = rawResponseOfferId.replace(/^0+(?=\d)/, '');
+  const normalizedExpectedOfferId = expectedOfferId.replace(/^0+(?=\d)/, '');
+  return responseOfferId === normalizedExpectedOfferId;
 }
 
 function readOfferSourceCorrelationEvidenceV1(
