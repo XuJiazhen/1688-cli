@@ -549,6 +549,12 @@ export async function executeRaw(
           sellerLoginPresent: result.supplier.loginId !== null,
           coreWithoutLoginPresent: coreSellerShopUrlWithoutLogin !== null,
           coreWithLoginPresent: coreSellerShopUrlWithLogin !== null,
+          core: offerCoreSellerShopUrlAuthorityDiagnosticsV1(
+            pageInfo.rawPayload,
+            result.offerId,
+            result.supplier.memberId,
+            result.supplier.loginId,
+          ),
         })}\n`,
       );
     }
@@ -984,6 +990,51 @@ export function readOfferCoreSellerShopUrlAuthorityV1(
     sellerWinportUrlMapDefaultUrl:
       asRecord(seller?.sellerWinportUrlMap)?.defaultUrl,
     winportUrl: seller?.winportUrl,
+  });
+}
+
+function offerCoreSellerShopUrlAuthorityDiagnosticsV1(
+  rawPayload: unknown,
+  observedOfferId: string,
+  observedMemberId: string | null,
+  observedLoginId: string | null,
+): Readonly<{
+  structureComplete: boolean;
+  offer: CorrelationIdentityState;
+  member: CorrelationIdentityState;
+  login: CorrelationIdentityState;
+  candidates: ReturnType<typeof sellerShopUrlCandidateDiagnosticsV1>;
+}> {
+  const root = asRecord(rawPayload);
+  const contextResult = asRecord(root?.contextResult);
+  const data = asRecord(contextResult?.data);
+  const gallery = asRecord(asRecord(data?.gallery)?.fields);
+  const global = asRecord(contextResult?.global);
+  const globalData = asRecord(global?.globalData);
+  const model = asRecord(globalData?.model);
+  const seller = asRecord(model?.sellerModel);
+  const offerId = correlationScalar(gallery?.offerId);
+  const memberId = correlationScalar(seller?.memberId);
+  const loginId = correlationScalar(seller?.loginId);
+  return Object.freeze({
+    structureComplete:
+      root !== null
+      && contextResult !== null
+      && data !== null
+      && gallery !== null
+      && global !== null
+      && globalData !== null
+      && model !== null
+      && seller !== null,
+    offer: correlationIdentityState(offerId, false, observedOfferId),
+    member: correlationIdentityState(memberId, false, observedMemberId),
+    login: correlationIdentityState(loginId, false, observedLoginId),
+    candidates: sellerShopUrlCandidateDiagnosticsV1({
+      sellerWinportUrl: seller?.sellerWinportUrl,
+      sellerWinportUrlMapDefaultUrl:
+        asRecord(seller?.sellerWinportUrlMap)?.defaultUrl,
+      winportUrl: seller?.winportUrl,
+    }),
   });
 }
 
@@ -1915,8 +1966,11 @@ function sellerShopUrlCandidateDiagnosticsV1(input: {
   winportUrl?: unknown;
 }): Readonly<{
   sellerWinportUrl: 'missing' | 'canonical' | 'invalid';
+  sellerWinportUrlType: string;
   sellerWinportUrlMapDefaultUrl: 'missing' | 'canonical' | 'invalid';
+  sellerWinportUrlMapDefaultUrlType: string;
   winportUrl: 'missing' | 'canonical' | 'invalid';
+  winportUrlType: string;
   uniqueCanonicalCount: number;
 }> {
   const canonicalUrls = new Set<string>();
@@ -1936,10 +1990,21 @@ function sellerShopUrlCandidateDiagnosticsV1(input: {
   const winportUrl = state(input.winportUrl);
   return Object.freeze({
     sellerWinportUrl,
+    sellerWinportUrlType: safeValueType(input.sellerWinportUrl),
     sellerWinportUrlMapDefaultUrl,
+    sellerWinportUrlMapDefaultUrlType: safeValueType(
+      input.sellerWinportUrlMapDefaultUrl,
+    ),
     winportUrl,
+    winportUrlType: safeValueType(input.winportUrl),
     uniqueCanonicalCount: canonicalUrls.size,
   });
+}
+
+function safeValueType(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
 }
 
 async function scrapeDomFallback(page: Page): Promise<PageInfo> {
