@@ -15,6 +15,9 @@ import {
 import { withIsolatedOperationPages } from '../session/page-lifecycle.js';
 import { debugTmpPath } from '../util/temp.js';
 import {
+  canonicalProfileShopUrl,
+} from '../session/catalog-runtime.js';
+import {
   mapConsignmentPayload,
   mapShopCardPayload,
   type ConsignmentInfo,
@@ -126,6 +129,7 @@ export interface OfferResult {
 }
 
 export interface OfferSourceCaptureEvidenceV1 {
+  authoritySource?: 'offer-core';
   responseObserved: boolean;
   responseSucceeded: boolean;
   correlatedOfferId: string | null;
@@ -491,9 +495,19 @@ export async function executeRaw(
       consignmentResponse !== null,
       offerDetailsCapture.diagnostics().matchedCount > 0,
     );
+    const consignmentEvidence = consignmentResponse === null
+      ? readOfferCoreConsignmentAbsenceV1(
+          pageInfo.rawPayload,
+          result.offerId,
+          result.supplier.memberId,
+        ) ?? captureEvidence(null, result)
+      : captureEvidence(consignmentResponse, result);
     OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
-      shopCard: captureEvidence(shopCardResponse, result),
-      consignment: captureEvidence(consignmentResponse, result),
+      shopCard: captureEvidence(shopCardResponse, result, {
+        observedSellerShopUrl: pageInfo.sellerShopUrl,
+        allowSellerShopUrlBinding: true,
+      }),
+      consignment: consignmentEvidence,
       components: {
         core: pageInfo.rawPayload,
         sku: sku?.rawPayload ?? pageInfo.skuRawPayload,
@@ -519,6 +533,10 @@ export async function executeRaw(
 function captureEvidence<T>(
   captured: OfferSourceResponseCaptureV1<T> | null,
   offer: OfferResult,
+  options: {
+    observedSellerShopUrl?: string | null;
+    allowSellerShopUrlBinding?: boolean;
+  } = {},
 ): OfferSourceCaptureEvidenceV1 {
   const correlation = captured === null
     ? { correlatedOfferId: null, correlatedMemberId: null }
@@ -528,6 +546,8 @@ function captureEvidence<T>(
         observedOfferId: offer.offerId,
         observedSellerLoginId: offer.supplier.loginId,
         observedSellerMemberId: offer.supplier.memberId,
+        observedSellerShopUrl: options.observedSellerShopUrl ?? null,
+        allowSellerShopUrlBinding: options.allowSellerShopUrlBinding ?? false,
       });
   return {
     responseObserved: captured !== null,
@@ -558,6 +578,8 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
   observedOfferId: string;
   observedSellerLoginId: string | null;
   observedSellerMemberId: string | null;
+  observedSellerShopUrl?: string | null;
+  allowSellerShopUrlBinding?: boolean;
 }): { correlatedOfferId: string | null; correlatedMemberId: string | null } {
   const correlation = readOfferSourceCorrelationEvidenceV1(
     input.requestUrl,
@@ -571,6 +593,13 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
     && input.observedSellerMemberId !== null
     && !requestCorrelation.loginIdentityConflict
     && requestCorrelation.correlatedLoginId === input.observedSellerLoginId;
+  const responseShopUrlMatched = input.allowSellerShopUrlBinding === true
+    && input.observedSellerShopUrl !== null
+    && input.observedSellerShopUrl !== undefined
+    && exactCanonicalShopUrlMatch(
+      input.rawPayload,
+      input.observedSellerShopUrl,
+    );
   const canonicalScopeUnambiguous = !correlation.offerIdentityConflict
     && !correlation.memberIdentityConflict;
   const canonicalScopeMatchesObserved = (
@@ -580,7 +609,11 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
     correlation.correlatedMemberId === null
       || correlation.correlatedMemberId === input.observedSellerMemberId
   );
-  if (requestSellerMatched && canonicalScopeUnambiguous && canonicalScopeMatchesObserved) {
+  if (
+    (requestSellerMatched || responseShopUrlMatched)
+    && canonicalScopeUnambiguous
+    && canonicalScopeMatchesObserved
+  ) {
     return {
       correlatedOfferId: input.observedOfferId,
       correlatedMemberId: input.observedSellerMemberId,
@@ -590,6 +623,92 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
     correlatedOfferId: correlation.correlatedOfferId,
     correlatedMemberId: correlation.correlatedMemberId,
   };
+}
+
+export function readOfferCoreConsignmentAbsenceV1(
+  rawPayload: unknown,
+  observedOfferId: string,
+  observedMemberId: string | null,
+): OfferSourceCaptureEvidenceV1 | null {
+  if (observedMemberId === null) return null;
+  const root = asRecord(rawPayload);
+  const contextResult = asRecord(root?.contextResult);
+  const data = asRecord(contextResult?.data);
+  const gallery = asRecord(asRecord(data?.gallery)?.fields);
+  const global = asRecord(contextResult?.global);
+  const globalData = asRecord(global?.globalData);
+  const model = asRecord(globalData?.model);
+  const seller = asRecord(model?.sellerModel);
+  const consign = asRecord(model?.consignModel);
+  const consignSign = asRecord(consign?.consignSign);
+  const signs = asRecord(consignSign?.signs);
+  if (
+    correlationScalar(gallery?.offerId) !== observedOfferId
+    || correlationScalar(seller?.memberId) !== observedMemberId
+    || consign?.consignOffer !== false
+    || consign?.hasConsignPrice !== false
+    || consignSign?.supportConsignIssuing !== false
+    || signs?.isSupportConsignIssuing !== false
+  ) {
+    return null;
+  }
+  const sourcePath =
+    'contextResult.global.globalData.model.consignModel.consignOffer';
+  return {
+    authoritySource: 'offer-core',
+    responseObserved: false,
+    responseSucceeded: false,
+    correlatedOfferId: observedOfferId,
+    correlatedMemberId: observedMemberId,
+    rawPayload,
+    authoritativeEmpty: {
+      sourcePath,
+      sourceValue: false,
+      reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED',
+    },
+  };
+}
+
+function exactCanonicalShopUrlMatch(
+  rawPayload: unknown,
+  observedSellerShopUrl: string,
+): boolean {
+  let expected: string;
+  try {
+    expected = canonicalProfileShopUrl(observedSellerShopUrl);
+  } catch {
+    return false;
+  }
+  const shopUrls: string[] = [];
+  return collectCanonicalShopUrls(rawPayload, shopUrls)
+    && shopUrls.length === 1
+    && shopUrls[0] === expected;
+}
+
+function collectCanonicalShopUrls(
+  value: unknown,
+  shopUrls: string[],
+  depth = 0,
+): boolean {
+  if (value === null || value === undefined) return true;
+  if (depth > 10) return typeof value !== 'object';
+  if (Array.isArray(value)) {
+    return value.every((item) =>
+      collectCanonicalShopUrls(item, shopUrls, depth + 1));
+  }
+  if (typeof value !== 'object') return true;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/gu, '');
+    if (normalizedKey === 'shopurl') {
+      try {
+        shopUrls.push(canonicalProfileShopUrl(child));
+      } catch {
+        return false;
+      }
+    }
+    if (!collectCanonicalShopUrls(child, shopUrls, depth + 1)) return false;
+  }
+  return true;
 }
 
 export function assertOfferPageIdentityV1(
@@ -1051,6 +1170,7 @@ interface PageInfo {
   sellerLoginId: string | null;
   sellerMemberId: string | null;
   sellerUserId: string | null;
+  sellerShopUrl: string | null;
   saledCount: number | null;
   mainImage: string | null;
   images: string[];
@@ -1146,6 +1266,8 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         loginId?: string;
         memberId?: string;
         userId?: number | string;
+        winportUrl?: string;
+        sellerWinportUrlMap?: { defaultUrl?: string };
       };
       const w = window as unknown as {
         context?: {
@@ -1352,6 +1474,8 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         sellerMemberId: seller.memberId ?? feg.memberId ?? null,
         sellerUserId:
           seller.userId != null ? String(seller.userId) : null,
+        sellerShopUrl:
+          seller.winportUrl ?? seller.sellerWinportUrlMap?.defaultUrl ?? null,
         saledCount: null,
         mainImage: imgs[0] ?? null,
         images: imgs,
@@ -1414,6 +1538,7 @@ async function scrapeDomFallback(page: Page): Promise<PageInfo> {
     sellerLoginId: null,
     sellerMemberId: null,
     sellerUserId: null,
+    sellerShopUrl: null,
     saledCount: null,
     mainImage: info.mainImage,
     images: info.mainImage ? [info.mainImage] : [],

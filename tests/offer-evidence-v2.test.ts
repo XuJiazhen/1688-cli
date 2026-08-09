@@ -114,6 +114,29 @@ describe('Offer evidence and SourceMedia V2', () => {
       pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
       capturedAt: '2026-07-31T00:00:00.000Z', rawPayload: { data: { data: { data: { data: {} } } } },
     });
+    const coreConsignmentSidecar = createOfferSourceSidecarV1({
+      source: 'offer-consignment', authoritySource: 'offer-core',
+      offerId: '100', memberId: 'member-1',
+      correlatedOfferId: '100', correlatedMemberId: 'member-1',
+      pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      rawPayload: {
+        contextResult: {
+          data: { gallery: { fields: { offerId: '100' } } },
+          global: { globalData: { model: {
+            sellerModel: { memberId: 'member-1' },
+            consignModel: {
+              consignOffer: false,
+              hasConsignPrice: false,
+              consignSign: {
+                supportConsignIssuing: false,
+                signs: { isSupportConsignIssuing: false },
+              },
+            },
+          } } },
+        },
+      },
+    });
     const common = {
       offerId: '100', memberId: 'member-1', pageActionId: 'action-1',
       remoteRequestAttemptId: 'remote-1', responseObserved: true,
@@ -138,6 +161,57 @@ describe('Offer evidence and SourceMedia V2', () => {
       },
     });
     expect(consignment).toMatchObject({ state: 'not-present', absenceProof: { reasonCode: 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL' } });
+    const coreDeclaredConsignmentAbsence = createOfferSourceTerminalReceiptV1({
+      ...common,
+      source: 'offer-consignment',
+      authoritySource: 'offer-core',
+      responseObserved: false,
+      responseSucceeded: false,
+      rawEvidenceRefs: [coreConsignmentSidecar.artifactRef],
+      parsedValue: null,
+      authoritativeEmpty: {
+        sourcePath: 'contextResult.global.globalData.model.consignModel.consignOffer',
+        sourceValue: false,
+        reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED',
+      },
+    });
+    expect(coreDeclaredConsignmentAbsence).toMatchObject({
+      authoritySource: 'offer-core',
+      responseObserved: false,
+      responseSucceeded: false,
+      state: 'not-present',
+      absenceProof: { reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED' },
+    });
+    expect(coreDeclaredConsignmentAbsence.absenceProof).toMatchObject({
+      authorityArtifactRef: coreConsignmentSidecar.artifactRef,
+    });
+    expect(() => assertOfferSourceSidecarBindingV1(
+      coreConsignmentSidecar.artifactRef,
+      coreConsignmentSidecar.artifact,
+    )).not.toThrow();
+    expect(() => assertOfferSourceSidecarBindingV1(
+      coreConsignmentSidecar.artifactRef,
+      {
+        ...coreConsignmentSidecar.artifact,
+        authorityEvidence: {
+          ...coreConsignmentSidecar.artifact.authorityEvidence!,
+          memberId: 'member-forged',
+        },
+      },
+    )).toThrow(/sidecar authority is invalid/iu);
+    expect(() => assertOfferSourceReceiptsCompleteV1({
+      offerId: '100', memberId: 'member-1', pageActionId: 'action-1',
+      remoteRequestAttemptId: 'remote-1',
+      remoteRawEvidenceRefs: [shopSidecar.artifactRef, coreConsignmentSidecar.artifactRef],
+      shopCard, consignment: coreDeclaredConsignmentAbsence,
+    })).not.toThrow();
+    expect(() => createOfferSourceSidecarV1({
+      source: 'shop-card', authoritySource: 'offer-core',
+      offerId: '100', memberId: 'member-1',
+      correlatedOfferId: '100', correlatedMemberId: 'member-1',
+      pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z', rawPayload: {},
+    })).toThrow(/only valid for Consignment absence/iu);
     expect(() => assertOfferSourceReceiptsCompleteV1({
       offerId: '100', memberId: 'member-1', pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
       remoteRawEvidenceRefs: [shopSidecar.artifactRef, consignmentSidecar.artifactRef],

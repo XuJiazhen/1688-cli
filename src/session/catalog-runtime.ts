@@ -371,7 +371,7 @@ function storeMemberIdFromMobileShopUrl(value: unknown): string | null {
     : null;
 }
 
-function canonicalProfileShopUrl(value: unknown): string {
+export function canonicalProfileShopUrl(value: unknown): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new TypeError('Store profile shop URL is missing.');
   }

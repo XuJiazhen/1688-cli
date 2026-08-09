@@ -5,6 +5,7 @@ import {
 } from '../src/session/offer-evidence.js';
 import {
   matchesOfferDetailServiceResponseV1,
+  readOfferCoreConsignmentAbsenceV1,
   readOfferSourceCorrelationScopeV1,
   resolveOfferSourceCorrelationScopeV1,
 } from '../src/commands/offer.js';
@@ -76,6 +77,103 @@ describe('offer source response scope', () => {
       observedSellerLoginId: 'seller-login-1',
       observedSellerMemberId: 'member-1',
     })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+  });
+
+  it('binds a shop card through the exact response-owned Store URL', () => {
+    const input = {
+      requestUrl: 'https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/',
+      rawPayload: {
+        data: { model: { shopUrl: 'https://supplier.1688.com/' } },
+      },
+      observedOfferId: '100',
+      observedSellerLoginId: null,
+      observedSellerMemberId: 'member-1',
+      observedSellerShopUrl: 'https://supplier.1688.com/',
+      allowSellerShopUrlBinding: true,
+    };
+    expect(resolveOfferSourceCorrelationScopeV1(input)).toEqual({
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+    });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      observedSellerShopUrl: 'https://another.1688.com/',
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      allowSellerShopUrlBinding: false,
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      rawPayload: {
+        data: {
+          model: { shopUrl: 'https://supplier.1688.com/' },
+          conflicting: { shopUrl: 'https://another.1688.com/' },
+        },
+      },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      rawPayload: {
+        data: {
+          model: { shopUrl: 'https://supplier.1688.com/' },
+          duplicate: { shopUrl: 'https://supplier.1688.com/' },
+        },
+      },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+  });
+
+  it('derives consignment not-present only from exact Offer core authority', () => {
+    const rawPayload = {
+      contextResult: {
+        data: { gallery: { fields: { offerId: '100' } } },
+        global: { globalData: { model: {
+          sellerModel: { memberId: 'member-1' },
+          consignModel: {
+            consignOffer: false,
+            hasConsignPrice: false,
+            consignSign: {
+              supportConsignIssuing: false,
+              signs: { isSupportConsignIssuing: false },
+            },
+          },
+        } } },
+      },
+    };
+    expect(readOfferCoreConsignmentAbsenceV1(
+      rawPayload,
+      '100',
+      'member-1',
+    )).toMatchObject({
+      authoritySource: 'offer-core',
+      responseObserved: false,
+      responseSucceeded: false,
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+      authoritativeEmpty: {
+        sourcePath: 'contextResult.global.globalData.model.consignModel.consignOffer',
+        sourceValue: false,
+        reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED',
+      },
+    });
+    expect(readOfferCoreConsignmentAbsenceV1(rawPayload, '100', 'member-2')).toBeNull();
+    expect(readOfferCoreConsignmentAbsenceV1({
+      ...rawPayload,
+      contextResult: {
+        ...rawPayload.contextResult,
+        global: { globalData: { model: {
+          sellerModel: { memberId: 'member-1' },
+          consignModel: {
+            consignOffer: true,
+            hasConsignPrice: false,
+            consignSign: {
+              supportConsignIssuing: false,
+              signs: { isSupportConsignIssuing: false },
+            },
+          },
+        } } },
+      },
+    }, '100', 'member-1')).toBeNull();
   });
 
   it('recognizes a percent-encoded offer detail service request exactly', () => {
