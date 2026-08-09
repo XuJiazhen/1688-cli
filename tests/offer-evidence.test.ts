@@ -436,6 +436,40 @@ describe('offer source response scope', () => {
         global: { globalData: { model: {
           sellerModel: { memberId: 'member-1' },
           consignModel: {
+            consignOffer: false,
+            hasConsignPrice: false,
+            consignSign: {
+              supportConsignIssuing: true,
+              signs: { isSupportConsignIssuing: true },
+            },
+          },
+        } } },
+      },
+    }, '100', 'member-1')).toMatchObject({
+      authoritySource: 'offer-core',
+      authoritativeEmpty: { sourceValue: false },
+    });
+    expect(readOfferCoreConsignmentAbsenceV1({
+      ...rawPayload,
+      contextResult: {
+        ...rawPayload.contextResult,
+        global: { globalData: { model: {
+          sellerModel: { memberId: 'member-1' },
+          consignModel: {
+            consignOffer: false,
+            hasConsignPrice: false,
+            consignSign: { supportConsignIssuing: true, signs: {} },
+          },
+        } } },
+      },
+    }, '100', 'member-1')).toBeNull();
+    expect(readOfferCoreConsignmentAbsenceV1({
+      ...rawPayload,
+      contextResult: {
+        ...rawPayload.contextResult,
+        global: { globalData: { model: {
+          sellerModel: { memberId: 'member-1' },
+          consignModel: {
             consignOffer: true,
             hasConsignPrice: false,
             consignSign: {

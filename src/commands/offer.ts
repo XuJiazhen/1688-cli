@@ -1073,8 +1073,8 @@ export function readOfferCoreConsignmentAbsenceV1(
     || correlationScalar(seller?.memberId) !== observedMemberId
     || consign?.consignOffer !== false
     || consign?.hasConsignPrice !== false
-    || consignSign?.supportConsignIssuing !== false
-    || signs?.isSupportConsignIssuing !== false
+    || typeof consignSign?.supportConsignIssuing !== 'boolean'
+    || typeof signs?.isSupportConsignIssuing !== 'boolean'
   ) {
     return null;
   }

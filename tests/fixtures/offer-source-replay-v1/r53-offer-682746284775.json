@@ -79,7 +79,7 @@
   "consignment": null,
   "expected": {
     "shopCardState": "available",
-    "consignmentState": "failed",
-    "consignmentAuthoritySource": null
+    "consignmentState": "not-present",
+    "consignmentAuthoritySource": "offer-core"
   }
 }

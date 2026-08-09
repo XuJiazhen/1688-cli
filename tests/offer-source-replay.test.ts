@@ -261,7 +261,7 @@ function replayOfferSources(fixture: ReplayFixtureV1): {
           global: { globalData: { model: {
             sellerModel: { memberId: subject.sellerMemberId },
             consignModel: { consignSign: { signs: {
-              isSupportConsignIssuing: false,
+              isSupportConsignIssuing: expect.any(Boolean),
             } } },
           } } },
         },
@@ -344,7 +344,7 @@ describe('sanitized Offer source replay', () => {
     }
   });
 
-  it('replays r53 Store URL authority while refusing unsupported Consignment absence', async () => {
+  it('replays r53 Offer-disabled Consignment authority when seller issuing support is enabled', async () => {
     const fixture = await loadFixture('r53-offer-682746284775.json');
     assertNoReplayableSecrets(fixture);
     const { subject } = fixture;
@@ -372,6 +372,20 @@ describe('sanitized Offer source replay', () => {
       fixture.offerCore,
       subject.offerId,
       subject.sellerMemberId,
-    )).toBeNull();
+    )).toMatchObject({
+      authoritySource: 'offer-core',
+      correlatedOfferId: subject.offerId,
+      correlatedMemberId: subject.sellerMemberId,
+      authoritativeEmpty: {
+        sourcePath: 'contextResult.global.globalData.model.consignModel.consignOffer',
+        sourceValue: false,
+      },
+    });
+    const replay = replayOfferSources(fixture);
+    expect(replay.consignment).toMatchObject({
+      state: fixture.expected.consignmentState,
+      authoritySource: fixture.expected.consignmentAuthoritySource,
+      correlation: 'matched',
+    });
   });
 });

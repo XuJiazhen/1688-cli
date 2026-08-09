@@ -121,8 +121,8 @@ export interface OfferSourceSidecarV1 {
     memberId: string;
     supportingSignals: {
       hasConsignPrice: false;
-      supportConsignIssuing: false;
-      isSupportConsignIssuing: false;
+      supportConsignIssuing: boolean;
+      isSupportConsignIssuing: boolean;
     };
   };
   sanitizedRawPayload: unknown;
@@ -145,9 +145,12 @@ export function createOfferSourceSidecarV1(input: {
   }
   const offerId = requiredId(input.offerId, 'offerId');
   const memberId = requiredId(input.memberId, 'memberId');
+  const offerCoreSignals = input.authoritySource === 'offer-core'
+    ? offerCoreAuthoritySupportingSignals(input.rawPayload, offerId, memberId)
+    : null;
   if (
     input.authoritySource === 'offer-core'
-    && !offerCoreAuthorityPayloadMatches(input.rawPayload, offerId, memberId, true)
+    && offerCoreSignals === null
   ) {
     throw new TypeError('Offer core Consignment sidecar authority is invalid.');
   }
@@ -168,7 +171,13 @@ export function createOfferSourceSidecarV1(input: {
     ),
     capturedAt: new Date(input.capturedAt).toISOString(),
     ...(input.authoritySource === 'offer-core'
-      ? { authorityEvidence: offerCoreAuthorityEvidence(offerId, memberId) }
+      ? {
+          authorityEvidence: offerCoreAuthorityEvidence(
+            offerId,
+            memberId,
+            offerCoreSignals!,
+          ),
+        }
       : {}),
     sanitizedRawPayload: sanitizeOfferSourcePayloadV1(
       input.rawPayload,
@@ -638,30 +647,35 @@ function registeredAbsenceSentinel(
 
 function assertOfferCoreSidecarAuthority(artifact: OfferSourceSidecarV1): void {
   if (artifact.authoritySource === undefined) return;
-  const expectedEvidence = offerCoreAuthorityEvidence(artifact.offerId, artifact.memberId);
+  const supportingSignals = offerCoreAuthoritySupportingSignals(
+    artifact.sanitizedRawPayload,
+    artifact.offerId,
+    artifact.memberId,
+  );
+  const expectedEvidence = supportingSignals === null
+    ? null
+    : offerCoreAuthorityEvidence(
+        artifact.offerId,
+        artifact.memberId,
+        supportingSignals,
+      );
   if (
     artifact.authoritySource !== 'offer-core'
     || artifact.source !== 'offer-consignment'
     || artifact.authorityEvidence === undefined
+    || expectedEvidence === null
     || evidenceHash(artifact.authorityEvidence)
       !== evidenceHash(expectedEvidence)
-    || !offerCoreAuthorityPayloadMatches(
-      artifact.sanitizedRawPayload,
-      artifact.offerId,
-      artifact.memberId,
-      true,
-    )
   ) {
     throw new TypeError('Offer core Consignment sidecar authority is invalid.');
   }
 }
 
-function offerCoreAuthorityPayloadMatches(
+function offerCoreAuthoritySupportingSignals(
   payload: unknown,
   offerId: string,
   memberId: string,
-  requireNestedIssuingSignal: boolean,
-): boolean {
+): NonNullable<OfferSourceSidecarV1['authorityEvidence']>['supportingSignals'] | null {
   const model = objectAt(
     payload,
     ['contextResult', 'global', 'globalData', 'model'],
@@ -674,20 +688,29 @@ function offerCoreAuthorityPayloadMatches(
   const consign = recordOrNull(model?.consignModel);
   const consignSign = recordOrNull(consign?.consignSign);
   const signs = recordOrNull(consignSign?.signs);
-  return stringOrNull(gallery?.offerId) === offerId
-    && stringOrNull(seller?.memberId) === memberId
-    && consign?.consignOffer === false
-    && consign?.hasConsignPrice === false
-    && consignSign?.supportConsignIssuing === false
-    && (
-      !requireNestedIssuingSignal
-      || signs?.isSupportConsignIssuing === false
-    );
+  if (
+    stringOrNull(gallery?.offerId) !== offerId
+    || stringOrNull(seller?.memberId) !== memberId
+    || consign?.consignOffer !== false
+    || consign?.hasConsignPrice !== false
+    || typeof consignSign?.supportConsignIssuing !== 'boolean'
+    || typeof signs?.isSupportConsignIssuing !== 'boolean'
+  ) {
+    return null;
+  }
+  return {
+    hasConsignPrice: false,
+    supportConsignIssuing: consignSign.supportConsignIssuing,
+    isSupportConsignIssuing: signs.isSupportConsignIssuing,
+  };
 }
 
 function offerCoreAuthorityEvidence(
   offerId: string,
   memberId: string,
+  supportingSignals: NonNullable<
+    OfferSourceSidecarV1['authorityEvidence']
+  >['supportingSignals'],
 ): NonNullable<OfferSourceSidecarV1['authorityEvidence']> {
   return {
     schema: 'collector.offer-core-consignment-authority.v1',
@@ -695,11 +718,7 @@ function offerCoreAuthorityEvidence(
     sourceValue: false,
     offerId,
     memberId,
-    supportingSignals: {
-      hasConsignPrice: false,
-      supportConsignIssuing: false,
-      isSupportConsignIssuing: false,
-    },
+    supportingSignals,
   };
 }
 
