@@ -5,10 +5,13 @@ import {
   executeRaw,
   mapContextSkuBizModel,
   offerSourceCaptureTimeoutMsV1,
+  parseConsignmentSourceResponseV1,
+  parseShopCardSourceResponseV1,
   requireSkuSelectorModel,
   selectSkuSelectorModel,
 } from '../src/commands/offer.js';
 import type { ResponseCaptureDiagnostics } from '../src/session/response-capture.js';
+import { startResponseCapture } from '../src/session/response-capture.js';
 
 function diagnostics(
   overrides: Partial<ResponseCaptureDiagnostics> = {},
@@ -32,6 +35,84 @@ function diagnostics(
 }
 
 describe('requireSkuSelectorModel', () => {
+  it('waits past an initial token-empty ShopCard response for the successful retry', async () => {
+    const page = new EventEmitter();
+    const capture = startResponseCapture({
+      page: page as never,
+      timeoutMs: 50,
+      matcher: /mtop\.1688\.moga\.pc\.shopcard/iu,
+      parse: async (response) => parseShopCardSourceResponseV1(
+        await response.text(),
+        response.url(),
+      ),
+    });
+    const response = (payload: unknown) => ({
+      url: () =>
+        'https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/',
+      text: async () => JSON.stringify(payload),
+    });
+    const result = capture.wait();
+    page.emit('response', response({
+      ret: ['FAIL_SYS_TOKEN_EMPTY::token empty'],
+      data: {},
+    }));
+    page.emit('response', response({
+      ret: ['SUCCESS::success'],
+      data: { model: { shopName: 'Replay Shop' } },
+    }));
+
+    await expect(result).resolves.toMatchObject({
+      responseSucceeded: true,
+      value: { name: 'Replay Shop' },
+    });
+    expect(capture.diagnostics()).toMatchObject({
+      matchedCount: 2,
+      emptyResultCount: 1,
+      parsedCount: 1,
+      settled: true,
+    });
+  });
+
+  it('waits past an initial token-empty Consignment response for the successful retry', async () => {
+    const page = new EventEmitter();
+    const capture = startResponseCapture({
+      page: page as never,
+      timeoutMs: 50,
+      matcher: /mtop\.1688\.mmga\.offerdetail\.service/iu,
+      parse: async (response) => parseConsignmentSourceResponseV1(
+        await response.text(),
+        response.url(),
+      ),
+    });
+    const requestUrl =
+      'https://h5api.m.1688.com/h5/mtop.1688.mmga.offerdetail.service/1.0/'
+      + '?serviceName=offerPCConsignInfoService';
+    const response = (payload: unknown) => ({
+      url: () => requestUrl,
+      text: async () => JSON.stringify(payload),
+    });
+    const result = capture.wait();
+    page.emit('response', response({
+      ret: ['FAIL_SYS_TOKEN_EMPTY::token empty'],
+      data: {},
+    }));
+    page.emit('response', response({
+      ret: ['SUCCESS::success'],
+      data: { data: { data: { name: 'Consignment Replay' } } },
+    }));
+
+    await expect(result).resolves.toMatchObject({
+      responseSucceeded: true,
+      value: { name: 'Consignment Replay' },
+    });
+    expect(capture.diagnostics()).toMatchObject({
+      matchedCount: 2,
+      emptyResultCount: 1,
+      parsedCount: 1,
+      settled: true,
+    });
+  });
+
   it('keeps a bounded late-response window for the Consignment source', () => {
     expect(offerSourceCaptureTimeoutMsV1(undefined, 'shop-card')).toBe(18_000);
     expect(offerSourceCaptureTimeoutMsV1(undefined, 'offer-consignment')).toBe(

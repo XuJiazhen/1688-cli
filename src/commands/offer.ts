@@ -296,17 +296,7 @@ export async function executeRaw(
     parse: async (resp) => {
       const rawResponseText = await resp.text();
       await args.onRawComponent?.('shop-card', rawResponseText);
-      const rawPayload = parseMtop(rawResponseText);
-      const value = mapShopCardPayload(rawPayload);
-      return {
-        value,
-        requestUrl: resp.url(),
-        responseSucceeded: isSuccessfulMtopPayload(rawPayload),
-        rawPayload,
-        ...(value === null
-          ? authoritativeEmptyEvidence(rawPayload, 'shop-card')
-          : {}),
-      };
+      return parseShopCardSourceResponseV1(rawResponseText, resp.url());
     },
   });
   const consignmentCapture = startResponseCapture<
@@ -319,17 +309,7 @@ export async function executeRaw(
     parse: async (resp) => {
       const rawResponseText = await resp.text();
       await args.onRawComponent?.('consignment', rawResponseText);
-      const rawPayload = parseMtop(rawResponseText);
-      const value = mapConsignmentPayload(rawPayload, resp.url());
-      return {
-        value,
-        requestUrl: resp.url(),
-        responseSucceeded: isSuccessfulMtopPayload(rawPayload),
-        rawPayload,
-        ...(value === null
-          ? authoritativeEmptyEvidence(rawPayload, 'offer-consignment')
-          : {}),
-      };
+      return parseConsignmentSourceResponseV1(rawResponseText, resp.url());
     },
   });
   const offerDetailsCapture = startResponseCapture<{
@@ -597,6 +577,42 @@ export async function executeRaw(
     ]);
     page.off('response', onResp);
   }
+}
+
+export function parseShopCardSourceResponseV1(
+  rawResponseText: string,
+  requestUrl: string,
+): OfferSourceResponseCaptureV1<ShopCardInfo> | null {
+  const rawPayload = parseMtop(rawResponseText);
+  if (!isSuccessfulMtopPayload(rawPayload)) return null;
+  const value = mapShopCardPayload(rawPayload);
+  return {
+    value,
+    requestUrl,
+    responseSucceeded: true,
+    rawPayload,
+    ...(value === null
+      ? authoritativeEmptyEvidence(rawPayload, 'shop-card')
+      : {}),
+  };
+}
+
+export function parseConsignmentSourceResponseV1(
+  rawResponseText: string,
+  requestUrl: string,
+): OfferSourceResponseCaptureV1<ConsignmentInfo> | null {
+  const rawPayload = parseMtop(rawResponseText);
+  if (!isSuccessfulMtopPayload(rawPayload)) return null;
+  const value = mapConsignmentPayload(rawPayload, requestUrl);
+  return {
+    value,
+    requestUrl,
+    responseSucceeded: true,
+    rawPayload,
+    ...(value === null
+      ? authoritativeEmptyEvidence(rawPayload, 'offer-consignment')
+      : {}),
+  };
 }
 
 function captureEvidence<T>(
