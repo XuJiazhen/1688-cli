@@ -1755,8 +1755,9 @@ class FakeStorePage extends EventEmitter {
   constructor(
     private readonly incompletePage1 = false,
     private readonly incompleteHeader = false,
-    private readonly headerShopUrl = 'https://fixture.1688.com/',
-    private readonly headerMemberId = 'b2b-member-1',
+    private readonly headerShopUrl =
+      'https://winport.m.1688.com/page/index.html?newRender=true&memberId=b2b-member-1&upstreamSource=search',
+    private readonly headerMemberId: string | null = null,
   ) { super(); }
 
   async goto(url: string): Promise<null> {
@@ -1777,7 +1778,9 @@ class FakeStorePage extends EventEmitter {
           data: this.incompleteHeader
             ? { mainCate: 'Tools' }
             : {
-                memberId: this.headerMemberId,
+                ...(this.headerMemberId === null
+                  ? {}
+                  : { memberId: this.headerMemberId }),
                 companyName: 'Fixture Store Header',
                 commonUrl: { shopUrl: this.headerShopUrl },
               },

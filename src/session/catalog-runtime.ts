@@ -245,13 +245,11 @@ export function assertStoreSampleProfileObservationV1(
   const memberIdSource = observation?.memberIdSource;
   let observedCanonicalShopUrl: string;
   let expectedShopUrl: string;
-  let payloadShopUrl: string;
   try {
     observedCanonicalShopUrl = canonicalProfileShopUrl(
       observation?.canonicalShopUrl,
     );
     expectedShopUrl = canonicalProfileShopUrl(expectedCanonicalShopUrl);
-    payloadShopUrl = canonicalProfileShopUrl(profile?.shopUrl.value);
   } catch {
     throw catalogProtocolError(
       'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
@@ -267,9 +265,11 @@ export function assertStoreSampleProfileObservationV1(
     || memberIdSource.parserVersion !== profile.source.parserVersion
     || memberIdSource.rawRef !== profile.source.rawRef
     || memberIdSource.sourceRef !== profile.source.sourceRef
-    || memberIdSource.fieldPath !== 'data.data.memberId'
+    || ![
+      'data.data.memberId',
+      'data.data.commonUrl.shopUrl#memberId',
+    ].includes(memberIdSource.fieldPath ?? '')
     || observedCanonicalShopUrl !== expectedShopUrl
-    || payloadShopUrl !== expectedShopUrl
     || profile?.source.api !== ALISITE_MODULE_API
     || profile.source.componentKey !== STORE_PROFILE_COMPONENT_KEY
     || !profile.source.rawRef?.startsWith('artifact:')
@@ -283,6 +283,11 @@ export function assertStoreSampleProfileObservationV1(
     || profile.name.source.fieldPath !== 'data.data.companyName'
     || profile.shopUrl.availability !== 'available'
     || typeof profile.shopUrl.value !== 'string'
+    || !storeProfileShopIdentityMatches(
+      profile.shopUrl.value,
+      expectedShopUrl,
+      expectedMemberId,
+    )
     || profile.shopUrl.source.api !== profile.source.api
     || profile.shopUrl.source.componentKey !== profile.source.componentKey
     || profile.shopUrl.source.parserVersion !== profile.source.parserVersion
@@ -303,20 +308,67 @@ export function parseStoreProfileMemberAuthorityV1(
   const root = recordValue(payload);
   const envelope = recordValue(root?.['data']);
   const header = recordValue(envelope?.['data']);
-  const memberId = header?.['memberId'];
-  if (typeof memberId !== 'string' || !isSafeSupplierMemberKey(memberId)) {
+  const directMemberId = header?.['memberId'];
+  const memberId = typeof directMemberId === 'string'
+    && isSafeSupplierMemberKey(directMemberId)
+    ? directMemberId
+    : storeMemberIdFromMobileShopUrl(
+        recordValue(header?.['commonUrl'])?.['shopUrl'],
+      );
+  if (memberId === null) {
     throw catalogProtocolError(
       'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
-      'Store Sample requires member authority parsed from data.data.memberId.',
+      'Store Sample requires member authority from the Wangpu header payload.',
     );
   }
   return {
     memberId,
     memberIdSource: {
       ...source,
-      fieldPath: 'data.data.memberId',
+      fieldPath: typeof directMemberId === 'string'
+        && isSafeSupplierMemberKey(directMemberId)
+        ? 'data.data.memberId'
+        : 'data.data.commonUrl.shopUrl#memberId',
     },
   };
+}
+
+function storeProfileShopIdentityMatches(
+  value: string,
+  expectedCanonicalShopUrl: string,
+  expectedMemberId: string,
+): boolean {
+  try {
+    if (canonicalProfileShopUrl(value) === expectedCanonicalShopUrl) return true;
+  } catch {
+    // Current Wangpu headers publish a mobile URL instead of the canonical host.
+  }
+  return storeMemberIdFromMobileShopUrl(value) === expectedMemberId;
+}
+
+function storeMemberIdFromMobileShopUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || value.trim() !== value) return null;
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return null;
+  }
+  if (
+    url.protocol !== 'https:'
+    || url.hostname !== 'winport.m.1688.com'
+    || url.port !== ''
+    || url.username !== ''
+    || url.password !== ''
+    || url.pathname !== '/page/index.html'
+    || url.hash !== ''
+  ) {
+    return null;
+  }
+  const memberIds = url.searchParams.getAll('memberId');
+  return memberIds.length === 1 && isSafeSupplierMemberKey(memberIds[0]!)
+    ? memberIds[0]!
+    : null;
 }
 
 function canonicalProfileShopUrl(value: unknown): string {

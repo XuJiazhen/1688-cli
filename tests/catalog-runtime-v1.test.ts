@@ -386,6 +386,110 @@ describe('bounded Store Sample runtime', () => {
     }));
   });
 
+  it('accepts current Wangpu mobile shop identity when the header omits data.data.memberId', async () => {
+    const mobileShopUrl =
+      `https://winport.m.1688.com/page/index.html?newRender=true&memberId=${MEMBER}&upstreamSource=search`;
+    const profile = mapStoreProfilePayload({
+      api: 'mtop.alibaba.alisite.cbu.server.ModuleAsyncService',
+      data: {
+        success: true,
+        data: {
+          companyName: 'Fixture Store',
+          commonUrl: { shopUrl: mobileShopUrl },
+        },
+      },
+    }, NOW, {
+      sourceRef: 'fixture:wangpu-header-mobile-shop-url',
+      rawRef: 'artifact:wangpu-header-mobile-shop-url',
+    });
+    const memberAuthority = parseStoreProfileMemberAuthorityV1({
+      data: {
+        data: {
+          companyName: 'Fixture Store',
+          commonUrl: { shopUrl: mobileShopUrl },
+        },
+      },
+    }, profile.source);
+
+    expect(memberAuthority).toMatchObject({
+      memberId: MEMBER,
+      memberIdSource: {
+        rawRef: 'artifact:wangpu-header-mobile-shop-url',
+        fieldPath: 'data.data.commonUrl.shopUrl#memberId',
+      },
+    });
+    const { result, calls } = await baseline({
+      collectProfileObservation: async () => ({
+        ...memberAuthority,
+        canonicalShopUrl: SHOP,
+        observedAt: NOW,
+        profile,
+      }),
+    });
+    expect(calls).toEqual([1, 2, 3]);
+    expect(result.status).toBe('completed');
+    expect(result.profileObservation).toMatchObject({
+      memberId: MEMBER,
+      canonicalShopUrl: SHOP,
+      profile: {
+        shopUrl: { availability: 'available', value: mobileShopUrl },
+      },
+    });
+  });
+
+  it('rejects a Wangpu mobile shop URL for another member', async () => {
+    const profile = mapStoreProfilePayload({
+      api: 'mtop.alibaba.alisite.cbu.server.ModuleAsyncService',
+      data: {
+        success: true,
+        data: {
+          companyName: 'Fixture Store',
+          commonUrl: {
+            shopUrl:
+              'https://winport.m.1688.com/page/index.html?memberId=b2b-other',
+          },
+        },
+      },
+    }, NOW, {
+      sourceRef: 'fixture:wangpu-header-mobile-shop-url-drift',
+      rawRef: 'artifact:wangpu-header-mobile-shop-url-drift',
+    });
+    const memberAuthority = parseStoreProfileMemberAuthorityV1({
+      data: { data: {
+        commonUrl: {
+          shopUrl: 'https://winport.m.1688.com/page/index.html?memberId=b2b-other',
+        },
+      } },
+    }, profile.source);
+    await expect(baseline({
+      collectProfileObservation: async () => ({
+        ...memberAuthority,
+        canonicalShopUrl: SHOP,
+        observedAt: NOW,
+        profile,
+      }),
+    })).rejects.toMatchObject({ code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE' });
+  });
+
+  it('rejects ambiguous Wangpu mobile shop member authority', () => {
+    expect(() => parseStoreProfileMemberAuthorityV1({
+      data: { data: {
+        commonUrl: {
+          shopUrl:
+            `https://winport.m.1688.com/page/index.html?memberId=${MEMBER}&memberId=b2b-other`,
+        },
+      } },
+    }, {
+      api: 'mtop.alibaba.alisite.cbu.server.ModuleAsyncService',
+      componentKey: 'cbu-pc-wangpu-homepage-leftnav',
+      parserVersion: 'store-profile-v1',
+      sourceRef: 'fixture:wangpu-header-mobile-shop-url-ambiguous',
+      rawRef: 'artifact:wangpu-header-mobile-shop-url-ambiguous',
+    })).toThrowError(expect.objectContaining({
+      code: 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE',
+    }));
+  });
+
   it.each(['offer-count', 'total-pages', 'categories'] as const)(
     'cannot complete when page-1 %s authority is missing',
     async (missing) => {

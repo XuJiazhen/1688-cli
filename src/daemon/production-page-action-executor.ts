@@ -1085,7 +1085,7 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
             );
             const capturedProfileObservation: StoreSampleProfileObservationV1 = {
               ...memberAuthority,
-              canonicalShopUrl: profile.shopUrl.value ?? '',
+              canonicalShopUrl: identity.canonicalShopUrl,
               observedAt: captured.captured.collectedAt,
               profile,
             };
