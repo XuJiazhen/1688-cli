@@ -1967,10 +1967,13 @@ function sellerShopUrlCandidateDiagnosticsV1(input: {
 }): Readonly<{
   sellerWinportUrl: 'missing' | 'canonical' | 'invalid';
   sellerWinportUrlType: string;
+  sellerWinportUrlShape: string;
   sellerWinportUrlMapDefaultUrl: 'missing' | 'canonical' | 'invalid';
   sellerWinportUrlMapDefaultUrlType: string;
+  sellerWinportUrlMapDefaultUrlShape: string;
   winportUrl: 'missing' | 'canonical' | 'invalid';
   winportUrlType: string;
+  winportUrlShape: string;
   uniqueCanonicalCount: number;
 }> {
   const canonicalUrls = new Set<string>();
@@ -1991,12 +1994,17 @@ function sellerShopUrlCandidateDiagnosticsV1(input: {
   return Object.freeze({
     sellerWinportUrl,
     sellerWinportUrlType: safeValueType(input.sellerWinportUrl),
+    sellerWinportUrlShape: safeUrlValueShape(input.sellerWinportUrl),
     sellerWinportUrlMapDefaultUrl,
     sellerWinportUrlMapDefaultUrlType: safeValueType(
       input.sellerWinportUrlMapDefaultUrl,
     ),
+    sellerWinportUrlMapDefaultUrlShape: safeUrlValueShape(
+      input.sellerWinportUrlMapDefaultUrl,
+    ),
     winportUrl,
     winportUrlType: safeValueType(input.winportUrl),
+    winportUrlShape: safeUrlValueShape(input.winportUrl),
     uniqueCanonicalCount: canonicalUrls.size,
   });
 }
@@ -2013,6 +2021,19 @@ function safeValueType(value: unknown): string {
   if (value === null) return 'null';
   if (Array.isArray(value)) return 'array';
   return typeof value;
+}
+
+function safeUrlValueShape(value: unknown): string {
+  if (value === null || value === undefined) return 'missing';
+  if (typeof value !== 'string') return 'non-string';
+  if (value.trim() !== value) return 'padded';
+  if (value.includes('\\')) return 'backslash';
+  if (value.startsWith('//')) return 'scheme-relative';
+  if (/^https:\/\//u.test(value)) return 'https';
+  if (/^http:\/\//u.test(value)) return 'http';
+  if (value.startsWith('"')) return 'quoted';
+  if (/^[A-Za-z0-9.-]+\.1688\.com\/?$/u.test(value)) return 'bare-host';
+  return 'other';
 }
 
 async function scrapeDomFallback(page: Page): Promise<PageInfo> {
