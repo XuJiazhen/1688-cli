@@ -170,7 +170,11 @@ export function createOfferSourceSidecarV1(input: {
     ...(input.authoritySource === 'offer-core'
       ? { authorityEvidence: offerCoreAuthorityEvidence(offerId, memberId) }
       : {}),
-    sanitizedRawPayload: sanitizeOfferSourcePayloadV1(input.rawPayload),
+    sanitizedRawPayload: sanitizeOfferSourcePayloadV1(
+      input.rawPayload,
+      [],
+      input.authoritySource === 'offer-core',
+    ),
   };
   assertOfferCoreSidecarAuthority(artifact);
   const digest = evidenceHash(artifact).slice('sha256:'.length);
@@ -463,7 +467,27 @@ function isOfferSourceArtifactRefV1(
   return new RegExp(`^artifact:offer-source-${source}-[0-9a-f]{64}$`, 'u').test(value);
 }
 
-function sanitizeOfferSourcePayloadV1(value: unknown, key?: string): unknown {
+const OFFER_CORE_AUTHORITY_VALUE_PATHS = [
+  ['contextResult', 'data', 'gallery', 'fields', 'offerId'],
+  ['contextResult', 'global', 'globalData', 'model', 'sellerModel', 'memberId'],
+] as const;
+
+function sanitizeOfferSourcePayloadV1(
+  value: unknown,
+  path: readonly string[] = [],
+  preserveOfferCoreAuthorityIds = false,
+): unknown {
+  if (
+    preserveOfferCoreAuthorityIds
+    &&
+    (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value)))
+    && OFFER_CORE_AUTHORITY_VALUE_PATHS.some((authorityPath) =>
+      authorityPath.length === path.length
+      && authorityPath.every((segment, index) => segment === path[index]))
+  ) {
+    return value;
+  }
+  const key = path.at(-1);
   const normalizedKey = key?.toLowerCase().replace(/[^a-z0-9]/gu, '') ?? '';
   if (
     /(?:authorization|cookie|password|secret|token|signature|^sign|mh5tk|headers)/u.test(normalizedKey) ||
@@ -499,13 +523,24 @@ function sanitizeOfferSourcePayloadV1(value: unknown, key?: string): unknown {
     return value;
   }
   if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map((item) => sanitizeOfferSourcePayloadV1(item));
+  if (Array.isArray(value)) {
+    return value.map((item, index) =>
+      sanitizeOfferSourcePayloadV1(
+        item,
+        [...path, String(index)],
+        preserveOfferCoreAuthorityIds,
+      ));
+  }
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
       .filter(([, child]) => child !== undefined)
       .map(([childKey, child]) => [
         childKey,
-        sanitizeOfferSourcePayloadV1(child, childKey),
+        sanitizeOfferSourcePayloadV1(
+          child,
+          [...path, childKey],
+          preserveOfferCoreAuthorityIds,
+        ),
       ]),
   );
 }

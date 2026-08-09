@@ -299,4 +299,76 @@ describe('Offer evidence and SourceMedia V2', () => {
       sidecar.artifact,
     )).not.toThrow();
   });
+
+  it('preserves only exact Offer core authority identifiers through sanitization', () => {
+    const sidecar = createOfferSourceSidecarV1({
+      source: 'offer-consignment', authoritySource: 'offer-core',
+      offerId: '968683334168', memberId: 'b2b-222035881045188136',
+      correlatedOfferId: '968683334168', correlatedMemberId: 'b2b-222035881045188136',
+      pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      rawPayload: {
+        contextResult: {
+          data: { gallery: { fields: {
+            offerId: '968683334168',
+            unrelatedOfferId: '968683334168',
+          } } },
+          global: { globalData: { model: {
+            sellerModel: {
+              memberId: 'b2b-222035881045188136',
+              contactPhone: '13800138000',
+            },
+            consignModel: {
+              consignOffer: false,
+              hasConsignPrice: false,
+              consignSign: {
+                supportConsignIssuing: false,
+                signs: { isSupportConsignIssuing: false },
+              },
+            },
+          } } },
+        },
+      },
+    });
+    expect(sidecar.artifact.sanitizedRawPayload).toMatchObject({
+      contextResult: {
+        data: { gallery: { fields: {
+          offerId: '968683334168',
+          unrelatedOfferId: '[redacted]',
+        } } },
+        global: { globalData: { model: { sellerModel: {
+          memberId: 'b2b-222035881045188136',
+          contactPhone: '[redacted]',
+        } } } },
+      },
+    });
+    expect(() => assertOfferSourceSidecarBindingV1(
+      sidecar.artifactRef,
+      sidecar.artifact,
+    )).not.toThrow();
+
+    const nonAuthoritySidecar = createOfferSourceSidecarV1({
+      source: 'shop-card',
+      offerId: '968683334168', memberId: 'b2b-222035881045188136',
+      correlatedOfferId: '968683334168', correlatedMemberId: 'b2b-222035881045188136',
+      pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      rawPayload: {
+        contextResult: {
+          data: { gallery: { fields: { offerId: '968683334168' } } },
+          global: { globalData: { model: { sellerModel: {
+            memberId: 'b2b-222035881045188136',
+          } } } },
+        },
+      },
+    });
+    expect(nonAuthoritySidecar.artifact.sanitizedRawPayload).toMatchObject({
+      contextResult: {
+        data: { gallery: { fields: { offerId: '[redacted]' } } },
+        global: { globalData: { model: { sellerModel: {
+          memberId: 'b2b-[redacted]',
+        } } } },
+      },
+    });
+  });
 });
