@@ -1,0 +1,90 @@
+{
+  "schema": "collector.offer-source-replay-fixture.v1",
+  "origin": {
+    "run": "r37",
+    "outerCommit": "783afee",
+    "nestedCommit": "ae14e830b73bc2ca82a15c0a6db32e9b5a37738c",
+    "sanitization": "business identity and source-shape only; credentials and contact data removed"
+  },
+  "subject": {
+    "offerId": "968683334168",
+    "sellerMemberId": "b2b-222035881045188136",
+    "sellerLoginId": "sanitized-r37-login",
+    "canonicalShopUrl": "https://shop22v60i972j411.1688.com/"
+  },
+  "page": {
+    "canonicalOfferId": "968683334168",
+    "sellerShopUrl": null
+  },
+  "offerCore": {
+    "contextResult": {
+      "data": {
+        "gallery": {
+          "fields": {
+            "offerId": 968683334168
+          }
+        }
+      },
+      "global": {
+        "globalData": {
+          "model": {
+            "sellerModel": {
+              "loginId": "sanitized-r37-login",
+              "memberId": "b2b-222035881045188136",
+              "sellerWinportUrlMap": {
+                "defaultUrl": "https://shop22v60i972j411.1688.com/"
+              },
+              "winportUrl": "https://shop22v60i972j411.1688.com/"
+            },
+            "consignModel": {
+              "consignOffer": false,
+              "hasConsignPrice": false,
+              "consignSign": {
+                "supportConsignIssuing": false,
+                "signs": {
+                  "isSupportConsignIssuing": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "shopCard": {
+    "requestScope": {},
+    "responseSucceeded": true,
+    "payload": {
+      "api": "mtop.1688.moga.pc.shopcard",
+      "ret": [
+        "SUCCESS::sanitized"
+      ],
+      "data": {
+        "model": {
+          "iconType": "cjgc_global",
+          "mainCategoryName": "sanitized-category",
+          "shopData": [
+            {
+              "dataKey": "return-rate",
+              "dataValue": "27%"
+            }
+          ],
+          "shopName": "sanitized-r37-shop",
+          "shopType": "cjgc",
+          "shopUrl": "https://shop22v60i972j411.1688.com/",
+          "tpYear": 2
+        }
+      }
+    },
+    "legacySidecarCorrelation": {
+      "offerId": null,
+      "memberId": null
+    }
+  },
+  "consignment": null,
+  "expected": {
+    "shopCardState": "available",
+    "consignmentState": "not-present",
+    "consignmentAuthoritySource": "offer-core"
+  }
+}

@@ -467,20 +467,54 @@ function isOfferSourceArtifactRefV1(
   return new RegExp(`^artifact:offer-source-${source}-[0-9a-f]{64}$`, 'u').test(value);
 }
 
+const OFFER_CORE_CONSIGNMENT_SIGNS_PATH = [
+  'contextResult',
+  'global',
+  'globalData',
+  'model',
+  'consignModel',
+  'consignSign',
+  'signs',
+] as const;
+
 const OFFER_CORE_AUTHORITY_VALUE_PATHS = [
   ['contextResult', 'data', 'gallery', 'fields', 'offerId'],
   ['contextResult', 'global', 'globalData', 'model', 'sellerModel', 'memberId'],
+  [
+    ...OFFER_CORE_CONSIGNMENT_SIGNS_PATH,
+    'isSupportConsignIssuing',
+  ],
 ] as const;
 
 function sanitizeOfferSourcePayloadV1(
   value: unknown,
   path: readonly string[] = [],
-  preserveOfferCoreAuthorityIds = false,
+  preserveOfferCoreAuthorityValues = false,
 ): unknown {
   if (
-    preserveOfferCoreAuthorityIds
+    preserveOfferCoreAuthorityValues
+    && path.length === OFFER_CORE_CONSIGNMENT_SIGNS_PATH.length
+    && path.every(
+      (segment, index) => segment === OFFER_CORE_CONSIGNMENT_SIGNS_PATH[index],
+    )
+  ) {
+    const signs = recordOrNull(value);
+    return {
+      isSupportConsignIssuing: sanitizeOfferSourcePayloadV1(
+        signs?.isSupportConsignIssuing,
+        [...path, 'isSupportConsignIssuing'],
+        true,
+      ),
+    };
+  }
+  if (
+    preserveOfferCoreAuthorityValues
     &&
-    (typeof value === 'string' || (typeof value === 'number' && Number.isFinite(value)))
+    (
+      typeof value === 'string'
+      || typeof value === 'boolean'
+      || (typeof value === 'number' && Number.isFinite(value))
+    )
     && OFFER_CORE_AUTHORITY_VALUE_PATHS.some((authorityPath) =>
       authorityPath.length === path.length
       && authorityPath.every((segment, index) => segment === path[index]))
@@ -490,8 +524,12 @@ function sanitizeOfferSourcePayloadV1(
   const key = path.at(-1);
   const normalizedKey = key?.toLowerCase().replace(/[^a-z0-9]/gu, '') ?? '';
   if (
-    /(?:authorization|cookie|password|secret|token|signature|^sign|mh5tk|headers)/u.test(normalizedKey) ||
-    /(?:contact|mobile|phone|telephone|email|wechat|wangwang|identitycard|idcard|bankaccount|principal|legalperson|legalrepresentative)/u.test(normalizedKey)
+    (
+      /(?:authorization|cookie|password|secret|token|signature|^sign|mh5tk|headers)/u
+        .test(normalizedKey)
+      || /(?:contact|mobile|phone|telephone|email|wechat|wangwang|identitycard|idcard|bankaccount|principal|legalperson|legalrepresentative)/u
+        .test(normalizedKey)
+    )
   ) {
     return '[redacted]';
   }
@@ -528,7 +566,7 @@ function sanitizeOfferSourcePayloadV1(
       sanitizeOfferSourcePayloadV1(
         item,
         [...path, String(index)],
-        preserveOfferCoreAuthorityIds,
+        preserveOfferCoreAuthorityValues,
       ));
   }
   return Object.fromEntries(
@@ -539,7 +577,7 @@ function sanitizeOfferSourcePayloadV1(
         sanitizeOfferSourcePayloadV1(
           child,
           [...path, childKey],
-          preserveOfferCoreAuthorityIds,
+          preserveOfferCoreAuthorityValues,
         ),
       ]),
   );
@@ -611,7 +649,7 @@ function assertOfferCoreSidecarAuthority(artifact: OfferSourceSidecarV1): void {
       artifact.sanitizedRawPayload,
       artifact.offerId,
       artifact.memberId,
-      false,
+      true,
     )
   ) {
     throw new TypeError('Offer core Consignment sidecar authority is invalid.');

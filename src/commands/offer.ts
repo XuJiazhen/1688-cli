@@ -507,6 +507,7 @@ export async function executeRaw(
         pageInfo.rawPayload,
         result.offerId,
         result.supplier.memberId,
+        result.supplier.loginId,
       );
     OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
       shopCard: captureEvidence(shopCardResponse, result, {
@@ -609,8 +610,22 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
   const responseCorrelation = readOfferCorrelationEvidenceV1([
     input.rawPayload,
   ]);
+  const requestScopeUnambiguous = !requestCorrelation.offerIdentityConflict
+    && !requestCorrelation.memberIdentityConflict
+    && !requestCorrelation.loginIdentityConflict;
+  const requestScopeMatchesObserved = (
+    requestCorrelation.correlatedOfferId === null
+      || requestCorrelation.correlatedOfferId === input.observedOfferId
+  ) && (
+    requestCorrelation.correlatedMemberId === null
+      || requestCorrelation.correlatedMemberId === input.observedSellerMemberId
+  ) && (
+    requestCorrelation.correlatedLoginId === null
+      || requestCorrelation.correlatedLoginId === input.observedSellerLoginId
+  );
   const responseScopeUnambiguous = !responseCorrelation.offerIdentityConflict
-    && !responseCorrelation.memberIdentityConflict;
+    && !responseCorrelation.memberIdentityConflict
+    && !responseCorrelation.loginIdentityConflict;
   const responseScopeMatchesObserved = (
     responseCorrelation.correlatedOfferId === null
       || responseCorrelation.correlatedOfferId === input.observedOfferId
@@ -618,20 +633,29 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
     responseCorrelation.correlatedMemberId === null
       || responseCorrelation.correlatedMemberId
         === input.observedSellerMemberId
+  ) && (
+    responseCorrelation.correlatedLoginId === null
+      || responseCorrelation.correlatedLoginId === input.observedSellerLoginId
   );
   const canonicalScopeUnambiguous = !correlation.offerIdentityConflict
-    && !correlation.memberIdentityConflict;
+    && !correlation.memberIdentityConflict
+    && !correlation.loginIdentityConflict;
   const canonicalScopeMatchesObserved = (
     correlation.correlatedOfferId === null
       || correlation.correlatedOfferId === input.observedOfferId
   ) && (
     correlation.correlatedMemberId === null
       || correlation.correlatedMemberId === input.observedSellerMemberId
+  ) && (
+    correlation.correlatedLoginId === null
+      || correlation.correlatedLoginId === input.observedSellerLoginId
   );
   if (
     (
       responseShopUrlMatched
       && input.observedSellerMemberId !== null
+      && requestScopeUnambiguous
+      && requestScopeMatchesObserved
       && responseScopeUnambiguous
       && responseScopeMatchesObserved
     ) || (
@@ -656,24 +680,26 @@ export function preferredCanonicalSellerShopUrlV1(input: {
   sellerWinportUrlMapDefaultUrl?: unknown;
   winportUrl?: unknown;
 }): string | null {
+  const canonicalUrls = new Set<string>();
   for (const candidate of [
     input.sellerWinportUrl,
     input.sellerWinportUrlMapDefaultUrl,
     input.winportUrl,
   ]) {
     try {
-      return canonicalProfileShopUrl(candidate);
+      canonicalUrls.add(canonicalProfileShopUrl(candidate));
     } catch {
       // Continue to the next response-owned Seller URL candidate.
     }
   }
-  return null;
+  return canonicalUrls.size === 1 ? [...canonicalUrls][0]! : null;
 }
 
 export function readOfferCoreSellerShopUrlAuthorityV1(
   rawPayload: unknown,
   observedOfferId: string,
   observedMemberId: string | null,
+  observedLoginId?: string | null,
 ): string | null {
   if (observedMemberId === null) return null;
   const root = asRecord(rawPayload);
@@ -687,6 +713,10 @@ export function readOfferCoreSellerShopUrlAuthorityV1(
   if (
     correlationScalar(gallery?.offerId) !== observedOfferId
     || correlationScalar(seller?.memberId) !== observedMemberId
+    || (
+      observedLoginId !== undefined
+      && correlationScalar(seller?.loginId) !== observedLoginId
+    )
   ) {
     return null;
   }

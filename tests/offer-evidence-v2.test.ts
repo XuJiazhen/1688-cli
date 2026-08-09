@@ -130,7 +130,10 @@ describe('Offer evidence and SourceMedia V2', () => {
               hasConsignPrice: false,
               consignSign: {
                 supportConsignIssuing: false,
-                signs: { isSupportConsignIssuing: false },
+                signs: {
+                  isSupportConsignIssuing: false,
+                  sign: 'synthetic-secret-that-must-not-survive',
+                },
               },
             },
           } } },
@@ -222,6 +225,28 @@ describe('Offer evidence and SourceMedia V2', () => {
       responseObserved: false,
     });
     expect(failed).toMatchObject({ state: 'failed', error: { code: 'OFFER_CONSIGNMENT_RESPONSE_NOT_OBSERVED' } });
+    const shopCardNotObserved = createOfferSourceTerminalReceiptV1({
+      ...common,
+      source: 'shop-card',
+      responseObserved: false,
+      parsedValue: shopCard as never,
+      rawEvidenceRefs: [shopSidecar.artifactRef],
+    });
+    expect(shopCardNotObserved).toMatchObject({
+      state: 'failed',
+      error: { code: 'SHOP_CARD_RESPONSE_NOT_OBSERVED' },
+    });
+    const shopCardScopeConflict = createOfferSourceTerminalReceiptV1({
+      ...common,
+      source: 'shop-card',
+      correlatedOfferId: 'another-offer',
+      parsedValue: shopCard as never,
+      rawEvidenceRefs: [shopSidecar.artifactRef],
+    });
+    expect(shopCardScopeConflict).toMatchObject({
+      state: 'failed',
+      error: { code: 'SHOP_CARD_SCOPE_MISMATCH' },
+    });
     expect(() => assertOfferSourceReceiptsCompleteV1({
       offerId: '100', memberId: 'member-1', pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
       remoteRawEvidenceRefs: [shopSidecar.artifactRef, consignmentSidecar.artifactRef],
@@ -339,13 +364,21 @@ describe('Offer evidence and SourceMedia V2', () => {
         global: { globalData: { model: { sellerModel: {
           memberId: 'b2b-222035881045188136',
           contactPhone: '[redacted]',
-        } } } },
+        }, consignModel: { consignSign: { signs: {
+          isSupportConsignIssuing: false,
+        } } } } } },
       },
     });
     expect(() => assertOfferSourceSidecarBindingV1(
       sidecar.artifactRef,
       sidecar.artifact,
     )).not.toThrow();
+    expect((sidecar.artifact.sanitizedRawPayload as {
+      contextResult: { global: { globalData: { model: {
+        consignModel: { consignSign: { signs: unknown } };
+      } } } };
+    }).contextResult.global.globalData.model.consignModel.consignSign.signs)
+      .toEqual({ isSupportConsignIssuing: false });
 
     const nonAuthoritySidecar = createOfferSourceSidecarV1({
       source: 'shop-card',

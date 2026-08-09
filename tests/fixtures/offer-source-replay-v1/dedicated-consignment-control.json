@@ -1,0 +1,115 @@
+{
+  "schema": "collector.offer-source-replay-fixture.v1",
+  "origin": {
+    "run": "sanitized-dedicated-control",
+    "outerCommit": null,
+    "nestedCommit": null,
+    "sanitization": "source-shape control; credentials and contact data absent"
+  },
+  "subject": {
+    "offerId": "900000000001",
+    "sellerMemberId": "b2b-sanitized-dedicated",
+    "sellerLoginId": "sanitized-dedicated-login",
+    "canonicalShopUrl": "https://dedicated-control.1688.com/"
+  },
+  "page": {
+    "canonicalOfferId": "900000000001",
+    "sellerShopUrl": "https://dedicated-control.1688.com/"
+  },
+  "offerCore": {
+    "contextResult": {
+      "data": {
+        "gallery": {
+          "fields": {
+            "offerId": 900000000001
+          }
+        }
+      },
+      "global": {
+        "globalData": {
+          "model": {
+            "sellerModel": {
+              "loginId": "sanitized-dedicated-login",
+              "memberId": "b2b-sanitized-dedicated",
+              "sellerWinportUrl": "https://dedicated-control.1688.com/"
+            },
+            "consignModel": {
+              "consignOffer": true,
+              "hasConsignPrice": true,
+              "consignSign": {
+                "supportConsignIssuing": true,
+                "signs": {
+                  "isSupportConsignIssuing": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "shopCard": {
+    "requestScope": {
+      "offerId": "900000000001",
+      "memberId": "b2b-sanitized-dedicated",
+      "sellerLoginId": "sanitized-dedicated-login"
+    },
+    "responseSucceeded": true,
+    "payload": {
+      "ret": [
+        "SUCCESS::sanitized"
+      ],
+      "data": {
+        "offerId": "900000000001",
+        "memberId": "b2b-sanitized-dedicated",
+        "model": {
+          "shopName": "sanitized-dedicated-shop",
+          "shopUrl": "https://dedicated-control.1688.com/"
+        }
+      }
+    },
+    "legacySidecarCorrelation": null
+  },
+  "consignment": {
+    "requestScope": {
+      "offerId": "900000000001",
+      "memberId": "b2b-sanitized-dedicated",
+      "sellerLoginId": "sanitized-dedicated-login",
+      "mmgaRequest": {
+        "serviceName": "offerPCConsignInfoService"
+      }
+    },
+    "responseSucceeded": true,
+    "payload": {
+      "ret": [
+        "SUCCESS::sanitized"
+      ],
+      "data": {
+        "offerId": "900000000001",
+        "memberId": "b2b-sanitized-dedicated",
+        "data": {
+          "data": {
+            "name": "sanitized-dedicated-consignment",
+            "adviseList": [
+              {
+                "key": "offerDelivery48hRate",
+                "value": "98%"
+              }
+            ],
+            "priceInfoList": [
+              {
+                "price": "8.00",
+                "text": "1 piece"
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "expected": {
+    "shopCardState": "available",
+    "consignmentState": "available",
+    "consignmentAuthoritySource": null
+  }
+}

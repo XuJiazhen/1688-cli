@@ -123,6 +123,31 @@ describe('offer source response scope', () => {
         },
       },
     })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      observedSellerLoginId: 'seller-login-1',
+      rawPayload: {
+        data: {
+          model: {
+            sellerLoginId: 'another-login',
+            shopUrl: 'https://supplier.1688.com/',
+          },
+        },
+      },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      observedSellerLoginId: 'seller-login-1',
+      rawPayload: {
+        data: {
+          model: { shopUrl: 'https://supplier.1688.com/' },
+          identities: [
+            { sellerLoginId: 'seller-login-1' },
+            { sellerLoginId: 'another-login' },
+          ],
+        },
+      },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
   });
 
   it('keeps response-owned Store URL authority separate from request identities', () => {
@@ -143,8 +168,8 @@ describe('offer source response scope', () => {
       allowSellerShopUrlBinding: true,
     };
     expect(resolveOfferSourceCorrelationScopeV1(input)).toEqual({
-      correlatedOfferId: '100',
-      correlatedMemberId: 'member-1',
+      correlatedOfferId: 'request-offer',
+      correlatedMemberId: 'request-member',
     });
     expect(resolveOfferSourceCorrelationScopeV1({
       ...input,
@@ -160,6 +185,15 @@ describe('offer source response scope', () => {
       correlatedOfferId: 'request-offer',
       correlatedMemberId: null,
     });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      requestUrl: `https://h5api.m.1688.com/h5/source/1.0/?data=${encodeURIComponent(JSON.stringify({
+        sellerLoginId: 'seller-login-1',
+      }))}`,
+      rawPayload: { data: { sellerLoginId: 'another-login' } },
+      observedOfferId: '100',
+      observedSellerLoginId: 'seller-login-1',
+      observedSellerMemberId: 'member-1',
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
   });
 
   it('prefers canonical Seller shop authority over a mobile winport URL', () => {
@@ -189,6 +223,7 @@ describe('offer source response scope', () => {
         data: { gallery: { fields: { offerId: '100' } } },
         global: { globalData: { model: { sellerModel: {
           memberId: 'member-1',
+          loginId: 'seller-login-1',
           sellerWinportUrl: null,
           sellerWinportUrlMap: {
             defaultUrl: 'https://supplier.1688.com/',
@@ -202,17 +237,40 @@ describe('offer source response scope', () => {
       rawPayload,
       '100',
       'member-1',
+      'seller-login-1',
     )).toBe('https://supplier.1688.com/');
     expect(readOfferCoreSellerShopUrlAuthorityV1(
       rawPayload,
       '999',
       'member-1',
+      'seller-login-1',
     )).toBeNull();
     expect(readOfferCoreSellerShopUrlAuthorityV1(
       rawPayload,
       '100',
       'member-2',
+      'seller-login-1',
     )).toBeNull();
+    expect(readOfferCoreSellerShopUrlAuthorityV1(
+      rawPayload,
+      '100',
+      'member-1',
+      'another-login',
+    )).toBeNull();
+    expect(readOfferCoreSellerShopUrlAuthorityV1({
+      ...rawPayload,
+      contextResult: {
+        ...rawPayload.contextResult,
+        global: { globalData: { model: { sellerModel: {
+          memberId: 'member-1',
+          loginId: 'seller-login-1',
+          sellerWinportUrl: 'https://supplier.1688.com/',
+          sellerWinportUrlMap: {
+            defaultUrl: 'https://conflicting-supplier.1688.com/',
+          },
+        } } } },
+      },
+    }, '100', 'member-1', 'seller-login-1')).toBeNull();
   });
 
   it('derives consignment not-present only from exact Offer core authority', () => {
