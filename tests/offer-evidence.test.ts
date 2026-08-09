@@ -5,6 +5,7 @@ import {
 } from '../src/session/offer-evidence.js';
 import {
   matchesOfferDetailServiceResponseV1,
+  offerSourceCorrelationDiagnosticsV1,
   preferredCanonicalSellerShopUrlV1,
   readOfferCoreConsignmentAbsenceV1,
   readOfferCoreSellerShopUrlAuthorityV1,
@@ -148,6 +149,101 @@ describe('offer source response scope', () => {
         },
       },
     })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+  });
+
+  it('reports correlation decisions without replayable authority values', () => {
+    const observed = {
+      observedOfferId: 'offer-secret-100',
+      observedSellerLoginId: 'login-secret-1',
+      observedSellerMemberId: 'member-secret-1',
+      observedSellerShopUrl: 'https://supplier.1688.com/',
+      allowSellerShopUrlBinding: true,
+    };
+    const exactUrl = offerSourceCorrelationDiagnosticsV1({
+      ...observed,
+      requestUrl: 'https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/',
+      rawPayload: {
+        data: { model: { shopUrl: 'https://supplier.1688.com/' } },
+      },
+    });
+    expect(exactUrl).toMatchObject({
+      request: {
+        offer: 'none',
+        member: 'none',
+        login: 'none',
+        scopeUnambiguous: true,
+        scopeMatchesObserved: true,
+        sellerMatched: false,
+      },
+      response: {
+        offer: 'none',
+        member: 'none',
+        login: 'none',
+        scopeUnambiguous: true,
+        scopeMatchesObserved: true,
+        shopUrlMatched: true,
+      },
+      predicates: {
+        observedMemberPresent: true,
+        observedShopUrlPresent: true,
+        urlBranchEligible: true,
+        loginBranchEligible: false,
+      },
+    });
+
+    const requestMismatch = offerSourceCorrelationDiagnosticsV1({
+      ...observed,
+      requestUrl:
+        'https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/'
+        + `?data=${encodeURIComponent(JSON.stringify({
+          offerId: 'other-offer',
+          memberId: 'other-member',
+        }))}`,
+      rawPayload: {
+        data: { model: { shopUrl: 'https://supplier.1688.com/' } },
+      },
+    });
+    expect(requestMismatch.request).toMatchObject({
+      offer: 'mismatch',
+      member: 'mismatch',
+      scopeUnambiguous: true,
+      scopeMatchesObserved: false,
+    });
+    expect(requestMismatch.predicates.urlBranchEligible).toBe(false);
+
+    const responseConflict = offerSourceCorrelationDiagnosticsV1({
+      ...observed,
+      requestUrl: 'https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/',
+      rawPayload: {
+        data: {
+          model: {
+            shopUrl: 'https://supplier.1688.com/',
+            loginId: 'login-secret-1',
+          },
+          other: { sellerLoginId: 'other-login' },
+        },
+      },
+    });
+    expect(responseConflict.response).toMatchObject({
+      login: 'conflict',
+      scopeUnambiguous: false,
+      scopeMatchesObserved: true,
+      shopUrlMatched: true,
+    });
+    expect(responseConflict.predicates.urlBranchEligible).toBe(false);
+
+    const serialized = JSON.stringify({ exactUrl, requestMismatch, responseConflict });
+    for (const secret of [
+      'offer-secret-100',
+      'member-secret-1',
+      'login-secret-1',
+      'other-offer',
+      'other-member',
+      'other-login',
+      'supplier.1688.com',
+    ]) {
+      expect(serialized).not.toContain(secret);
+    }
   });
 
   it('keeps response-owned Store URL authority separate from request identities', () => {

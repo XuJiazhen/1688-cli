@@ -575,6 +575,28 @@ function captureEvidence<T>(
         observedSellerShopUrl: options.observedSellerShopUrl ?? null,
         allowSellerShopUrlBinding: options.allowSellerShopUrlBinding ?? false,
       });
+  if (
+    captured !== null
+    && options.allowSellerShopUrlBinding === true
+    && process.env.BB1688_OFFER_AUTHORITY_DIAGNOSTICS === '1'
+    && (
+      correlation.correlatedOfferId !== offer.offerId
+      || correlation.correlatedMemberId !== offer.supplier.memberId
+    )
+  ) {
+    const diagnostics = offerSourceCorrelationDiagnosticsV1({
+      requestUrl: captured.requestUrl,
+      rawPayload: captured.rawPayload,
+      observedOfferId: offer.offerId,
+      observedSellerLoginId: offer.supplier.loginId,
+      observedSellerMemberId: offer.supplier.memberId,
+      observedSellerShopUrl: options.observedSellerShopUrl ?? null,
+      allowSellerShopUrlBinding: true,
+    });
+    process.stderr.write(
+      `[DEBUG-offer-correlation] ${JSON.stringify(diagnostics)}\n`,
+    );
+  }
   return {
     responseObserved: captured !== null,
     responseSucceeded: captured?.responseSucceeded ?? false,
@@ -692,6 +714,200 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
     correlatedOfferId: correlation.correlatedOfferId,
     correlatedMemberId: correlation.correlatedMemberId,
   };
+}
+
+type CorrelationIdentityState = 'none' | 'match' | 'mismatch' | 'conflict';
+
+export function offerSourceCorrelationDiagnosticsV1(input: {
+  requestUrl: string;
+  rawPayload: unknown;
+  observedOfferId: string;
+  observedSellerLoginId: string | null;
+  observedSellerMemberId: string | null;
+  observedSellerShopUrl?: string | null;
+  allowSellerShopUrlBinding?: boolean;
+}): Readonly<{
+  request: Readonly<{
+    offer: CorrelationIdentityState;
+    member: CorrelationIdentityState;
+    login: CorrelationIdentityState;
+    scopeUnambiguous: boolean;
+    scopeMatchesObserved: boolean;
+    sellerMatched: boolean;
+  }>;
+  response: Readonly<{
+    offer: CorrelationIdentityState;
+    member: CorrelationIdentityState;
+    login: CorrelationIdentityState;
+    scopeUnambiguous: boolean;
+    scopeMatchesObserved: boolean;
+    shopUrlMatched: boolean;
+  }>;
+  canonical: Readonly<{
+    offer: CorrelationIdentityState;
+    member: CorrelationIdentityState;
+    login: CorrelationIdentityState;
+    scopeUnambiguous: boolean;
+    scopeMatchesObserved: boolean;
+  }>;
+  predicates: Readonly<{
+    observedMemberPresent: boolean;
+    observedShopUrlPresent: boolean;
+    urlBranchEligible: boolean;
+    loginBranchEligible: boolean;
+  }>;
+}> {
+  const canonical = readOfferSourceCorrelationEvidenceV1(
+    input.requestUrl,
+    input.rawPayload,
+  );
+  const request = readOfferSourceCorrelationEvidenceV1(input.requestUrl, null);
+  const response = readOfferCorrelationEvidenceV1([input.rawPayload]);
+  const requestScopeUnambiguous = correlationScopeUnambiguous(request);
+  const requestScopeMatchesObserved = correlationScopeMatchesObserved(
+    request,
+    input,
+  );
+  const responseScopeUnambiguous = correlationScopeUnambiguous(response);
+  const responseScopeMatchesObserved = correlationScopeMatchesObserved(
+    response,
+    input,
+  );
+  const canonicalScopeUnambiguous = correlationScopeUnambiguous(canonical);
+  const canonicalScopeMatchesObserved = correlationScopeMatchesObserved(
+    canonical,
+    input,
+  );
+  const sellerMatched = input.observedSellerLoginId !== null
+    && input.observedSellerMemberId !== null
+    && !request.loginIdentityConflict
+    && request.correlatedLoginId === input.observedSellerLoginId;
+  const observedShopUrlPresent = input.observedSellerShopUrl !== null
+    && input.observedSellerShopUrl !== undefined;
+  const shopUrlMatched = input.allowSellerShopUrlBinding === true
+    && observedShopUrlPresent
+    && exactCanonicalShopUrlMatch(
+      input.rawPayload,
+      input.observedSellerShopUrl!,
+    );
+  return Object.freeze({
+    request: Object.freeze({
+      offer: correlationIdentityState(
+        request.correlatedOfferId,
+        request.offerIdentityConflict,
+        input.observedOfferId,
+      ),
+      member: correlationIdentityState(
+        request.correlatedMemberId,
+        request.memberIdentityConflict,
+        input.observedSellerMemberId,
+      ),
+      login: correlationIdentityState(
+        request.correlatedLoginId,
+        request.loginIdentityConflict,
+        input.observedSellerLoginId,
+      ),
+      scopeUnambiguous: requestScopeUnambiguous,
+      scopeMatchesObserved: requestScopeMatchesObserved,
+      sellerMatched,
+    }),
+    response: Object.freeze({
+      offer: correlationIdentityState(
+        response.correlatedOfferId,
+        response.offerIdentityConflict,
+        input.observedOfferId,
+      ),
+      member: correlationIdentityState(
+        response.correlatedMemberId,
+        response.memberIdentityConflict,
+        input.observedSellerMemberId,
+      ),
+      login: correlationIdentityState(
+        response.correlatedLoginId,
+        response.loginIdentityConflict,
+        input.observedSellerLoginId,
+      ),
+      scopeUnambiguous: responseScopeUnambiguous,
+      scopeMatchesObserved: responseScopeMatchesObserved,
+      shopUrlMatched,
+    }),
+    canonical: Object.freeze({
+      offer: correlationIdentityState(
+        canonical.correlatedOfferId,
+        canonical.offerIdentityConflict,
+        input.observedOfferId,
+      ),
+      member: correlationIdentityState(
+        canonical.correlatedMemberId,
+        canonical.memberIdentityConflict,
+        input.observedSellerMemberId,
+      ),
+      login: correlationIdentityState(
+        canonical.correlatedLoginId,
+        canonical.loginIdentityConflict,
+        input.observedSellerLoginId,
+      ),
+      scopeUnambiguous: canonicalScopeUnambiguous,
+      scopeMatchesObserved: canonicalScopeMatchesObserved,
+    }),
+    predicates: Object.freeze({
+      observedMemberPresent: input.observedSellerMemberId !== null,
+      observedShopUrlPresent,
+      urlBranchEligible: shopUrlMatched
+        && input.observedSellerMemberId !== null
+        && requestScopeUnambiguous
+        && requestScopeMatchesObserved
+        && responseScopeUnambiguous
+        && responseScopeMatchesObserved,
+      loginBranchEligible: sellerMatched
+        && canonicalScopeUnambiguous
+        && canonicalScopeMatchesObserved,
+    }),
+  });
+}
+
+function correlationScopeUnambiguous(input: {
+  offerIdentityConflict: boolean;
+  memberIdentityConflict: boolean;
+  loginIdentityConflict: boolean;
+}): boolean {
+  return !input.offerIdentityConflict
+    && !input.memberIdentityConflict
+    && !input.loginIdentityConflict;
+}
+
+function correlationScopeMatchesObserved(
+  correlation: {
+    correlatedOfferId: string | null;
+    correlatedMemberId: string | null;
+    correlatedLoginId: string | null;
+  },
+  observed: {
+    observedOfferId: string;
+    observedSellerMemberId: string | null;
+    observedSellerLoginId: string | null;
+  },
+): boolean {
+  return (
+    correlation.correlatedOfferId === null
+      || correlation.correlatedOfferId === observed.observedOfferId
+  ) && (
+    correlation.correlatedMemberId === null
+      || correlation.correlatedMemberId === observed.observedSellerMemberId
+  ) && (
+    correlation.correlatedLoginId === null
+      || correlation.correlatedLoginId === observed.observedSellerLoginId
+  );
+}
+
+function correlationIdentityState(
+  value: string | null,
+  conflict: boolean,
+  observed: string | null,
+): CorrelationIdentityState {
+  if (conflict) return 'conflict';
+  if (value === null) return 'none';
+  return value === observed ? 'match' : 'mismatch';
 }
 
 export function preferredCanonicalSellerShopUrlV1(input: {
