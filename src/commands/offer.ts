@@ -521,13 +521,37 @@ export async function executeRaw(
           result.supplier.memberId,
         ) ?? captureEvidence(null, result)
       : captureEvidence(consignmentResponse, result);
+    const coreSellerShopUrlWithoutLogin = readOfferCoreSellerShopUrlAuthorityV1(
+      pageInfo.rawPayload,
+      result.offerId,
+      result.supplier.memberId,
+    );
+    const coreSellerShopUrlWithLogin = readOfferCoreSellerShopUrlAuthorityV1(
+      pageInfo.rawPayload,
+      result.offerId,
+      result.supplier.memberId,
+      result.supplier.loginId,
+    );
     const sellerShopUrlAuthority = pageInfo.sellerShopUrl
-      ?? readOfferCoreSellerShopUrlAuthorityV1(
-        pageInfo.rawPayload,
-        result.offerId,
-        result.supplier.memberId,
-        result.supplier.loginId,
+      ?? coreSellerShopUrlWithLogin;
+    if (
+      process.env.BB1688_OFFER_AUTHORITY_DIAGNOSTICS === '1'
+      && sellerShopUrlAuthority === null
+    ) {
+      process.stderr.write(
+        `[DEBUG-offer-core-authority] ${JSON.stringify({
+          pageInfoShopUrlPresent: pageInfo.sellerShopUrl !== null,
+          rawPayloadIsObject:
+            pageInfo.rawPayload !== null
+            && typeof pageInfo.rawPayload === 'object'
+            && !Array.isArray(pageInfo.rawPayload),
+          sellerMemberPresent: result.supplier.memberId !== null,
+          sellerLoginPresent: result.supplier.loginId !== null,
+          coreWithoutLoginPresent: coreSellerShopUrlWithoutLogin !== null,
+          coreWithLoginPresent: coreSellerShopUrlWithLogin !== null,
+        })}\n`,
       );
+    }
     OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
       shopCard: captureEvidence(shopCardResponse, result, {
         observedSellerShopUrl: sellerShopUrlAuthority,
@@ -1841,7 +1865,14 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     }, debug)
     .catch(() => null);
 
-  if (!fromContext) return scrapeDomFallback(page);
+  if (!fromContext) {
+    if (process.env.BB1688_OFFER_AUTHORITY_DIAGNOSTICS === '1') {
+      process.stderr.write(
+        '[DEBUG-offer-page-info] {"contextExtraction":"fallback"}\n',
+      );
+    }
+    return scrapeDomFallback(page);
+  }
 
   // Title from <title> as backup when subject empty.
   let title = fromContext.title;
@@ -1855,16 +1886,60 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     sellerShopUrlCandidates,
     ...pageInfo
   } = fromContext;
+  const sellerShopUrl = preferredCanonicalSellerShopUrlV1(
+    sellerShopUrlCandidates,
+  );
+  if (
+    process.env.BB1688_OFFER_AUTHORITY_DIAGNOSTICS === '1'
+    && sellerShopUrl === null
+  ) {
+    process.stderr.write(
+      `[DEBUG-offer-page-info] ${JSON.stringify(
+        sellerShopUrlCandidateDiagnosticsV1(sellerShopUrlCandidates),
+      )}\n`,
+    );
+  }
   return {
     ...pageInfo,
     title,
-    sellerShopUrl: preferredCanonicalSellerShopUrlV1(
-      sellerShopUrlCandidates,
-    ),
+    sellerShopUrl,
     skuModel: mapContextSkuBizModel(skuContext),
     rawPayload: sourcePayload,
     skuRawPayload: skuContext,
   };
+}
+
+function sellerShopUrlCandidateDiagnosticsV1(input: {
+  sellerWinportUrl?: unknown;
+  sellerWinportUrlMapDefaultUrl?: unknown;
+  winportUrl?: unknown;
+}): Readonly<{
+  sellerWinportUrl: 'missing' | 'canonical' | 'invalid';
+  sellerWinportUrlMapDefaultUrl: 'missing' | 'canonical' | 'invalid';
+  winportUrl: 'missing' | 'canonical' | 'invalid';
+  uniqueCanonicalCount: number;
+}> {
+  const canonicalUrls = new Set<string>();
+  const state = (candidate: unknown): 'missing' | 'canonical' | 'invalid' => {
+    if (candidate === null || candidate === undefined) return 'missing';
+    try {
+      canonicalUrls.add(canonicalProfileShopUrl(candidate));
+      return 'canonical';
+    } catch {
+      return 'invalid';
+    }
+  };
+  const sellerWinportUrl = state(input.sellerWinportUrl);
+  const sellerWinportUrlMapDefaultUrl = state(
+    input.sellerWinportUrlMapDefaultUrl,
+  );
+  const winportUrl = state(input.winportUrl);
+  return Object.freeze({
+    sellerWinportUrl,
+    sellerWinportUrlMapDefaultUrl,
+    winportUrl,
+    uniqueCanonicalCount: canonicalUrls.size,
+  });
 }
 
 async function scrapeDomFallback(page: Page): Promise<PageInfo> {
