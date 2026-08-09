@@ -220,8 +220,20 @@ const SKU_API_RE = /wosc\.queryofferskuselectormodel/i;
 const SHOPCARD_API_RE = /mtop\.1688\.moga\.pc\.shopcard/i;
 const OFFER_DETAIL_SERVICE_PATH_RE =
   /^\/h5\/mtop\.1688\.mmga\.offerdetail\.service\/1\.0\/?$/i;
+const DEFAULT_OFFER_CAPTURE_TIMEOUT_MS = 18_000;
+const DEFAULT_OFFER_CONSIGNMENT_CAPTURE_TIMEOUT_MS = 30_000;
 const OFFER_DETAILS_CONTENT_RE = /itemcdn\.tmall\.com\/1688offer\//i;
 let DETAIL_SEQ = 0;
+
+export function offerSourceCaptureTimeoutMsV1(
+  configuredTimeoutMs: number | undefined,
+  source: 'shop-card' | 'offer-consignment',
+): number {
+  if (configuredTimeoutMs !== undefined) return configuredTimeoutMs;
+  return source === 'offer-consignment'
+    ? DEFAULT_OFFER_CONSIGNMENT_CAPTURE_TIMEOUT_MS
+    : DEFAULT_OFFER_CAPTURE_TIMEOUT_MS;
+}
 
 export async function execute(
   ctx: BrowserContext,
@@ -245,7 +257,14 @@ export async function executeRaw(
   args: OfferArgs,
 ): Promise<OfferResult> {
   const page = await ctx.newPage();
-  const captureTimeoutMs = args.captureTimeoutMs ?? 18_000;
+  const captureTimeoutMs = offerSourceCaptureTimeoutMsV1(
+    args.captureTimeoutMs,
+    'shop-card',
+  );
+  const consignmentCaptureTimeoutMs = offerSourceCaptureTimeoutMsV1(
+    args.captureTimeoutMs,
+    'offer-consignment',
+  );
 
   const skuCapture = startResponseCapture<{ model: SkuBizModel | null; rawPayload: unknown }>({
     page,
@@ -294,7 +313,7 @@ export async function executeRaw(
     OfferSourceResponseCaptureV1<ConsignmentInfo>
   >({
     page,
-    timeoutMs: captureTimeoutMs,
+    timeoutMs: consignmentCaptureTimeoutMs,
     matcher: (resp) =>
       matchesOfferDetailServiceResponseV1(resp.url(), 'offerPCConsignInfoService'),
     parse: async (resp) => {

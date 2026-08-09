@@ -4,6 +4,7 @@ import {
   assertOfferPageIdentityV1,
   executeRaw,
   mapContextSkuBizModel,
+  offerSourceCaptureTimeoutMsV1,
   requireSkuSelectorModel,
   selectSkuSelectorModel,
 } from '../src/commands/offer.js';
@@ -31,6 +32,14 @@ function diagnostics(
 }
 
 describe('requireSkuSelectorModel', () => {
+  it('keeps a bounded late-response window for the Consignment source', () => {
+    expect(offerSourceCaptureTimeoutMsV1(undefined, 'shop-card')).toBe(18_000);
+    expect(offerSourceCaptureTimeoutMsV1(undefined, 'offer-consignment')).toBe(
+      30_000,
+    );
+    expect(offerSourceCaptureTimeoutMsV1(5, 'offer-consignment')).toBe(5);
+  });
+
   it('rejects an unproven or mismatched canonical Offer page identity', () => {
     expect(() => assertOfferPageIdentityV1('1001', '1001')).not.toThrow();
     expect(() => assertOfferPageIdentityV1(null, '1001')).toThrowError(

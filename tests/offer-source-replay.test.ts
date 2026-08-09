@@ -343,4 +343,35 @@ describe('sanitized Offer source replay', () => {
       });
     }
   });
+
+  it('replays r53 Store URL authority while refusing unsupported Consignment absence', async () => {
+    const fixture = await loadFixture('r53-offer-682746284775.json');
+    assertNoReplayableSecrets(fixture);
+    const { subject } = fixture;
+    const coreShopUrl = offerCommand.readOfferCoreSellerShopUrlAuthorityV1(
+      fixture.offerCore,
+      subject.offerId,
+      subject.sellerMemberId,
+      subject.sellerLoginId,
+    );
+
+    expect(coreShopUrl).toBe(subject.canonicalShopUrl);
+    expect(offerCommand.resolveOfferSourceCorrelationScopeV1({
+      requestUrl: sourceRequestUrl('shop-card', fixture.shopCard.requestScope),
+      rawPayload: fixture.shopCard.payload,
+      observedOfferId: subject.offerId,
+      observedSellerLoginId: subject.sellerLoginId,
+      observedSellerMemberId: subject.sellerMemberId,
+      observedSellerShopUrl: fixture.page.sellerShopUrl ?? coreShopUrl,
+      allowSellerShopUrlBinding: true,
+    })).toEqual({
+      correlatedOfferId: subject.offerId,
+      correlatedMemberId: subject.sellerMemberId,
+    });
+    expect(offerCommand.readOfferCoreConsignmentAbsenceV1(
+      fixture.offerCore,
+      subject.offerId,
+      subject.sellerMemberId,
+    )).toBeNull();
+  });
 });

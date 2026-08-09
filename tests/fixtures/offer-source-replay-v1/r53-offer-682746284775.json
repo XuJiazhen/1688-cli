@@ -1,0 +1,85 @@
+{
+  "schema": "collector.offer-source-replay-fixture.v1",
+  "origin": {
+    "run": "r53",
+    "outerCommit": "b825518ce5984ef3a6839fb8e95f4166e3a6b692",
+    "nestedCommit": "5366f5600a469ec50bb6128f50802fda05dcbf24",
+    "sanitization": "Exact identity and source-authority fields retained; unrelated payload and credentials omitted."
+  },
+  "subject": {
+    "offerId": "682746284775",
+    "sellerMemberId": "b2b-221470257453133fa3",
+    "sellerLoginId": "sanitized-r53-login",
+    "canonicalShopUrl": "https://shop06u45789e8672.1688.com/"
+  },
+  "page": {
+    "canonicalOfferId": "682746284775",
+    "sellerShopUrl": null
+  },
+  "offerCore": {
+    "contextResult": {
+      "data": {
+        "gallery": {
+          "fields": {
+            "offerId": 682746284775
+          }
+        }
+      },
+      "global": {
+        "globalData": {
+          "model": {
+            "sellerModel": {
+              "memberId": "b2b-221470257453133fa3",
+              "loginId": "sanitized-r53-login",
+              "sellerWinportUrl": null,
+              "sellerWinportUrlMap": {
+                "defaultUrl": "https://shop06u45789e8672.1688.com/"
+              },
+              "winportUrl": "https://shop06u45789e8672.1688.com/"
+            },
+            "consignModel": {
+              "consignOffer": false,
+              "hasConsignPrice": false,
+              "consignSign": {
+                "supportConsignIssuing": true,
+                "signs": {
+                  "isSupportConsignIssuing": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "shopCard": {
+    "requestScope": {},
+    "responseSucceeded": true,
+    "payload": {
+      "api": "mtop.1688.moga.pc.shopcard",
+      "ret": [
+        "SUCCESS::sanitized"
+      ],
+      "data": {
+        "model": {
+          "iconType": "cjgc",
+          "mainCategoryName": "sanitized-category",
+          "shopName": "sanitized-r53-shop",
+          "shopType": "cjgc",
+          "shopUrl": "https://shop06u45789e8672.1688.com/",
+          "tpYear": 4
+        }
+      }
+    },
+    "legacySidecarCorrelation": {
+      "offerId": null,
+      "memberId": null
+    }
+  },
+  "consignment": null,
+  "expected": {
+    "shopCardState": "available",
+    "consignmentState": "failed",
+    "consignmentAuthoritySource": null
+  }
+}
