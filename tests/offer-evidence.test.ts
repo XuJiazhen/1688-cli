@@ -294,6 +294,17 @@ describe('offer source response scope', () => {
 
   it('prefers canonical Seller shop authority over a mobile winport URL', () => {
     expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl: '//shop97766603w5446.1688.com/',
+      winportUrl: '//shop97766603w5446.1688.com/',
+    })).toBe('https://shop97766603w5446.1688.com/');
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl:
+        '//shop97766603w5446.1688.com/page/index.html',
+      winportUrl: '//shop97766603w5446.1688.com/?memberId=other',
+    })).toBeNull();
+    expect(preferredCanonicalSellerShopUrlV1({
       sellerWinportUrl: 'https://shop97766603w5446.1688.com/',
       sellerWinportUrlMapDefaultUrl: 'https://shop97766603w5446.1688.com/',
       winportUrl:

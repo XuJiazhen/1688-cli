@@ -952,7 +952,7 @@ export function preferredCanonicalSellerShopUrlV1(input: {
     input.winportUrl,
   ]) {
     try {
-      canonicalUrls.add(canonicalProfileShopUrl(candidate));
+      canonicalUrls.add(canonicalSellerShopUrlCandidateV1(candidate));
     } catch {
       // Continue to the next response-owned Seller URL candidate.
     }
@@ -1977,7 +1977,7 @@ function sellerShopUrlCandidateDiagnosticsV1(input: {
   const state = (candidate: unknown): 'missing' | 'canonical' | 'invalid' => {
     if (candidate === null || candidate === undefined) return 'missing';
     try {
-      canonicalUrls.add(canonicalProfileShopUrl(candidate));
+      canonicalUrls.add(canonicalSellerShopUrlCandidateV1(candidate));
       return 'canonical';
     } catch {
       return 'invalid';
@@ -1999,6 +1999,14 @@ function sellerShopUrlCandidateDiagnosticsV1(input: {
     winportUrlType: safeValueType(input.winportUrl),
     uniqueCanonicalCount: canonicalUrls.size,
   });
+}
+
+function canonicalSellerShopUrlCandidateV1(value: unknown): string {
+  return canonicalProfileShopUrl(
+    typeof value === 'string' && value.startsWith('//')
+      ? `https:${value}`
+      : value,
+  );
 }
 
 function safeValueType(value: unknown): string {
