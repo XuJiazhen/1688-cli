@@ -2010,10 +2010,15 @@ function sellerShopUrlCandidateDiagnosticsV1(input: {
 }
 
 function canonicalSellerShopUrlCandidateV1(value: unknown): string {
-  return canonicalProfileShopUrl(
-    typeof value === 'string' && value.startsWith('//')
+  const normalized = typeof value === 'string'
+    ? value.startsWith('//')
       ? `https:${value}`
-      : value,
+      : /^https:\/\/[^/?#]+$/u.test(value)
+        ? `${value}/`
+        : value
+    : value;
+  return canonicalProfileShopUrl(
+    normalized,
   );
 }
 
@@ -2029,6 +2034,7 @@ function safeUrlValueShape(value: unknown): string {
   if (value.trim() !== value) return 'padded';
   if (value.includes('\\')) return 'backslash';
   if (value.startsWith('//')) return 'scheme-relative';
+  if (/^https:\/\/[^/?#]+$/u.test(value)) return 'https-no-root-slash';
   if (/^https:\/\//u.test(value)) return 'https';
   if (/^http:\/\//u.test(value)) return 'http';
   if (value.startsWith('"')) return 'quoted';
