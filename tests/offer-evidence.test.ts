@@ -7,6 +7,7 @@ import {
   matchesOfferDetailServiceResponseV1,
   preferredCanonicalSellerShopUrlV1,
   readOfferCoreConsignmentAbsenceV1,
+  readOfferCoreSellerShopUrlAuthorityV1,
   readOfferSourceCorrelationScopeV1,
   resolveOfferSourceCorrelationScopeV1,
 } from '../src/commands/offer.js';
@@ -180,6 +181,38 @@ describe('offer source response scope', () => {
       winportUrl:
         'https://winport.m.1688.com/page/index.html?memberId=b2b-32168485931208e',
     })).toBeNull();
+  });
+
+  it('recovers exact Seller shop authority from the identity-bound Offer core', () => {
+    const rawPayload = {
+      contextResult: {
+        data: { gallery: { fields: { offerId: '100' } } },
+        global: { globalData: { model: { sellerModel: {
+          memberId: 'member-1',
+          sellerWinportUrl: null,
+          sellerWinportUrlMap: {
+            defaultUrl: 'https://supplier.1688.com/',
+          },
+          winportUrl:
+            'https://winport.m.1688.com/page/index.html?memberId=member-1',
+        } } } },
+      },
+    };
+    expect(readOfferCoreSellerShopUrlAuthorityV1(
+      rawPayload,
+      '100',
+      'member-1',
+    )).toBe('https://supplier.1688.com/');
+    expect(readOfferCoreSellerShopUrlAuthorityV1(
+      rawPayload,
+      '999',
+      'member-1',
+    )).toBeNull();
+    expect(readOfferCoreSellerShopUrlAuthorityV1(
+      rawPayload,
+      '100',
+      'member-2',
+    )).toBeNull();
   });
 
   it('derives consignment not-present only from exact Offer core authority', () => {

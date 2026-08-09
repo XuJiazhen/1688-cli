@@ -502,9 +502,15 @@ export async function executeRaw(
           result.supplier.memberId,
         ) ?? captureEvidence(null, result)
       : captureEvidence(consignmentResponse, result);
+    const sellerShopUrlAuthority = pageInfo.sellerShopUrl
+      ?? readOfferCoreSellerShopUrlAuthorityV1(
+        pageInfo.rawPayload,
+        result.offerId,
+        result.supplier.memberId,
+      );
     OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
       shopCard: captureEvidence(shopCardResponse, result, {
-        observedSellerShopUrl: pageInfo.sellerShopUrl,
+        observedSellerShopUrl: sellerShopUrlAuthority,
         allowSellerShopUrlBinding: true,
       }),
       consignment: consignmentEvidence,
@@ -662,6 +668,34 @@ export function preferredCanonicalSellerShopUrlV1(input: {
     }
   }
   return null;
+}
+
+export function readOfferCoreSellerShopUrlAuthorityV1(
+  rawPayload: unknown,
+  observedOfferId: string,
+  observedMemberId: string | null,
+): string | null {
+  if (observedMemberId === null) return null;
+  const root = asRecord(rawPayload);
+  const contextResult = asRecord(root?.contextResult);
+  const data = asRecord(contextResult?.data);
+  const gallery = asRecord(asRecord(data?.gallery)?.fields);
+  const global = asRecord(contextResult?.global);
+  const globalData = asRecord(global?.globalData);
+  const model = asRecord(globalData?.model);
+  const seller = asRecord(model?.sellerModel);
+  if (
+    correlationScalar(gallery?.offerId) !== observedOfferId
+    || correlationScalar(seller?.memberId) !== observedMemberId
+  ) {
+    return null;
+  }
+  return preferredCanonicalSellerShopUrlV1({
+    sellerWinportUrl: seller?.sellerWinportUrl,
+    sellerWinportUrlMapDefaultUrl:
+      asRecord(seller?.sellerWinportUrlMap)?.defaultUrl,
+    winportUrl: seller?.winportUrl,
+  });
 }
 
 export function readOfferCoreConsignmentAbsenceV1(
