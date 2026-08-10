@@ -114,6 +114,32 @@ describe('Offer evidence and SourceMedia V2', () => {
       pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
       capturedAt: '2026-07-31T00:00:00.000Z', rawPayload: { data: { data: { data: { data: {} } } } },
     });
+    const coreConsignmentSidecar = createOfferSourceSidecarV1({
+      source: 'offer-consignment', authoritySource: 'offer-core',
+      offerId: '100', memberId: 'member-1',
+      correlatedOfferId: '100', correlatedMemberId: 'member-1',
+      pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      rawPayload: {
+        contextResult: {
+          data: { gallery: { fields: { offerId: '100' } } },
+          global: { globalData: { model: {
+            sellerModel: { memberId: 'member-1' },
+            consignModel: {
+              consignOffer: false,
+              hasConsignPrice: false,
+              consignSign: {
+                supportConsignIssuing: false,
+                signs: {
+                  isSupportConsignIssuing: false,
+                  sign: 'synthetic-secret-that-must-not-survive',
+                },
+              },
+            },
+          } } },
+        },
+      },
+    });
     const common = {
       offerId: '100', memberId: 'member-1', pageActionId: 'action-1',
       remoteRequestAttemptId: 'remote-1', responseObserved: true,
@@ -138,6 +164,57 @@ describe('Offer evidence and SourceMedia V2', () => {
       },
     });
     expect(consignment).toMatchObject({ state: 'not-present', absenceProof: { reasonCode: 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL' } });
+    const coreDeclaredConsignmentAbsence = createOfferSourceTerminalReceiptV1({
+      ...common,
+      source: 'offer-consignment',
+      authoritySource: 'offer-core',
+      responseObserved: false,
+      responseSucceeded: false,
+      rawEvidenceRefs: [coreConsignmentSidecar.artifactRef],
+      parsedValue: null,
+      authoritativeEmpty: {
+        sourcePath: 'contextResult.global.globalData.model.consignModel.consignOffer',
+        sourceValue: false,
+        reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED',
+      },
+    });
+    expect(coreDeclaredConsignmentAbsence).toMatchObject({
+      authoritySource: 'offer-core',
+      responseObserved: false,
+      responseSucceeded: false,
+      state: 'not-present',
+      absenceProof: { reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED' },
+    });
+    expect(coreDeclaredConsignmentAbsence.absenceProof).toMatchObject({
+      authorityArtifactRef: coreConsignmentSidecar.artifactRef,
+    });
+    expect(() => assertOfferSourceSidecarBindingV1(
+      coreConsignmentSidecar.artifactRef,
+      coreConsignmentSidecar.artifact,
+    )).not.toThrow();
+    expect(() => assertOfferSourceSidecarBindingV1(
+      coreConsignmentSidecar.artifactRef,
+      {
+        ...coreConsignmentSidecar.artifact,
+        authorityEvidence: {
+          ...coreConsignmentSidecar.artifact.authorityEvidence!,
+          memberId: 'member-forged',
+        },
+      },
+    )).toThrow(/sidecar authority is invalid/iu);
+    expect(() => assertOfferSourceReceiptsCompleteV1({
+      offerId: '100', memberId: 'member-1', pageActionId: 'action-1',
+      remoteRequestAttemptId: 'remote-1',
+      remoteRawEvidenceRefs: [shopSidecar.artifactRef, coreConsignmentSidecar.artifactRef],
+      shopCard, consignment: coreDeclaredConsignmentAbsence,
+    })).not.toThrow();
+    expect(() => createOfferSourceSidecarV1({
+      source: 'shop-card', authoritySource: 'offer-core',
+      offerId: '100', memberId: 'member-1',
+      correlatedOfferId: '100', correlatedMemberId: 'member-1',
+      pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z', rawPayload: {},
+    })).toThrow(/only valid for Consignment absence/iu);
     expect(() => assertOfferSourceReceiptsCompleteV1({
       offerId: '100', memberId: 'member-1', pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
       remoteRawEvidenceRefs: [shopSidecar.artifactRef, consignmentSidecar.artifactRef],
@@ -148,6 +225,28 @@ describe('Offer evidence and SourceMedia V2', () => {
       responseObserved: false,
     });
     expect(failed).toMatchObject({ state: 'failed', error: { code: 'OFFER_CONSIGNMENT_RESPONSE_NOT_OBSERVED' } });
+    const shopCardNotObserved = createOfferSourceTerminalReceiptV1({
+      ...common,
+      source: 'shop-card',
+      responseObserved: false,
+      parsedValue: shopCard as never,
+      rawEvidenceRefs: [shopSidecar.artifactRef],
+    });
+    expect(shopCardNotObserved).toMatchObject({
+      state: 'failed',
+      error: { code: 'SHOP_CARD_RESPONSE_NOT_OBSERVED' },
+    });
+    const shopCardScopeConflict = createOfferSourceTerminalReceiptV1({
+      ...common,
+      source: 'shop-card',
+      correlatedOfferId: 'another-offer',
+      parsedValue: shopCard as never,
+      rawEvidenceRefs: [shopSidecar.artifactRef],
+    });
+    expect(shopCardScopeConflict).toMatchObject({
+      state: 'failed',
+      error: { code: 'SHOP_CARD_SCOPE_MISMATCH' },
+    });
     expect(() => assertOfferSourceReceiptsCompleteV1({
       offerId: '100', memberId: 'member-1', pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
       remoteRawEvidenceRefs: [shopSidecar.artifactRef, consignmentSidecar.artifactRef],
@@ -297,5 +396,85 @@ describe('Offer evidence and SourceMedia V2', () => {
       sidecar.artifactRef,
       sidecar.artifact,
     )).not.toThrow();
+  });
+
+  it('preserves only exact Offer core authority identifiers through sanitization', () => {
+    const sidecar = createOfferSourceSidecarV1({
+      source: 'offer-consignment', authoritySource: 'offer-core',
+      offerId: '968683334168', memberId: 'b2b-222035881045188136',
+      correlatedOfferId: '968683334168', correlatedMemberId: 'b2b-222035881045188136',
+      pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      rawPayload: {
+        contextResult: {
+          data: { gallery: { fields: {
+            offerId: '968683334168',
+            unrelatedOfferId: '968683334168',
+          } } },
+          global: { globalData: { model: {
+            sellerModel: {
+              memberId: 'b2b-222035881045188136',
+              contactPhone: '13800138000',
+            },
+            consignModel: {
+              consignOffer: false,
+              hasConsignPrice: false,
+              consignSign: {
+                supportConsignIssuing: false,
+                signs: { isSupportConsignIssuing: false },
+              },
+            },
+          } } },
+        },
+      },
+    });
+    expect(sidecar.artifact.sanitizedRawPayload).toMatchObject({
+      contextResult: {
+        data: { gallery: { fields: {
+          offerId: '968683334168',
+          unrelatedOfferId: '[redacted]',
+        } } },
+        global: { globalData: { model: { sellerModel: {
+          memberId: 'b2b-222035881045188136',
+          contactPhone: '[redacted]',
+        }, consignModel: { consignSign: { signs: {
+          isSupportConsignIssuing: false,
+        } } } } } },
+      },
+    });
+    expect(() => assertOfferSourceSidecarBindingV1(
+      sidecar.artifactRef,
+      sidecar.artifact,
+    )).not.toThrow();
+    expect((sidecar.artifact.sanitizedRawPayload as {
+      contextResult: { global: { globalData: { model: {
+        consignModel: { consignSign: { signs: unknown } };
+      } } } };
+    }).contextResult.global.globalData.model.consignModel.consignSign.signs)
+      .toEqual({ isSupportConsignIssuing: false });
+
+    const nonAuthoritySidecar = createOfferSourceSidecarV1({
+      source: 'shop-card',
+      offerId: '968683334168', memberId: 'b2b-222035881045188136',
+      correlatedOfferId: '968683334168', correlatedMemberId: 'b2b-222035881045188136',
+      pageActionId: 'action-1', remoteRequestAttemptId: 'remote-1',
+      capturedAt: '2026-07-31T00:00:00.000Z',
+      rawPayload: {
+        contextResult: {
+          data: { gallery: { fields: { offerId: '968683334168' } } },
+          global: { globalData: { model: { sellerModel: {
+            memberId: 'b2b-222035881045188136',
+          } } } },
+        },
+      },
+    });
+    expect(nonAuthoritySidecar.artifact.sanitizedRawPayload).toMatchObject({
+      contextResult: {
+        data: { gallery: { fields: { offerId: '[redacted]' } } },
+        global: { globalData: { model: { sellerModel: {
+          memberId: 'b2b-[redacted]',
+        } } } },
+      },
+    });
   });
 });

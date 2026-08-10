@@ -4,7 +4,11 @@ import {
   mapShopCardPayload,
 } from '../src/session/offer-evidence.js';
 import {
+  matchesOfferDetailsContentResponseV1,
   matchesOfferDetailServiceResponseV1,
+  preferredCanonicalSellerShopUrlV1,
+  readOfferCoreConsignmentAbsenceV1,
+  readOfferCoreSellerShopUrlAuthorityV1,
   readOfferSourceCorrelationScopeV1,
   resolveOfferSourceCorrelationScopeV1,
 } from '../src/commands/offer.js';
@@ -78,6 +82,310 @@ describe('offer source response scope', () => {
     })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
   });
 
+  it('binds a shop card through the exact response-owned Store URL', () => {
+    const input = {
+      requestUrl: 'https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/',
+      rawPayload: {
+        data: { model: { shopUrl: 'https://supplier.1688.com/' } },
+      },
+      observedOfferId: '100',
+      observedSellerLoginId: null,
+      observedSellerMemberId: 'member-1',
+      observedSellerShopUrl: 'https://supplier.1688.com/',
+      allowSellerShopUrlBinding: true,
+    };
+    expect(resolveOfferSourceCorrelationScopeV1(input)).toEqual({
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+    });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      rawPayload: {
+        data: { model: { shopUrl: 'https://supplier.1688.com' } },
+      },
+    })).toEqual({
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+    });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      observedSellerShopUrl: 'https://another.1688.com/',
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      allowSellerShopUrlBinding: false,
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      rawPayload: {
+        data: {
+          model: { shopUrl: 'https://supplier.1688.com/' },
+          conflicting: { shopUrl: 'https://another.1688.com/' },
+        },
+      },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      rawPayload: {
+        data: {
+          model: { shopUrl: 'https://supplier.1688.com/' },
+          duplicate: { shopUrl: 'https://supplier.1688.com/' },
+        },
+      },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      observedSellerLoginId: 'seller-login-1',
+      rawPayload: {
+        data: {
+          model: {
+            sellerLoginId: 'another-login',
+            shopUrl: 'https://supplier.1688.com/',
+          },
+        },
+      },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      observedSellerLoginId: 'seller-login-1',
+      rawPayload: {
+        data: {
+          model: { shopUrl: 'https://supplier.1688.com/' },
+          identities: [
+            { sellerLoginId: 'seller-login-1' },
+            { sellerLoginId: 'another-login' },
+          ],
+        },
+      },
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+  });
+
+  it('keeps response-owned Store URL authority separate from request identities', () => {
+    const input = {
+      requestUrl:
+        'https://h5api.m.1688.com/h5/mtop.1688.moga.pc.shopcard/1.0/'
+        + `?data=${encodeURIComponent(JSON.stringify({
+          offerId: 'request-offer',
+          memberId: 'request-member',
+        }))}`,
+      rawPayload: {
+        data: { model: { shopUrl: 'https://supplier.1688.com/' } },
+      },
+      observedOfferId: '100',
+      observedSellerLoginId: null,
+      observedSellerMemberId: 'member-1',
+      observedSellerShopUrl: 'https://supplier.1688.com/',
+      allowSellerShopUrlBinding: true,
+    };
+    expect(resolveOfferSourceCorrelationScopeV1(input)).toEqual({
+      correlatedOfferId: 'request-offer',
+      correlatedMemberId: 'request-member',
+    });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      ...input,
+      rawPayload: {
+        data: {
+          model: {
+            memberId: 'response-member-conflict',
+            shopUrl: 'https://supplier.1688.com/',
+          },
+        },
+      },
+    })).toEqual({
+      correlatedOfferId: 'request-offer',
+      correlatedMemberId: null,
+    });
+    expect(resolveOfferSourceCorrelationScopeV1({
+      requestUrl: `https://h5api.m.1688.com/h5/source/1.0/?data=${encodeURIComponent(JSON.stringify({
+        sellerLoginId: 'seller-login-1',
+      }))}`,
+      rawPayload: { data: { sellerLoginId: 'another-login' } },
+      observedOfferId: '100',
+      observedSellerLoginId: 'seller-login-1',
+      observedSellerMemberId: 'member-1',
+    })).toEqual({ correlatedOfferId: null, correlatedMemberId: null });
+  });
+
+  it('prefers canonical Seller shop authority over a mobile winport URL', () => {
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl: '//shop97766603w5446.1688.com/',
+      winportUrl: '//shop97766603w5446.1688.com/',
+    })).toBe('https://shop97766603w5446.1688.com/');
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl: 'https://shop97766603w5446.1688.com',
+      winportUrl: 'https://shop97766603w5446.1688.com',
+    })).toBe('https://shop97766603w5446.1688.com/');
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl:
+        '//shop97766603w5446.1688.com/page/index.html',
+      winportUrl: '//shop97766603w5446.1688.com/?memberId=other',
+    })).toBeNull();
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: 'https://shop97766603w5446.1688.com/',
+      sellerWinportUrlMapDefaultUrl: 'https://shop97766603w5446.1688.com/',
+      winportUrl:
+        'https://winport.m.1688.com/page/index.html?memberId=b2b-32168485931208e',
+    })).toBe('https://shop97766603w5446.1688.com/');
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl: 'https://shop97766603w5446.1688.com/',
+      winportUrl:
+        'https://winport.m.1688.com/page/index.html?memberId=b2b-32168485931208e',
+    })).toBe('https://shop97766603w5446.1688.com/');
+    expect(preferredCanonicalSellerShopUrlV1({
+      sellerWinportUrl: null,
+      sellerWinportUrlMapDefaultUrl: null,
+      winportUrl:
+        'https://winport.m.1688.com/page/index.html?memberId=b2b-32168485931208e',
+    })).toBeNull();
+  });
+
+  it('recovers exact Seller shop authority from the identity-bound Offer core', () => {
+    const rawPayload = {
+      contextResult: {
+        data: { gallery: { fields: { offerId: '100' } } },
+        global: { globalData: { model: { sellerModel: {
+          memberId: 'member-1',
+          loginId: 'seller-login-1',
+          sellerWinportUrl: null,
+          sellerWinportUrlMap: {
+            defaultUrl: 'https://supplier.1688.com/',
+          },
+          winportUrl:
+            'https://winport.m.1688.com/page/index.html?memberId=member-1',
+        } } } },
+      },
+    };
+    expect(readOfferCoreSellerShopUrlAuthorityV1(
+      rawPayload,
+      '100',
+      'member-1',
+      'seller-login-1',
+    )).toBe('https://supplier.1688.com/');
+    expect(readOfferCoreSellerShopUrlAuthorityV1(
+      rawPayload,
+      '999',
+      'member-1',
+      'seller-login-1',
+    )).toBeNull();
+    expect(readOfferCoreSellerShopUrlAuthorityV1(
+      rawPayload,
+      '100',
+      'member-2',
+      'seller-login-1',
+    )).toBeNull();
+    expect(readOfferCoreSellerShopUrlAuthorityV1(
+      rawPayload,
+      '100',
+      'member-1',
+      'another-login',
+    )).toBeNull();
+    expect(readOfferCoreSellerShopUrlAuthorityV1({
+      ...rawPayload,
+      contextResult: {
+        ...rawPayload.contextResult,
+        global: { globalData: { model: { sellerModel: {
+          memberId: 'member-1',
+          loginId: 'seller-login-1',
+          sellerWinportUrl: 'https://supplier.1688.com/',
+          sellerWinportUrlMap: {
+            defaultUrl: 'https://conflicting-supplier.1688.com/',
+          },
+        } } } },
+      },
+    }, '100', 'member-1', 'seller-login-1')).toBeNull();
+  });
+
+  it('derives consignment not-present only from exact Offer core authority', () => {
+    const rawPayload = {
+      contextResult: {
+        data: { gallery: { fields: { offerId: '100' } } },
+        global: { globalData: { model: {
+          sellerModel: { memberId: 'member-1' },
+          consignModel: {
+            consignOffer: false,
+            hasConsignPrice: false,
+            consignSign: {
+              supportConsignIssuing: false,
+              signs: { isSupportConsignIssuing: false },
+            },
+          },
+        } } },
+      },
+    };
+    expect(readOfferCoreConsignmentAbsenceV1(
+      rawPayload,
+      '100',
+      'member-1',
+    )).toMatchObject({
+      authoritySource: 'offer-core',
+      responseObserved: false,
+      responseSucceeded: false,
+      correlatedOfferId: '100',
+      correlatedMemberId: 'member-1',
+      authoritativeEmpty: {
+        sourcePath: 'contextResult.global.globalData.model.consignModel.consignOffer',
+        sourceValue: false,
+        reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED',
+      },
+    });
+    expect(readOfferCoreConsignmentAbsenceV1(rawPayload, '100', 'member-2')).toBeNull();
+    expect(readOfferCoreConsignmentAbsenceV1({
+      ...rawPayload,
+      contextResult: {
+        ...rawPayload.contextResult,
+        global: { globalData: { model: {
+          sellerModel: { memberId: 'member-1' },
+          consignModel: {
+            consignOffer: false,
+            hasConsignPrice: false,
+            consignSign: {
+              supportConsignIssuing: true,
+              signs: { isSupportConsignIssuing: true },
+            },
+          },
+        } } },
+      },
+    }, '100', 'member-1')).toMatchObject({
+      authoritySource: 'offer-core',
+      authoritativeEmpty: { sourceValue: false },
+    });
+    expect(readOfferCoreConsignmentAbsenceV1({
+      ...rawPayload,
+      contextResult: {
+        ...rawPayload.contextResult,
+        global: { globalData: { model: {
+          sellerModel: { memberId: 'member-1' },
+          consignModel: {
+            consignOffer: false,
+            hasConsignPrice: false,
+            consignSign: { supportConsignIssuing: true, signs: {} },
+          },
+        } } },
+      },
+    }, '100', 'member-1')).toBeNull();
+    expect(readOfferCoreConsignmentAbsenceV1({
+      ...rawPayload,
+      contextResult: {
+        ...rawPayload.contextResult,
+        global: { globalData: { model: {
+          sellerModel: { memberId: 'member-1' },
+          consignModel: {
+            consignOffer: true,
+            hasConsignPrice: false,
+            consignSign: {
+              supportConsignIssuing: false,
+              signs: { isSupportConsignIssuing: false },
+            },
+          },
+        } } },
+      },
+    }, '100', 'member-1')).toBeNull();
+  });
+
   it('recognizes a percent-encoded offer detail service request exactly', () => {
     const requestUrl = `https://h5api.m.1688.com/h5/mtop.1688.mmga.offerdetail.service/1.0/?data=${encodeURIComponent(JSON.stringify({
       mmgaRequest: { serviceName: 'offerPCConsignInfoService' },
@@ -97,6 +405,56 @@ describe('offer source response scope', () => {
     expect(matchesOfferDetailServiceResponseV1(
       `https://example.com/?next=${encodeURIComponent(requestUrl)}`,
       'offerPCConsignInfoService',
+    )).toBe(false);
+  });
+
+  it('recognizes the identity-bound itemcdn description response used by current Offer pages', () => {
+    const requestUrl =
+      'https://itemcdn.tmall.com/desc/icoss!0971556389830!13076862629?var=desc';
+
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '971556389830',
+    )).toBe(true);
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '971556389831',
+    )).toBe(false);
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl.replace('https://itemcdn.tmall.com', 'https://example.com'),
+      '971556389830',
+    )).toBe(false);
+    for (const rejectedUrl of [
+      requestUrl.replace('https:', 'http:'),
+      requestUrl.replace('itemcdn.tmall.com', 'user@itemcdn.tmall.com'),
+      requestUrl.replace('itemcdn.tmall.com', 'itemcdn.tmall.com:8443'),
+      requestUrl.replace('!13076862629', '!seller'),
+      requestUrl.replace('?var=desc', '/extra?var=desc'),
+    ]) {
+      expect(matchesOfferDetailsContentResponseV1(
+        rejectedUrl,
+        '971556389830',
+      )).toBe(false);
+    }
+  });
+
+  it('requires the page-declared source URL for opaque legacy detail responses', () => {
+    const requestUrl =
+      'https://itemcdn.tmall.com/1688offer/icoss280584577749f7d4ee5bf1b052';
+
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '739304676936',
+    )).toBe(false);
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '739304676936',
+      `${requestUrl}?var=desc`,
+    )).toBe(true);
+    expect(matchesOfferDetailsContentResponseV1(
+      requestUrl,
+      '739304676936',
+      'https://itemcdn.tmall.com/1688offer/icoss-other',
     )).toBe(false);
   });
 });

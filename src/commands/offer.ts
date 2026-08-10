@@ -15,6 +15,9 @@ import {
 import { withIsolatedOperationPages } from '../session/page-lifecycle.js';
 import { debugTmpPath } from '../util/temp.js';
 import {
+  canonicalProfileShopUrl,
+} from '../session/catalog-runtime.js';
+import {
   mapContextConsignmentPayloadV1,
   mapConsignmentPayload,
   mapShopCardPayload,
@@ -127,6 +130,7 @@ export interface OfferResult {
 }
 
 export interface OfferSourceCaptureEvidenceV1 {
+  authoritySource?: 'offer-core';
   responseObserved: boolean;
   responseSucceeded: boolean;
   correlatedOfferId: string | null;
@@ -305,8 +309,20 @@ const SKU_API_RE = /wosc\.queryofferskuselectormodel/i;
 const SHOPCARD_API_RE = /mtop\.1688\.moga\.pc\.shopcard/i;
 const OFFER_DETAIL_SERVICE_PATH_RE =
   /^\/h5\/mtop\.1688\.mmga\.offerdetail\.service\/1\.0\/?$/i;
-const OFFER_DETAILS_CONTENT_RE = /itemcdn\.tmall\.com\/1688offer\//i;
+const DEFAULT_OFFER_CAPTURE_TIMEOUT_MS = 18_000;
+const DEFAULT_OFFER_CONSIGNMENT_CAPTURE_TIMEOUT_MS = 30_000;
+const LEGACY_OFFER_DETAILS_CONTENT_PATH_RE = /^\/1688offer\//i;
 let DETAIL_SEQ = 0;
+
+export function offerSourceCaptureTimeoutMsV1(
+  configuredTimeoutMs: number | undefined,
+  source: 'shop-card' | 'offer-consignment',
+): number {
+  if (configuredTimeoutMs !== undefined) return configuredTimeoutMs;
+  return source === 'offer-consignment'
+    ? DEFAULT_OFFER_CONSIGNMENT_CAPTURE_TIMEOUT_MS
+    : DEFAULT_OFFER_CAPTURE_TIMEOUT_MS;
+}
 
 export async function execute(
   ctx: BrowserContext,
@@ -330,7 +346,14 @@ export async function executeRaw(
   args: OfferArgs,
 ): Promise<OfferResult> {
   const page = await ctx.newPage();
-  const captureTimeoutMs = args.captureTimeoutMs ?? 18_000;
+  const captureTimeoutMs = offerSourceCaptureTimeoutMsV1(
+    args.captureTimeoutMs,
+    'shop-card',
+  );
+  const consignmentCaptureTimeoutMs = offerSourceCaptureTimeoutMsV1(
+    args.captureTimeoutMs,
+    'offer-consignment',
+  );
 
   const skuCapture = startResponseCapture<{ model: SkuBizModel | null; rawPayload: unknown }>({
     page,
@@ -362,55 +385,37 @@ export async function executeRaw(
     parse: async (resp) => {
       const rawResponseText = await resp.text();
       await args.onRawComponent?.('shop-card', rawResponseText);
-      const rawPayload = parseMtop(rawResponseText);
-      const value = mapShopCardPayload(rawPayload);
-      return {
-        value,
-        requestUrl: resp.url(),
-        responseSucceeded: isSuccessfulMtopPayload(rawPayload),
-        rawPayload,
-        ...(value === null
-          ? authoritativeEmptyEvidence(rawPayload, 'shop-card')
-          : {}),
-      };
+      return parseShopCardSourceResponseV1(rawResponseText, resp.url());
     },
   });
   const consignmentCapture = startResponseCapture<
     OfferSourceResponseCaptureV1<ConsignmentInfo>
   >({
     page,
-    timeoutMs: captureTimeoutMs,
+    timeoutMs: consignmentCaptureTimeoutMs,
     matcher: (resp) =>
       matchesOfferDetailServiceResponseV1(resp.url(), 'offerPCConsignInfoService'),
     parse: async (resp) => {
       const rawResponseText = await resp.text();
       await args.onRawComponent?.('consignment', rawResponseText);
-      const rawPayload = parseMtop(rawResponseText);
-      const value = mapConsignmentPayload(rawPayload, resp.url());
-      return {
-        value,
-        requestUrl: resp.url(),
-        responseSucceeded: isSuccessfulMtopPayload(rawPayload),
-        rawPayload,
-        ...(value === null
-          ? authoritativeEmptyEvidence(rawPayload, 'offer-consignment')
-          : {}),
-      };
+      return parseConsignmentSourceResponseV1(rawResponseText, resp.url());
     },
   });
   const offerDetailsCapture = startResponseCapture<{
     evidence: OfferDetailsEvidence;
     rawPayload: string;
+    requestUrl: string;
   }>({
     page,
     timeoutMs: captureTimeoutMs,
-    matcher: OFFER_DETAILS_CONTENT_RE,
+    matcher: (resp) =>
+      isOfferDetailsContentCandidateResponseV1(resp.url(), args.offerId),
     parse: async (resp) => {
       const rawPayload = await resp.text();
-      await args.onRawComponent?.('detail', rawPayload);
       return {
         evidence: parseOfferDetailsEvidence(rawPayload, resp.url()),
         rawPayload,
+        requestUrl: resp.url(),
       };
     },
   });
@@ -562,6 +567,17 @@ export async function executeRaw(
         })(),
       ]);
     assertOfferPageIdentityV1(pageInfo.canonicalOfferId, args.offerId);
+    const authorizedOfferDetails = offerDetails !== null
+      && matchesOfferDetailsContentResponseV1(
+        offerDetails.requestUrl,
+        args.offerId,
+        pageInfo.detailUrl,
+      )
+      ? offerDetails
+      : null;
+    if (authorizedOfferDetails) {
+      await args.onRawComponent?.('detail', authorizedOfferDetails.rawPayload);
+    }
     const requiredSku = requireSkuSelectorModel(
       selectSkuSelectorModel(sku?.model ?? null, pageInfo.skuModel),
       skuCapture.diagnostics(),
@@ -588,18 +604,37 @@ export async function executeRaw(
       pageInfo,
       shopCard,
       consignment,
-      offerDetails?.evidence ?? null,
+      authorizedOfferDetails?.evidence ?? null,
       effectiveShopCardResponse !== null,
       effectiveConsignmentResponse !== null,
-      offerDetailsCapture.diagnostics().matchedCount > 0,
+      authorizedOfferDetails !== null,
     );
+    const consignmentEvidence = effectiveConsignmentResponse !== null
+      ? captureEvidence(effectiveConsignmentResponse, result)
+      : (
+        readOfferCoreConsignmentAbsenceV1(
+          pageInfo.rawPayload,
+          result.offerId,
+          result.supplier.memberId,
+        ) ?? captureEvidence(null, result)
+      );
+    const sellerShopUrlAuthority = pageInfo.sellerShopUrl
+      ?? readOfferCoreSellerShopUrlAuthorityV1(
+        pageInfo.rawPayload,
+        result.offerId,
+        result.supplier.memberId,
+        result.supplier.loginId,
+      );
     OFFER_SOURCE_CAPTURE_EVIDENCE.set(result, {
-      shopCard: captureEvidence(effectiveShopCardResponse, result),
-      consignment: captureEvidence(effectiveConsignmentResponse, result),
+      shopCard: captureEvidence(effectiveShopCardResponse, result, {
+        observedSellerShopUrl: sellerShopUrlAuthority,
+        allowSellerShopUrlBinding: true,
+      }),
+      consignment: consignmentEvidence,
       components: {
         core: pageInfo.rawPayload,
         sku: sku?.rawPayload ?? pageInfo.skuRawPayload,
-        detail: offerDetails?.rawPayload ?? null,
+        detail: authorizedOfferDetails?.rawPayload ?? null,
       },
     });
     return result;
@@ -618,9 +653,49 @@ export async function executeRaw(
   }
 }
 
+export function parseShopCardSourceResponseV1(
+  rawResponseText: string,
+  requestUrl: string,
+): OfferSourceResponseCaptureV1<ShopCardInfo> | null {
+  const rawPayload = parseMtop(rawResponseText);
+  if (!isSuccessfulMtopPayload(rawPayload)) return null;
+  const value = mapShopCardPayload(rawPayload);
+  return {
+    value,
+    requestUrl,
+    responseSucceeded: true,
+    rawPayload,
+    ...(value === null
+      ? authoritativeEmptyEvidence(rawPayload, 'shop-card')
+      : {}),
+  };
+}
+
+export function parseConsignmentSourceResponseV1(
+  rawResponseText: string,
+  requestUrl: string,
+): OfferSourceResponseCaptureV1<ConsignmentInfo> | null {
+  const rawPayload = parseMtop(rawResponseText);
+  if (!isSuccessfulMtopPayload(rawPayload)) return null;
+  const value = mapConsignmentPayload(rawPayload, requestUrl);
+  return {
+    value,
+    requestUrl,
+    responseSucceeded: true,
+    rawPayload,
+    ...(value === null
+      ? authoritativeEmptyEvidence(rawPayload, 'offer-consignment')
+      : {}),
+  };
+}
+
 function captureEvidence<T>(
   captured: OfferSourceResponseCaptureV1<T> | null,
   offer: OfferResult,
+  options: {
+    observedSellerShopUrl?: string | null;
+    allowSellerShopUrlBinding?: boolean;
+  } = {},
 ): OfferSourceCaptureEvidenceV1 {
   const correlation = captured === null
     ? { correlatedOfferId: null, correlatedMemberId: null }
@@ -637,7 +712,9 @@ function captureEvidence<T>(
         observedOfferId: offer.offerId,
         observedSellerLoginId: offer.supplier.loginId,
         observedSellerMemberId: offer.supplier.memberId,
-          });
+        observedSellerShopUrl: options.observedSellerShopUrl ?? null,
+        allowSellerShopUrlBinding: options.allowSellerShopUrlBinding ?? false,
+      });
   return {
     responseObserved: captured !== null,
     responseSucceeded: captured?.responseSucceeded ?? false,
@@ -670,6 +747,8 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
   observedOfferId: string;
   observedSellerLoginId: string | null;
   observedSellerMemberId: string | null;
+  observedSellerShopUrl?: string | null;
+  allowSellerShopUrlBinding?: boolean;
 }): { correlatedOfferId: string | null; correlatedMemberId: string | null } {
   const correlation = readOfferSourceCorrelationEvidenceV1(
     input.requestUrl,
@@ -683,16 +762,70 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
     && input.observedSellerMemberId !== null
     && !requestCorrelation.loginIdentityConflict
     && requestCorrelation.correlatedLoginId === input.observedSellerLoginId;
+  const responseShopUrlMatched = input.allowSellerShopUrlBinding === true
+    && input.observedSellerShopUrl !== null
+    && input.observedSellerShopUrl !== undefined
+    && exactCanonicalShopUrlMatch(
+      input.rawPayload,
+      input.observedSellerShopUrl,
+    );
+  const responseCorrelation = readOfferCorrelationEvidenceV1([
+    input.rawPayload,
+  ]);
+  const requestScopeUnambiguous = !requestCorrelation.offerIdentityConflict
+    && !requestCorrelation.memberIdentityConflict
+    && !requestCorrelation.loginIdentityConflict;
+  const requestScopeMatchesObserved = (
+    requestCorrelation.correlatedOfferId === null
+      || requestCorrelation.correlatedOfferId === input.observedOfferId
+  ) && (
+    requestCorrelation.correlatedMemberId === null
+      || requestCorrelation.correlatedMemberId === input.observedSellerMemberId
+  ) && (
+    requestCorrelation.correlatedLoginId === null
+      || requestCorrelation.correlatedLoginId === input.observedSellerLoginId
+  );
+  const responseScopeUnambiguous = !responseCorrelation.offerIdentityConflict
+    && !responseCorrelation.memberIdentityConflict
+    && !responseCorrelation.loginIdentityConflict;
+  const responseScopeMatchesObserved = (
+    responseCorrelation.correlatedOfferId === null
+      || responseCorrelation.correlatedOfferId === input.observedOfferId
+  ) && (
+    responseCorrelation.correlatedMemberId === null
+      || responseCorrelation.correlatedMemberId
+        === input.observedSellerMemberId
+  ) && (
+    responseCorrelation.correlatedLoginId === null
+      || responseCorrelation.correlatedLoginId === input.observedSellerLoginId
+  );
   const canonicalScopeUnambiguous = !correlation.offerIdentityConflict
-    && !correlation.memberIdentityConflict;
+    && !correlation.memberIdentityConflict
+    && !correlation.loginIdentityConflict;
   const canonicalScopeMatchesObserved = (
     correlation.correlatedOfferId === null
       || correlation.correlatedOfferId === input.observedOfferId
   ) && (
     correlation.correlatedMemberId === null
       || correlation.correlatedMemberId === input.observedSellerMemberId
+  ) && (
+    correlation.correlatedLoginId === null
+      || correlation.correlatedLoginId === input.observedSellerLoginId
   );
-  if (requestSellerMatched && canonicalScopeUnambiguous && canonicalScopeMatchesObserved) {
+  if (
+    (
+      responseShopUrlMatched
+      && input.observedSellerMemberId !== null
+      && requestScopeUnambiguous
+      && requestScopeMatchesObserved
+      && responseScopeUnambiguous
+      && responseScopeMatchesObserved
+    ) || (
+      requestSellerMatched
+      && canonicalScopeUnambiguous
+      && canonicalScopeMatchesObserved
+    )
+  ) {
     return {
       correlatedOfferId: input.observedOfferId,
       correlatedMemberId: input.observedSellerMemberId,
@@ -702,6 +835,145 @@ export function resolveOfferSourceCorrelationScopeV1(input: {
     correlatedOfferId: correlation.correlatedOfferId,
     correlatedMemberId: correlation.correlatedMemberId,
   };
+}
+
+export function preferredCanonicalSellerShopUrlV1(input: {
+  sellerWinportUrl?: unknown;
+  sellerWinportUrlMapDefaultUrl?: unknown;
+  winportUrl?: unknown;
+}): string | null {
+  const canonicalUrls = new Set<string>();
+  for (const candidate of [
+    input.sellerWinportUrl,
+    input.sellerWinportUrlMapDefaultUrl,
+    input.winportUrl,
+  ]) {
+    try {
+      canonicalUrls.add(canonicalSellerShopUrlCandidateV1(candidate));
+    } catch {
+      // Continue to the next response-owned Seller URL candidate.
+    }
+  }
+  return canonicalUrls.size === 1 ? [...canonicalUrls][0]! : null;
+}
+
+export function readOfferCoreSellerShopUrlAuthorityV1(
+  rawPayload: unknown,
+  observedOfferId: string,
+  observedMemberId: string | null,
+  observedLoginId?: string | null,
+): string | null {
+  if (observedMemberId === null) return null;
+  const root = asRecord(rawPayload);
+  const contextResult = asRecord(root?.contextResult);
+  const data = asRecord(contextResult?.data);
+  const gallery = asRecord(asRecord(data?.gallery)?.fields);
+  const global = asRecord(contextResult?.global);
+  const globalData = asRecord(global?.globalData);
+  const model = asRecord(globalData?.model);
+  const seller = asRecord(model?.sellerModel);
+  if (
+    correlationScalar(gallery?.offerId) !== observedOfferId
+    || correlationScalar(seller?.memberId) !== observedMemberId
+    || (
+      observedLoginId !== undefined
+      && correlationScalar(seller?.loginId) !== observedLoginId
+    )
+  ) {
+    return null;
+  }
+  return preferredCanonicalSellerShopUrlV1({
+    sellerWinportUrl: seller?.sellerWinportUrl,
+    sellerWinportUrlMapDefaultUrl:
+      asRecord(seller?.sellerWinportUrlMap)?.defaultUrl,
+    winportUrl: seller?.winportUrl,
+  });
+}
+
+export function readOfferCoreConsignmentAbsenceV1(
+  rawPayload: unknown,
+  observedOfferId: string,
+  observedMemberId: string | null,
+): OfferSourceCaptureEvidenceV1 | null {
+  if (observedMemberId === null) return null;
+  const root = asRecord(rawPayload);
+  const contextResult = asRecord(root?.contextResult);
+  const data = asRecord(contextResult?.data);
+  const gallery = asRecord(asRecord(data?.gallery)?.fields);
+  const global = asRecord(contextResult?.global);
+  const globalData = asRecord(global?.globalData);
+  const model = asRecord(globalData?.model);
+  const seller = asRecord(model?.sellerModel);
+  const consign = asRecord(model?.consignModel);
+  const consignSign = asRecord(consign?.consignSign);
+  const signs = asRecord(consignSign?.signs);
+  if (
+    correlationScalar(gallery?.offerId) !== observedOfferId
+    || correlationScalar(seller?.memberId) !== observedMemberId
+    || consign?.consignOffer !== false
+    || consign?.hasConsignPrice !== false
+    || typeof consignSign?.supportConsignIssuing !== 'boolean'
+    || typeof signs?.isSupportConsignIssuing !== 'boolean'
+  ) {
+    return null;
+  }
+  const sourcePath =
+    'contextResult.global.globalData.model.consignModel.consignOffer';
+  return {
+    authoritySource: 'offer-core',
+    responseObserved: false,
+    responseSucceeded: false,
+    correlatedOfferId: observedOfferId,
+    correlatedMemberId: observedMemberId,
+    rawPayload,
+    authoritativeEmpty: {
+      sourcePath,
+      sourceValue: false,
+      reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED',
+    },
+  };
+}
+
+function exactCanonicalShopUrlMatch(
+  rawPayload: unknown,
+  observedSellerShopUrl: string,
+): boolean {
+  let expected: string;
+  try {
+    expected = canonicalProfileShopUrl(observedSellerShopUrl);
+  } catch {
+    return false;
+  }
+  const shopUrls: string[] = [];
+  return collectCanonicalShopUrls(rawPayload, shopUrls)
+    && shopUrls.length === 1
+    && shopUrls[0] === expected;
+}
+
+function collectCanonicalShopUrls(
+  value: unknown,
+  shopUrls: string[],
+  depth = 0,
+): boolean {
+  if (value === null || value === undefined) return true;
+  if (depth > 10) return typeof value !== 'object';
+  if (Array.isArray(value)) {
+    return value.every((item) =>
+      collectCanonicalShopUrls(item, shopUrls, depth + 1));
+  }
+  if (typeof value !== 'object') return true;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/gu, '');
+    if (normalizedKey === 'shopurl') {
+      try {
+        shopUrls.push(canonicalSellerShopUrlCandidateV1(child));
+      } catch {
+        return false;
+      }
+    }
+    if (!collectCanonicalShopUrls(child, shopUrls, depth + 1)) return false;
+  }
+  return true;
 }
 
 export function assertOfferPageIdentityV1(
@@ -745,6 +1017,68 @@ export function matchesOfferDetailServiceResponseV1(
   return serviceNames.size === 1 && serviceNames.has(expectedServiceName);
 }
 
+export function matchesOfferDetailsContentResponseV1(
+  requestUrl: string,
+  expectedOfferId: string,
+  declaredSourceUrl: string | null = null,
+): boolean {
+  const request = offerDetailsContentUrlV1(requestUrl);
+  if (!request || !/^\d+$/.test(expectedOfferId)) return false;
+  if (LEGACY_OFFER_DETAILS_CONTENT_PATH_RE.test(request.pathname)) {
+    const declared = offerDetailsContentUrlV1(declaredSourceUrl);
+    return declared !== null && declared.pathname === request.pathname;
+  }
+  return matchesIdentityBoundOfferDetailsPathV1(
+    request.pathname,
+    expectedOfferId,
+  );
+}
+
+function isOfferDetailsContentCandidateResponseV1(
+  requestUrl: string,
+  expectedOfferId: string,
+): boolean {
+  const request = offerDetailsContentUrlV1(requestUrl);
+  if (!request || !/^\d+$/.test(expectedOfferId)) return false;
+  return LEGACY_OFFER_DETAILS_CONTENT_PATH_RE.test(request.pathname)
+    || matchesIdentityBoundOfferDetailsPathV1(
+      request.pathname,
+      expectedOfferId,
+    );
+}
+
+function offerDetailsContentUrlV1(requestUrl: string | null): URL | null {
+  if (requestUrl === null) return null;
+  try {
+    const url = new URL(requestUrl);
+    if (
+      url.protocol !== 'https:'
+      || url.hostname !== 'itemcdn.tmall.com'
+      || url.port !== ''
+      || url.username !== ''
+      || url.password !== ''
+    ) {
+      return null;
+    }
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+function matchesIdentityBoundOfferDetailsPathV1(
+  pathname: string,
+  expectedOfferId: string,
+): boolean {
+  const match = /^\/desc\/icoss!(\d+)!\d+$/i.exec(pathname);
+  if (!match) return false;
+  const rawResponseOfferId = match[1];
+  if (!rawResponseOfferId) return false;
+  const responseOfferId = rawResponseOfferId.replace(/^0+(?=\d)/, '');
+  const normalizedExpectedOfferId = expectedOfferId.replace(/^0+(?=\d)/, '');
+  return responseOfferId === normalizedExpectedOfferId;
+}
+
 function readOfferSourceCorrelationEvidenceV1(
   requestUrl: string,
   rawPayload: unknown,
@@ -772,10 +1106,21 @@ function readOfferSourceCorrelationEvidenceV1(
       loginIdentityConflict: false,
     };
   }
+  return readOfferCorrelationEvidenceV1([...requestPayloads, rawPayload]);
+}
+
+function readOfferCorrelationEvidenceV1(payloads: readonly unknown[]): {
+  correlatedOfferId: string | null;
+  correlatedMemberId: string | null;
+  correlatedLoginId: string | null;
+  offerIdentityConflict: boolean;
+  memberIdentityConflict: boolean;
+  loginIdentityConflict: boolean;
+} {
   const offerIds = new Set<string>();
   const memberIds = new Set<string>();
   const loginIds = new Set<string>();
-  for (const payload of [...requestPayloads, rawPayload]) {
+  for (const payload of payloads) {
     collectCorrelationValues(payload, offerIds, memberIds, loginIds);
   }
   return {
@@ -1163,6 +1508,7 @@ interface PageInfo {
   sellerLoginId: string | null;
   sellerMemberId: string | null;
   sellerUserId: string | null;
+  sellerShopUrl: string | null;
   saledCount: number | null;
   mainImage: string | null;
   images: string[];
@@ -1258,6 +1604,9 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         loginId?: string;
         memberId?: string;
         userId?: number | string;
+        winportUrl?: string;
+        sellerWinportUrl?: string;
+        sellerWinportUrlMap?: { defaultUrl?: string };
       };
       const w = window as unknown as {
         context?: {
@@ -1464,6 +1813,12 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
         sellerMemberId: seller.memberId ?? feg.memberId ?? null,
         sellerUserId:
           seller.userId != null ? String(seller.userId) : null,
+        sellerShopUrlCandidates: {
+          sellerWinportUrl: seller.sellerWinportUrl ?? null,
+          sellerWinportUrlMapDefaultUrl:
+            seller.sellerWinportUrlMap?.defaultUrl ?? null,
+          winportUrl: seller.winportUrl ?? null,
+        },
         saledCount: null,
         mainImage: imgs[0] ?? null,
         images: imgs,
@@ -1483,14 +1838,36 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     const raw = await page.title();
     title = raw.replace(/\s*-\s*阿里巴巴\s*$/, '').trim();
   }
-  const { sourcePayload, skuContext, ...pageInfo } = fromContext;
+  const {
+    sourcePayload,
+    skuContext,
+    sellerShopUrlCandidates,
+    ...pageInfo
+  } = fromContext;
+  const sellerShopUrl = preferredCanonicalSellerShopUrlV1(
+    sellerShopUrlCandidates,
+  );
   return {
     ...pageInfo,
     title,
+    sellerShopUrl,
     skuModel: mapContextSkuBizModel(skuContext),
     rawPayload: sourcePayload,
     skuRawPayload: skuContext,
   };
+}
+
+function canonicalSellerShopUrlCandidateV1(value: unknown): string {
+  const normalized = typeof value === 'string'
+    ? value.startsWith('//')
+      ? `https:${value}`
+      : /^https:\/\/[^/?#]+$/u.test(value)
+        ? `${value}/`
+        : value
+    : value;
+  return canonicalProfileShopUrl(
+    normalized,
+  );
 }
 
 async function scrapeDomFallback(page: Page): Promise<PageInfo> {
@@ -1526,6 +1903,7 @@ async function scrapeDomFallback(page: Page): Promise<PageInfo> {
     sellerLoginId: null,
     sellerMemberId: null,
     sellerUserId: null,
+    sellerShopUrl: null,
     saledCount: null,
     mainImage: info.mainImage,
     images: info.mainImage ? [info.mainImage] : [],

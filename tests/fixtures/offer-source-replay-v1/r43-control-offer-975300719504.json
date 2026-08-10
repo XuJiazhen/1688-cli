@@ -1,0 +1,90 @@
+{
+  "schema": "collector.offer-source-replay-fixture.v1",
+  "origin": {
+    "run": "r43",
+    "outerCommit": "91f9ef4",
+    "nestedCommit": "3f14db7b96d04dd01c1a4b565278480c078476b2",
+    "sanitization": "business identity and source-shape only; credentials and contact data removed"
+  },
+  "subject": {
+    "offerId": "975300719504",
+    "sellerMemberId": "b2b-22205571627831491a",
+    "sellerLoginId": "sanitized-r43-login",
+    "canonicalShopUrl": "https://shop2d274o61i9238.1688.com/"
+  },
+  "page": {
+    "canonicalOfferId": "975300719504",
+    "sellerShopUrl": null
+  },
+  "offerCore": {
+    "contextResult": {
+      "data": {
+        "gallery": {
+          "fields": {
+            "offerId": 975300719504
+          }
+        }
+      },
+      "global": {
+        "globalData": {
+          "model": {
+            "sellerModel": {
+              "loginId": "sanitized-r43-login",
+              "memberId": "b2b-22205571627831491a",
+              "sellerWinportUrlMap": {
+                "defaultUrl": "https://shop2d274o61i9238.1688.com/"
+              },
+              "winportUrl": "https://shop2d274o61i9238.1688.com/"
+            },
+            "consignModel": {
+              "consignOffer": false,
+              "hasConsignPrice": false,
+              "consignSign": {
+                "supportConsignIssuing": false,
+                "signs": {
+                  "isSupportConsignIssuing": false
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "shopCard": {
+    "requestScope": {},
+    "responseSucceeded": true,
+    "payload": {
+      "api": "mtop.1688.moga.pc.shopcard",
+      "ret": [
+        "SUCCESS::sanitized"
+      ],
+      "data": {
+        "model": {
+          "iconType": "ytqj",
+          "mainCategoryName": "sanitized-category",
+          "shopData": [
+            {
+              "dataKey": "service-score",
+              "dataValue": "5.0"
+            }
+          ],
+          "shopName": "sanitized-r43-shop",
+          "shopType": "ytqj",
+          "shopUrl": "https://shop2d274o61i9238.1688.com/",
+          "tpYear": 1
+        }
+      }
+    },
+    "legacySidecarCorrelation": {
+      "offerId": null,
+      "memberId": null
+    }
+  },
+  "consignment": null,
+  "expected": {
+    "shopCardState": "available",
+    "consignmentState": "not-present",
+    "consignmentAuthoritySource": "offer-core"
+  }
+}

@@ -272,7 +272,7 @@ export function assertStoreSampleProfileObservationV1(
     || memberIdSource.sourceRef !== profile.source.sourceRef
     || (
       memberIdSource.fieldPath !== 'data.data.memberId'
-      && memberIdSource.fieldPath !== 'data.data.commonUrl.shopUrl'
+      && memberIdSource.fieldPath !== 'data.data.commonUrl.shopUrl#memberId'
     )
     || observedCanonicalShopUrl !== expectedShopUrl
     || (
@@ -293,6 +293,11 @@ export function assertStoreSampleProfileObservationV1(
     || profile.name.source.fieldPath !== 'data.data.companyName'
     || profile.shopUrl.availability !== 'available'
     || typeof profile.shopUrl.value !== 'string'
+    || !storeProfileShopIdentityMatches(
+      profile.shopUrl.value,
+      expectedShopUrl,
+      expectedMemberId,
+    )
     || profile.shopUrl.source.api !== profile.source.api
     || profile.shopUrl.source.componentKey !== profile.source.componentKey
     || profile.shopUrl.source.parserVersion !== profile.source.parserVersion
@@ -315,7 +320,7 @@ export function parseStoreProfileMemberAuthorityV1(
   const header = recordValue(envelope?.['data']);
   const directMemberId = header?.['memberId'];
   const commonUrl = recordValue(header?.['commonUrl']);
-  const mobileMemberId = parseWangpuMobileMemberId(commonUrl?.['shopUrl']);
+  const mobileMemberId = storeMemberIdFromMobileShopUrl(commonUrl?.['shopUrl']);
   const hasDirectMemberId = typeof directMemberId === 'string'
     && isSafeSupplierMemberKey(directMemberId);
   if (
@@ -351,7 +356,7 @@ export function parseStoreProfileMemberAuthorityV1(
       ...source,
       fieldPath: hasDirectMemberId
         ? 'data.data.memberId'
-        : 'data.data.commonUrl.shopUrl',
+        : 'data.data.commonUrl.shopUrl#memberId',
     },
   };
 }
@@ -363,13 +368,24 @@ function storeProfileShopIdentity(value: unknown): Readonly<
   try {
     return { kind: 'canonical-shop', canonicalShopUrl: canonicalProfileShopUrl(value) };
   } catch {
-    const memberId = parseWangpuMobileMemberId(value);
+    const memberId = storeMemberIdFromMobileShopUrl(value);
     if (memberId === null) throw new TypeError('Store profile shop URL is not authoritative.');
     return { kind: 'wangpu-member', memberId };
   }
 }
 
-function parseWangpuMobileMemberId(value: unknown): string | null {
+function storeProfileShopIdentityMatches(
+  value: string,
+  expectedCanonicalShopUrl: string,
+  expectedMemberId: string,
+): boolean {
+  const identity = storeProfileShopIdentity(value);
+  return identity.kind === 'canonical-shop'
+    ? identity.canonicalShopUrl === expectedCanonicalShopUrl
+    : identity.memberId === expectedMemberId;
+}
+
+function storeMemberIdFromMobileShopUrl(value: unknown): string | null {
   if (
     typeof value !== 'string'
     || !/^https:\/\/winport\.m\.1688\.com\/page\/index\.html\?[^#]+$/u.test(value)
@@ -400,7 +416,7 @@ function parseWangpuMobileMemberId(value: unknown): string | null {
   return memberIds[0]!;
 }
 
-function canonicalProfileShopUrl(value: unknown): string {
+export function canonicalProfileShopUrl(value: unknown): string {
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new TypeError('Store profile shop URL is missing.');
   }

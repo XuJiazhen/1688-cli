@@ -105,6 +105,7 @@ export type OfferSourceKindV1 = 'shop-card' | 'offer-consignment';
 export interface OfferSourceSidecarV1 {
   schema: 'collector.offer-source-sidecar.v1';
   source: OfferSourceKindV1;
+  authoritySource?: 'offer-core';
   offerId: string;
   memberId: string;
   correlatedOfferId: string | null;
@@ -118,11 +119,24 @@ export interface OfferSourceSidecarV1 {
     offerIdFieldPath: 'contextResult.data.gallery.fields.offerId';
     memberIdFieldPath: 'contextResult.global.globalData.model.sellerModel.memberId';
   };
+  authorityEvidence?: {
+    schema: 'collector.offer-core-consignment-authority.v1';
+    sourcePath: 'contextResult.global.globalData.model.consignModel.consignOffer';
+    sourceValue: false;
+    offerId: string;
+    memberId: string;
+    supportingSignals: {
+      hasConsignPrice: false;
+      supportConsignIssuing: boolean;
+      isSupportConsignIssuing: boolean;
+    };
+  };
   sanitizedRawPayload: unknown;
 }
 
 export function createOfferSourceSidecarV1(input: {
   source: OfferSourceKindV1;
+  authoritySource?: 'offer-core';
   offerId: string;
   memberId: string;
   correlatedOfferId: string | null;
@@ -133,11 +147,28 @@ export function createOfferSourceSidecarV1(input: {
   rawPayload: unknown;
   correlationEvidence?: OfferSourceSidecarV1['correlationEvidence'];
 }): { artifactRef: string; artifact: OfferSourceSidecarV1 } {
+  if (input.authoritySource === 'offer-core' && input.source !== 'offer-consignment') {
+    throw new TypeError('Offer core authority is only valid for Consignment absence.');
+  }
+  const offerId = requiredId(input.offerId, 'offerId');
+  const memberId = requiredId(input.memberId, 'memberId');
+  const offerCoreSignals = input.authoritySource === 'offer-core'
+    ? offerCoreAuthoritySupportingSignals(input.rawPayload, offerId, memberId)
+    : null;
+  if (
+    input.authoritySource === 'offer-core'
+    && offerCoreSignals === null
+  ) {
+    throw new TypeError('Offer core Consignment sidecar authority is invalid.');
+  }
   const artifact: OfferSourceSidecarV1 = {
     schema: 'collector.offer-source-sidecar.v1',
     source: input.source,
-    offerId: requiredId(input.offerId, 'offerId'),
-    memberId: requiredId(input.memberId, 'memberId'),
+    ...(input.authoritySource === 'offer-core'
+      ? { authoritySource: input.authoritySource }
+      : {}),
+    offerId,
+    memberId,
     correlatedOfferId: optionalId(input.correlatedOfferId, 'correlatedOfferId'),
     correlatedMemberId: optionalId(input.correlatedMemberId, 'correlatedMemberId'),
     pageActionId: requiredId(input.pageActionId, 'pageActionId'),
@@ -157,8 +188,22 @@ export function createOfferSourceSidecarV1(input: {
             ),
           },
         }),
-    sanitizedRawPayload: sanitizeOfferSourcePayloadV1(input.rawPayload),
+    ...(input.authoritySource === 'offer-core'
+      ? {
+          authorityEvidence: offerCoreAuthorityEvidence(
+            offerId,
+            memberId,
+            offerCoreSignals!,
+          ),
+        }
+      : {}),
+    sanitizedRawPayload: sanitizeOfferSourcePayloadV1(
+      input.rawPayload,
+      [],
+      input.authoritySource === 'offer-core',
+    ),
   };
+  assertOfferCoreSidecarAuthority(artifact);
   const digest = evidenceHash(artifact).slice('sha256:'.length);
   return Object.freeze({
     artifactRef: `artifact:offer-source-${input.source}-${digest}`,
@@ -170,6 +215,7 @@ export function assertOfferSourceSidecarBindingV1(
   artifactRef: string,
   artifact: OfferSourceSidecarV1,
 ): void {
+  assertOfferCoreSidecarAuthority(artifact);
   const digest = evidenceHash(artifact).slice('sha256:'.length);
   const correlationEvidenceValid = artifact.correlationEvidence === undefined
     || (
@@ -208,14 +254,35 @@ const OFFER_SOURCE_REVISIONS = Object.freeze({
 } as const);
 
 const OFFER_SOURCE_EMPTY_SENTINELS: Readonly<
-  Record<OfferSourceKindV1, ReadonlyArray<{ sourcePath: string; reasonCode: string }>>
+  Record<OfferSourceKindV1, ReadonlyArray<{
+    sourcePath: string;
+    reasonCode: string;
+    valueKind: 'structurally-empty' | 'false';
+  }>>
 > = Object.freeze({
   'shop-card': Object.freeze([
-    { sourcePath: 'data', reasonCode: 'SHOP_CARD_SUCCESS_EMPTY_SENTINEL' },
+    {
+      sourcePath: 'data',
+      reasonCode: 'SHOP_CARD_SUCCESS_EMPTY_SENTINEL',
+      valueKind: 'structurally-empty' as const,
+    },
   ]),
   'offer-consignment': Object.freeze([
-    { sourcePath: 'data.data.data.data', reasonCode: 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL' },
-    { sourcePath: 'data.data.data', reasonCode: 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL' },
+    {
+      sourcePath: 'data.data.data.data',
+      reasonCode: 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL',
+      valueKind: 'structurally-empty' as const,
+    },
+    {
+      sourcePath: 'data.data.data',
+      reasonCode: 'CONSIGNMENT_SUCCESS_EMPTY_SENTINEL',
+      valueKind: 'structurally-empty' as const,
+    },
+    {
+      sourcePath: 'contextResult.global.globalData.model.consignModel.consignOffer',
+      reasonCode: 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED',
+      valueKind: 'false' as const,
+    },
   ]),
 });
 
@@ -224,6 +291,7 @@ export interface OfferSourceTerminalReceiptV1 {
     | 'offer-shop-card-observation-receipt-v1'
     | 'offer-consignment-observation-receipt-v1';
   source: OfferSourceKindV1;
+  authoritySource?: 'offer-core';
   offerId: string;
   memberId: string;
   pageActionId: string;
@@ -238,6 +306,7 @@ export interface OfferSourceTerminalReceiptV1 {
     sourcePath: string;
     sourceValueHash: string;
     reasonCode: string;
+    authorityArtifactRef?: string;
   };
   rawEvidenceRefs: string[];
   fieldObservationRefs?: string[];
@@ -247,6 +316,7 @@ export interface OfferSourceTerminalReceiptV1 {
 
 export function createOfferSourceTerminalReceiptV1(input: {
   source: OfferSourceKindV1;
+  authoritySource?: 'offer-core';
   offerId: string;
   memberId: string;
   pageActionId: string;
@@ -277,19 +347,25 @@ export function createOfferSourceTerminalReceiptV1(input: {
     input.correlatedMemberId === input.memberId
       ? 'matched'
       : 'failed';
+  const dedicatedResponseReady = input.authoritySource === undefined
+    && input.responseObserved
+    && input.responseSucceeded;
+  const offerCoreAbsenceReady = input.authoritySource === 'offer-core'
+    && input.source === 'offer-consignment'
+    && !input.responseObserved
+    && !input.responseSucceeded
+    && rawEvidenceRefs.length === 1;
   let state: OfferSourceTerminalReceiptV1['state'] = 'failed';
   let absenceProof: OfferSourceTerminalReceiptV1['absenceProof'];
   if (
-    input.responseObserved &&
-    input.responseSucceeded &&
+    dedicatedResponseReady &&
     correlation === 'matched' &&
     input.parsedValue !== null &&
     rawEvidenceComplete
   ) {
     state = 'available';
   } else if (
-    input.responseObserved &&
-    input.responseSucceeded &&
+    (dedicatedResponseReady || offerCoreAbsenceReady) &&
     correlation === 'matched' &&
     input.parsedValue === null &&
     input.authoritativeEmpty &&
@@ -301,6 +377,9 @@ export function createOfferSourceTerminalReceiptV1(input: {
       sourcePath: input.authoritativeEmpty.sourcePath,
       sourceValueHash: evidenceHash(input.authoritativeEmpty.sourceValue),
       reasonCode: input.authoritativeEmpty.reasonCode,
+      ...(input.authoritySource === 'offer-core'
+        ? { authorityArtifactRef: rawEvidenceRefs[0]! }
+        : {}),
     };
   }
   const error = state === 'failed'
@@ -317,6 +396,9 @@ export function createOfferSourceTerminalReceiptV1(input: {
   const content = {
     schema: OFFER_SOURCE_REVISIONS[input.source].schema,
     source: input.source,
+    ...(input.authoritySource === 'offer-core'
+      ? { authoritySource: input.authoritySource }
+      : {}),
     offerId: requiredId(input.offerId, 'offerId'),
     memberId: requiredId(input.memberId, 'memberId'),
     pageActionId: requiredId(input.pageActionId, 'pageActionId'),
@@ -360,6 +442,18 @@ export function assertOfferSourceReceiptsCompleteV1(input: {
       isRegisteredAbsenceProof(source, receipt.absenceProof) &&
       /^sha256:[0-9a-f]{64}$/.test(receipt.absenceProof.sourceValueHash)
     );
+    const sourceAuthorityComplete = receipt.authoritySource === undefined
+      ? receipt.responseObserved && receipt.responseSucceeded
+      : receipt.authoritySource === 'offer-core'
+        && source === 'offer-consignment'
+        && receipt.state === 'not-present'
+        && !receipt.responseObserved
+        && !receipt.responseSucceeded
+        && receipt.absenceProof?.reasonCode
+          === 'CONSIGNMENT_CORE_DECLARED_UNSUPPORTED'
+        && receipt.rawEvidenceRefs.length === 1
+        && receipt.absenceProof.authorityArtifactRef
+          === receipt.rawEvidenceRefs[0];
     if (
       receipt.source !== source ||
       receipt.schema !== expected.schema ||
@@ -369,8 +463,7 @@ export function assertOfferSourceReceiptsCompleteV1(input: {
       receipt.memberId !== input.memberId ||
       receipt.pageActionId !== input.pageActionId ||
       receipt.remoteRequestAttemptId !== input.remoteRequestAttemptId ||
-      !receipt.responseObserved ||
-      !receipt.responseSucceeded ||
+      !sourceAuthorityComplete ||
       receipt.correlation !== 'matched' ||
       !['available', 'not-present'].includes(receipt.state) ||
       receipt.rawEvidenceRefs.length === 0 ||
@@ -421,11 +514,69 @@ function isOfferSourceArtifactRefV1(
   return new RegExp(`^artifact:offer-source-${source}-[0-9a-f]{64}$`, 'u').test(value);
 }
 
-function sanitizeOfferSourcePayloadV1(value: unknown, key?: string): unknown {
+const OFFER_CORE_CONSIGNMENT_SIGNS_PATH = [
+  'contextResult',
+  'global',
+  'globalData',
+  'model',
+  'consignModel',
+  'consignSign',
+  'signs',
+] as const;
+
+const OFFER_CORE_AUTHORITY_VALUE_PATHS = [
+  ['contextResult', 'data', 'gallery', 'fields', 'offerId'],
+  ['contextResult', 'global', 'globalData', 'model', 'sellerModel', 'memberId'],
+  [
+    ...OFFER_CORE_CONSIGNMENT_SIGNS_PATH,
+    'isSupportConsignIssuing',
+  ],
+] as const;
+
+function sanitizeOfferSourcePayloadV1(
+  value: unknown,
+  path: readonly string[] = [],
+  preserveOfferCoreAuthorityValues = false,
+): unknown {
+  if (
+    preserveOfferCoreAuthorityValues
+    && path.length === OFFER_CORE_CONSIGNMENT_SIGNS_PATH.length
+    && path.every(
+      (segment, index) => segment === OFFER_CORE_CONSIGNMENT_SIGNS_PATH[index],
+    )
+  ) {
+    const signs = recordOrNull(value);
+    return {
+      isSupportConsignIssuing: sanitizeOfferSourcePayloadV1(
+        signs?.isSupportConsignIssuing,
+        [...path, 'isSupportConsignIssuing'],
+        true,
+      ),
+    };
+  }
+  if (
+    preserveOfferCoreAuthorityValues
+    &&
+    (
+      typeof value === 'string'
+      || typeof value === 'boolean'
+      || (typeof value === 'number' && Number.isFinite(value))
+    )
+    && OFFER_CORE_AUTHORITY_VALUE_PATHS.some((authorityPath) =>
+      authorityPath.length === path.length
+      && authorityPath.every((segment, index) => segment === path[index]))
+  ) {
+    return value;
+  }
+  const key = path.at(-1);
   const normalizedKey = key?.toLowerCase().replace(/[^a-z0-9]/gu, '') ?? '';
   if (
-    /(?:authorization|cookie|password|secret|token|signature|^sign|mh5tk|headers)/u.test(normalizedKey) ||
-    /(?:contact|mobile|phone|telephone|email|wechat|wangwang|identitycard|idcard|bankaccount|principal|legalperson|legalrepresentative)/u.test(normalizedKey)
+    (
+      /(?:authorization|cookie|password|secret|token|signature|^sign|mh5tk|headers)/u
+        .test(normalizedKey)
+      || /(?:contact|mobile|phone|telephone|email|wechat|wangwang|identitycard|idcard|bankaccount|principal|legalperson|legalrepresentative)/u
+        .test(normalizedKey)
+    )
   ) {
     return '[redacted]';
   }
@@ -457,13 +608,24 @@ function sanitizeOfferSourcePayloadV1(value: unknown, key?: string): unknown {
     return value;
   }
   if (value === null || typeof value !== 'object') return value;
-  if (Array.isArray(value)) return value.map((item) => sanitizeOfferSourcePayloadV1(item));
+  if (Array.isArray(value)) {
+    return value.map((item, index) =>
+      sanitizeOfferSourcePayloadV1(
+        item,
+        [...path, String(index)],
+        preserveOfferCoreAuthorityValues,
+      ));
+  }
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>)
       .filter(([, child]) => child !== undefined)
       .map(([childKey, child]) => [
         childKey,
-        sanitizeOfferSourcePayloadV1(child, childKey),
+        sanitizeOfferSourcePayloadV1(
+          child,
+          [...path, childKey],
+          preserveOfferCoreAuthorityValues,
+        ),
       ]),
   );
 }
@@ -488,10 +650,12 @@ function assertRegisteredAuthoritativeEmpty(
   source: OfferSourceKindV1,
   empty: { sourcePath: string; sourceValue: unknown; reasonCode: string },
 ): void {
-  if (
-    !isRegisteredAbsenceProof(source, empty) ||
-    !isStructurallyEmpty(empty.sourceValue)
-  ) {
+  const registered = registeredAbsenceSentinel(source, empty);
+  const valueMatches = registered?.valueKind === 'false'
+    ? empty.sourceValue === false
+    : registered?.valueKind === 'structurally-empty'
+      && isStructurallyEmpty(empty.sourceValue);
+  if (!valueMatches) {
     throw new TypeError(`${source} authoritative-empty proof is not a registered versioned sentinel.`);
   }
 }
@@ -500,15 +664,100 @@ function isRegisteredAbsenceProof(
   source: OfferSourceKindV1,
   proof: { sourcePath: string; reasonCode: string; sourceValueHash?: string },
 ): boolean {
-  const registered = OFFER_SOURCE_EMPTY_SENTINELS[source].some(
+  const registered = registeredAbsenceSentinel(source, proof);
+  if (registered === undefined) return false;
+  if (proof.sourceValueHash === undefined) return true;
+  return registered.valueKind === 'false'
+    ? proof.sourceValueHash === evidenceHash(false)
+    : REGISTERED_EMPTY_VALUE_HASHES.has(proof.sourceValueHash);
+}
+
+function registeredAbsenceSentinel(
+  source: OfferSourceKindV1,
+  proof: { sourcePath: string; reasonCode: string },
+) {
+  return OFFER_SOURCE_EMPTY_SENTINELS[source].find(
     (registered) =>
-      registered.sourcePath === proof.sourcePath &&
-      registered.reasonCode === proof.reasonCode,
+      registered.sourcePath === proof.sourcePath
+      && registered.reasonCode === proof.reasonCode,
   );
-  return registered && (
-    proof.sourceValueHash === undefined ||
-    REGISTERED_EMPTY_VALUE_HASHES.has(proof.sourceValueHash)
+}
+
+function assertOfferCoreSidecarAuthority(artifact: OfferSourceSidecarV1): void {
+  if (artifact.authoritySource === undefined) return;
+  const supportingSignals = offerCoreAuthoritySupportingSignals(
+    artifact.sanitizedRawPayload,
+    artifact.offerId,
+    artifact.memberId,
   );
+  const expectedEvidence = supportingSignals === null
+    ? null
+    : offerCoreAuthorityEvidence(
+        artifact.offerId,
+        artifact.memberId,
+        supportingSignals,
+      );
+  if (
+    artifact.authoritySource !== 'offer-core'
+    || artifact.source !== 'offer-consignment'
+    || artifact.authorityEvidence === undefined
+    || expectedEvidence === null
+    || evidenceHash(artifact.authorityEvidence)
+      !== evidenceHash(expectedEvidence)
+  ) {
+    throw new TypeError('Offer core Consignment sidecar authority is invalid.');
+  }
+}
+
+function offerCoreAuthoritySupportingSignals(
+  payload: unknown,
+  offerId: string,
+  memberId: string,
+): NonNullable<OfferSourceSidecarV1['authorityEvidence']>['supportingSignals'] | null {
+  const model = objectAt(
+    payload,
+    ['contextResult', 'global', 'globalData', 'model'],
+  );
+  const gallery = objectAt(
+    payload,
+    ['contextResult', 'data', 'gallery', 'fields'],
+  );
+  const seller = recordOrNull(model?.sellerModel);
+  const consign = recordOrNull(model?.consignModel);
+  const consignSign = recordOrNull(consign?.consignSign);
+  const signs = recordOrNull(consignSign?.signs);
+  if (
+    stringOrNull(gallery?.offerId) !== offerId
+    || stringOrNull(seller?.memberId) !== memberId
+    || consign?.consignOffer !== false
+    || consign?.hasConsignPrice !== false
+    || typeof consignSign?.supportConsignIssuing !== 'boolean'
+    || typeof signs?.isSupportConsignIssuing !== 'boolean'
+  ) {
+    return null;
+  }
+  return {
+    hasConsignPrice: false,
+    supportConsignIssuing: consignSign.supportConsignIssuing,
+    isSupportConsignIssuing: signs.isSupportConsignIssuing,
+  };
+}
+
+function offerCoreAuthorityEvidence(
+  offerId: string,
+  memberId: string,
+  supportingSignals: NonNullable<
+    OfferSourceSidecarV1['authorityEvidence']
+  >['supportingSignals'],
+): NonNullable<OfferSourceSidecarV1['authorityEvidence']> {
+  return {
+    schema: 'collector.offer-core-consignment-authority.v1',
+    sourcePath: 'contextResult.global.globalData.model.consignModel.consignOffer',
+    sourceValue: false,
+    offerId,
+    memberId,
+    supportingSignals,
+  };
 }
 
 function isStructurallyEmpty(value: unknown): boolean {

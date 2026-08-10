@@ -746,6 +746,9 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
           artifactDirectory: this.options.artifactDirectory,
           sidecar: createOfferSourceSidecarV1({
             source: 'offer-consignment', offerId, memberId,
+            ...(sourceEvidence.consignment.authoritySource === 'offer-core'
+              ? { authoritySource: sourceEvidence.consignment.authoritySource }
+              : {}),
             correlatedOfferId: sourceEvidence.consignment.correlatedOfferId,
             correlatedMemberId: sourceEvidence.consignment.correlatedMemberId,
             pageActionId: request.pageActionId,
@@ -797,6 +800,9 @@ export class ProductionPageActionExecutor implements PageActionExecutor {
     const consignment = createOfferSourceTerminalReceiptV1({
       ...sourceInput,
       source: 'offer-consignment',
+      ...(sourceEvidence?.consignment.authoritySource === 'offer-core'
+        ? { authoritySource: sourceEvidence.consignment.authoritySource }
+        : {}),
       correlatedOfferId: sourceEvidence?.consignment.correlatedOfferId ?? null,
       correlatedMemberId: sourceEvidence?.consignment.correlatedMemberId ?? null,
       responseObserved: sourceEvidence?.consignment.responseObserved ?? false,
