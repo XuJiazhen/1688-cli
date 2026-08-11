@@ -29,6 +29,7 @@ import { mapStoreProfilePayload } from '../session/store-profile.js';
 import {
   assertStoreProfilePayloadState,
   captureStoreProfileForAction,
+  requestStoreProfileFromPage,
 } from '../session/store-profile-capture.js';
 import { runOnSharedCtx } from '../session/shared.js';
 import {
@@ -499,17 +500,19 @@ async function runProductionStorePages(
       ).toISOString(),
       collectProfileObservation: async () => {
         const navigationUrl = buildStoreCatalogUrl(storeUrl, { sort: 'wangpu_score' });
+        await page.goto(navigationUrl, {
+          waitUntil: 'domcontentloaded',
+          timeout: 30_000,
+        });
+        await waitForCollectionPageAvailability(page, { headed: true });
+        await waitForStoreCatalogRuntime(page, { timeoutMs: 15_000 });
         const captured = await captureStoreProfileForAction(
           page,
           { memberId, timeoutMs: 15_000 },
-          async () => {
-            await page.goto(navigationUrl, {
-              waitUntil: 'domcontentloaded',
-              timeout: 30_000,
-            });
-            await waitForCollectionPageAvailability(page, { headed: true });
-            await waitForStoreCatalogRuntime(page, { timeoutMs: 15_000 });
-          },
+          () => requestStoreProfileFromPage(page, memberId, {
+            runtimeReadyTimeoutMs: 15_000,
+            requestTimeoutMs: 15_000,
+          }),
         );
         if (captured.captured === null) {
           throw new CliError(

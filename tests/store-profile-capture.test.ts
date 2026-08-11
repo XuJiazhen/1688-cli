@@ -119,7 +119,7 @@ describe('store profile capture', () => {
     expect(page.listenerCount('response')).toBe(0);
   });
 
-  it('returns the same-page MTOP fulfillment for fallback parsing', async () => {
+  it('returns the same-page MTOP fulfillment for canonical capture', async () => {
     const payload = {
       ret: ['SUCCESS::调用成功'],
       data: {
@@ -152,6 +152,45 @@ describe('store profile capture', () => {
     ).resolves.toEqual(payload);
     expect(calls[0]?.[1]).toBeUndefined();
     expect(calls[0]?.[2]).toEqual({ timeout: 7 });
+  });
+
+  it('captures the correlated response from one explicit same-page MTOP request', async () => {
+    const payload = {
+      ret: ['SUCCESS::调用成功'],
+      data: {
+        success: 'true',
+        data: {
+          memberId: 'b2b-target',
+          companyName: '脱敏工具有限公司',
+          commonUrl: { shopUrl: 'https://b2b-target.1688.com/' },
+        },
+      },
+    };
+    const page = new MockPage() as Page & MockPage & {
+      waitForFunction: (...args: unknown[]) => Promise<void>;
+      evaluate: (pageFunction: unknown, runtimeRequest: unknown) => Promise<unknown>;
+    };
+    page.waitForFunction = async () => undefined;
+    page.evaluate = async (_pageFunction, runtimeRequest) => {
+      expect(runtimeRequest).toEqual(buildStoreProfileRuntimeRequest('b2b-target'));
+      page.emit('response', response(profileUrl('b2b-target'), payload));
+      return payload;
+    };
+
+    const result = await captureStoreProfileForAction(
+      page,
+      { memberId: 'b2b-target', timeoutMs: 50 },
+      () => requestStoreProfileFromPage(page, 'b2b-target'),
+    );
+
+    expect(result).toMatchObject({
+      actionResult: payload,
+      captured: {
+        payload,
+        sourceRef: `https://h5api.m.1688.com/h5/${ALISITE_MODULE_API}/1.0/`,
+      },
+      diagnostics: { matchedCount: 1, parsedCount: 1 },
+    });
   });
 
   it('bounds an unresolved runtime request', async () => {
