@@ -673,12 +673,12 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV1
 function classifyRuntimeError(error: unknown): ProductionCollectionProtocolError {
   if (error instanceof ProductionCollectionProtocolError) return error;
   if (error instanceof CliError) {
-    const category = typeof error.details.category === 'string'
-      ? error.details.category
-      : error.code === 'NOT_LOGGED_IN'
-        ? 'authentication'
-        : error.code === 'RISK_CONTROL'
-          ? 'risk-control'
+    const category = error.code === 'NOT_LOGGED_IN'
+      ? 'authentication'
+      : error.code === 'RISK_CONTROL'
+        ? 'risk-control'
+        : typeof error.details.category === 'string'
+          ? error.details.category
           : 'runtime';
     const retryable = typeof error.details.retryable === 'boolean'
       ? error.details.retryable

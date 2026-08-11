@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { BrowserContext, Page } from 'playwright';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CollectionBatch } from '../src/collection/contracts.js';
+import { CliError } from '../src/io/errors.js';
 import {
   parseProductionCollectionRpcRequestV1,
   productionCollectionRequestHashV1,
@@ -60,6 +61,33 @@ describe('production collection protocol', () => {
 });
 
 describe('ProductionCollectionRuntime', () => {
+  it('preserves external intervention categories across the daemon RPC boundary', async () => {
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
+    directories.push(artifactDirectory);
+    const runtime = new ProductionCollectionRuntime({
+      profileId: PROFILE_ID,
+      profileName: 'fixture-profile',
+      artifactDirectory,
+      runCollection: async () => {
+        throw new CliError(4, 'RISK_CONTROL', 'Verification is required.', {
+          category: 'risk_challenge',
+          retryable: false,
+        });
+      },
+      runWithContext: (operation) => operation(new FakeContext() as unknown as BrowserContext),
+    });
+
+    await expect(runtime.handle(parseProductionCollectionRpcRequestV1(request())))
+      .resolves.toMatchObject({
+        ok: false,
+        error: {
+          code: 'RISK_CONTROL',
+          category: 'risk-control',
+          retryable: false,
+        },
+      });
+  });
+
   it('archives production raw evidence with the canonical artifact authority', async () => {
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
     directories.push(artifactDirectory);
