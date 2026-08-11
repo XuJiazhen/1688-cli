@@ -373,9 +373,8 @@ async function runProductionCollection(
         headed: true,
         allowDomFallback: false,
         onRawComponent: async (component, payload) => {
-          rawEvidenceRefs.push(await persistRawEvidence(
+          rawEvidenceRefs.push(await persistProductionCollectionRawEvidence(
             artifactDirectory,
-            `${request.attemptId}-${component}`,
             payload,
           ));
         },
@@ -412,9 +411,8 @@ async function runProductionCollection(
     headed: true,
     remoteFilterParams: request.query.filters as Record<string, string>,
   });
-  const rawEvidenceRef = await persistRawEvidence(
+  const rawEvidenceRef = await persistProductionCollectionRawEvidence(
     artifactDirectory,
-    `${request.attemptId}-search-page-${page}`,
     result.rawResponseText,
   );
   return createSearchPageBatch({
@@ -451,9 +449,8 @@ async function runProductionQualification(
         memberId,
         timeoutMs: 15_000,
         onRawResponse: async (payload) => {
-          rawEvidenceRefs.push(await persistRawEvidence(
+          rawEvidenceRefs.push(await persistProductionCollectionRawEvidence(
             artifactDirectory,
-            `${request.attemptId}-qualification`,
             payload,
           ));
         },
@@ -522,9 +519,8 @@ async function runProductionStorePages(
             { category: 'protocol', retryable: false, recoveryAction: 'refresh-store-header-parser' },
           );
         }
-        const rawRef = await persistRawEvidence(
+        const rawRef = await persistProductionCollectionRawEvidence(
           artifactDirectory,
-          `${request.attemptId}-store-profile`,
           captured.captured.payload,
         );
         rawEvidenceRefs.push(rawRef);
@@ -554,9 +550,8 @@ async function runProductionStorePages(
           count: 30,
           sortType: 'wangpu_score',
         }, { timeoutMs: 15_000 });
-        rawEvidenceRefs.push(await persistRawEvidence(
+        rawEvidenceRefs.push(await persistProductionCollectionRawEvidence(
           artifactDirectory,
-          `${request.attemptId}-store-page-${logicalPage}`,
           rawPayload,
         ));
         return parseStoreCatalogModule(rawPayload, {
@@ -626,9 +621,8 @@ async function runProductionStorePages(
   }
 }
 
-async function persistRawEvidence(
+export async function persistProductionCollectionRawEvidence(
   artifactDirectory: string,
-  label: string,
   payload: unknown,
 ): Promise<string> {
   const serialized = typeof payload === 'string'
@@ -645,7 +639,7 @@ async function persistRawEvidence(
   } catch {
     await writeAtomic(filePath, serialized);
   }
-  return `production-collection-raw:${label}:sha256:${hash}`;
+  return `artifact:production-collection-raw-${hash}`;
 }
 
 async function sleep(milliseconds: number): Promise<void> {

@@ -10,7 +10,10 @@ import {
   productionCollectionRequestHashV1,
   type ProductionCollectionRpcRequestV1,
 } from '../src/daemon/production-collection-protocol.js';
-import { ProductionCollectionRuntime } from '../src/daemon/production-collection-runtime.js';
+import {
+  persistProductionCollectionRawEvidence,
+  ProductionCollectionRuntime,
+} from '../src/daemon/production-collection-runtime.js';
 
 const directories: string[] = [];
 
@@ -57,6 +60,30 @@ describe('production collection protocol', () => {
 });
 
 describe('ProductionCollectionRuntime', () => {
+  it('archives production raw evidence with the canonical artifact authority', async () => {
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
+    directories.push(artifactDirectory);
+    const payload = { data: { data: { companyName: 'Fixture Store' } } };
+
+    const reference = await persistProductionCollectionRawEvidence(
+      artifactDirectory,
+      payload,
+    );
+
+    const serialized = `${JSON.stringify(payload)}\n`;
+    const hash = await crypto.subtle.digest(
+      'SHA-256',
+      new TextEncoder().encode(serialized),
+    );
+    const hex = Buffer.from(hash).toString('hex');
+    expect(reference).toBe(`artifact:production-collection-raw-${hex}`);
+    await expect(fs.readFile(path.join(
+      artifactDirectory,
+      'production-collection-raw',
+      `${hex}.json`,
+    ), 'utf8')).resolves.toBe(serialized);
+  });
+
   it('persists one replayable receipt only after owned Page cleanup', async () => {
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
     directories.push(artifactDirectory);
