@@ -53,7 +53,7 @@ const transportAuthority = {
   liveAuthorizationId: '60000000-0000-4000-8000-000000000006',
   liveAuthorizationSha256: 'a'.repeat(64),
   cohortId: '60000000-0000-4000-8000-000000000008',
-  runId: '60000000-0000-4000-8000-000000000009',
+  collectionTaskId: '60000000-0000-4000-8000-000000000009',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
 };
 
@@ -1189,7 +1189,7 @@ describe('ProfileDaemonRuntime', () => {
           admittedAt: now.toISOString(),
           transportAuthority: {
             ...transportAuthority,
-            runId: '60000000-0000-4000-8000-000000000099',
+            collectionTaskId: '60000000-0000-4000-8000-000000000099',
           },
           parentCanonicalRequestHash: canonicalRpcPayloadHash(request),
         }),
@@ -1229,7 +1229,7 @@ describe('ProfileDaemonRuntime', () => {
     }],
     ['live authorization hash', { liveAuthorizationSha256: 'c'.repeat(64) }],
     ['cohort', { cohortId: '60000000-0000-4000-8000-000000000097' }],
-    ['Run', { runId: '60000000-0000-4000-8000-000000000096' }],
+    ['collection task', { collectionTaskId: '60000000-0000-4000-8000-000000000096' }],
     ['protocol', { protocolSha256: 'e'.repeat(64) }],
   ])('rejects mismatched admission %s before durable acceptance or Page creation', async (
     _name,

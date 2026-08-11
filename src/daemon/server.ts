@@ -36,6 +36,15 @@ import {
 } from './supervisor-rpc.js';
 import type { PageActionVerificationConfigV1 } from '../collection/page-action-contracts.js';
 import type { ProfileDaemonRuntime } from './supervisor-runtime.js';
+import {
+  PRODUCTION_COLLECTION_RPC_SCHEMA,
+  PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA,
+  ProductionCollectionProtocolError,
+  parseProductionCollectionRpcRequestV1,
+  productionCollectionRequestHashV1,
+  productionCollectionRpcFailureV1,
+} from './production-collection-protocol.js';
+import type { ProductionCollectionRuntime } from './production-collection-runtime.js';
 import pkg from '../../package.json' with { type: 'json' };
 
 export interface ServerOpts {
@@ -44,6 +53,7 @@ export interface ServerOpts {
   prewarm?: boolean;
   headful?: boolean;
   supervisorRuntime: ProfileDaemonRuntime;
+  productionCollectionRuntime: ProductionCollectionRuntime;
   pageActionVerification?: PageActionVerificationConfigV1;
 }
 
@@ -258,6 +268,54 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
               response.error.retryable,
             ));
           }
+          continue;
+        }
+        if (
+          parsed !== null
+          && typeof parsed === 'object'
+          && !Array.isArray(parsed)
+          && (parsed as Record<string, unknown>)['schema']
+            === PRODUCTION_COLLECTION_RPC_SCHEMA
+        ) {
+          let collectionRequest;
+          try {
+            collectionRequest = parseProductionCollectionRpcRequestV1(parsed);
+          } catch (error) {
+            const rpcId = typeof (parsed as Record<string, unknown>)['rpcId'] === 'string'
+              ? (parsed as Record<string, unknown>)['rpcId'] as string
+              : '?';
+            const requestHash = '0'.repeat(64);
+            const failure = productionCollectionRpcFailureV1({
+              rpcId,
+              requestHash,
+              error: error instanceof ProductionCollectionProtocolError
+                ? error
+                : new ProductionCollectionProtocolError(
+                    'PRODUCTION_COLLECTION_CONTRACT_INVALID',
+                    'Invalid production collection request frame.',
+                  ),
+            });
+            sock.write(`${JSON.stringify(failure)}\n`);
+            continue;
+          }
+          const response = opts.productionCollectionRuntime.handle(collectionRequest);
+          void response.then((value) => {
+            if (sock.writable) sock.write(`${JSON.stringify(value)}\n`);
+          }).catch((error) => {
+            if (!sock.writable) return;
+            sock.write(`${JSON.stringify({
+              schema: PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA,
+              rpcId: collectionRequest.rpcId,
+              requestHash: productionCollectionRequestHashV1(collectionRequest),
+              ok: false,
+              error: {
+                code: 'PRODUCTION_COLLECTION_RUNTIME_FAILED',
+                message: error instanceof Error ? error.message : 'Runtime failed.',
+                retryable: true,
+                category: 'runtime',
+              },
+            })}\n`);
+          });
           continue;
         }
         if (

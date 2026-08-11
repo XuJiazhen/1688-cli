@@ -1,6 +1,5 @@
 import { CliError } from '../io/errors.js';
 import {
-  SEARCH_REMOTE_PAGE_LIMIT,
   SEARCH_REMOTE_PAGE_SIZE,
 } from '../session/search-limits.js';
 import type { Offer, RawOfferItem } from '../session/search-mtop.js';
@@ -150,17 +149,6 @@ export function planSearchBatch(
     );
   }
   const page = checkpoint?.nextPage ?? cursorPage ?? 1;
-  if (page > SEARCH_REMOTE_PAGE_LIMIT) {
-    throw new CliError(
-      2,
-      checkpoint === undefined ? 'BAD_INPUT' : 'CHECKPOINT_INCOMPATIBLE',
-      `Search collection cannot continue beyond remote page ${SEARCH_REMOTE_PAGE_LIMIT}.`,
-      {
-        page,
-        remotePageLimit: SEARCH_REMOTE_PAGE_LIMIT,
-      },
-    );
-  }
   const seenOfferIds = (checkpoint?.seenKeys ?? []).map((offerId, index) =>
     requireOfferId(offerId, `CollectionCheckpoint.seenKeys[${index}]`)
   );
@@ -403,14 +391,9 @@ export function createSearchPageBatch(
     plan.pendingItems.at(-1)?.remoteHasMore ??
     input.hasMore;
   const shouldContinueScope = remoteHasMore && requestedScope !== 'page';
-  const reachedRemotePageBudget =
-    !pageEmissionTruncated &&
-    shouldContinueScope &&
-    input.page === SEARCH_REMOTE_PAGE_LIMIT;
   const shouldAdvancePage =
     !pageEmissionTruncated &&
-    shouldContinueScope &&
-    input.page < SEARCH_REMOTE_PAGE_LIMIT;
+    shouldContinueScope;
   const shouldCheckpoint =
     pageEmissionTruncated || shouldAdvancePage;
   const nextPage = pageEmissionTruncated ? input.page : input.page + 1;
@@ -490,17 +473,6 @@ export function createSearchPageBatch(
       },
     });
   }
-  if (reachedRemotePageBudget) {
-    warnings.push({
-      code: 'SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED',
-      message: `Search collection reached the technical remote-page budget at page ${SEARCH_REMOTE_PAGE_LIMIT}.`,
-      details: {
-        page: input.page,
-        remotePageLimit: SEARCH_REMOTE_PAGE_LIMIT,
-        remoteHasMore: true,
-      },
-    });
-  }
   const partial = shouldCheckpoint;
   const errors: CollectionError[] = remotePageOversize
     ? [
@@ -577,7 +549,7 @@ export function createSearchPageBatch(
     observations,
     completeness: {
       requestedScope,
-      state: partial || reachedRemotePageBudget ? 'truncated' : 'complete',
+      state: partial ? 'truncated' : 'complete',
       observedPages: [input.page],
       failedPages:
         remotePageOversize || snapshotTooLarge || noProgress
@@ -599,7 +571,6 @@ export function createSearchPageBatch(
       deferredOffers: pendingKeys.length,
       unrecoverablePendingOffers: missingPendingKeys.length,
       emissionLimit,
-      remotePageLimit: SEARCH_REMOTE_PAGE_LIMIT,
       noProgressAttempts,
       requestSnapshots: requestSnapshot === undefined ? 0 : 1,
       snapshotBytes: createdSnapshotBytes,

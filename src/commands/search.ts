@@ -26,6 +26,7 @@ import {
 import { parseMtopJsonp } from '../session/mtop.js';
 import { sleep } from '../session/wait.js';
 import { withIsolatedOperationPages } from '../session/page-lifecycle.js';
+import { SEARCH_FILTER_REQUEST_KEYS } from '../session/search-contract.js';
 import type { OfferResult, OfferArgs } from './offer.js';
 import {
   applySearchControls,
@@ -102,6 +103,7 @@ export interface IncrementalSearchPageArgs {
   headed?: boolean;
   pageDelayMin?: number;
   pageDelayMax?: number;
+  remoteFilterParams?: Record<string, string>;
 }
 
 export interface IncrementalSearchPageResult {
@@ -111,6 +113,7 @@ export interface IncrementalSearchPageResult {
   offers: Offer[];
   hasMore: boolean;
   collectedAt: string;
+  rawResponseText: string;
 }
 
 export type { Offer };
@@ -162,13 +165,12 @@ export async function fetchIncrementalSearchPage(
 ): Promise<IncrementalSearchPageResult> {
   if (
     !Number.isInteger(args.page) ||
-    args.page < 1 ||
-    args.page > SEARCH_REMOTE_PAGE_LIMIT
+    args.page < 1
   ) {
     throw new CliError(
       2,
       'BAD_INPUT',
-      `Search page must be between 1 and ${SEARCH_REMOTE_PAGE_LIMIT}.`,
+      'Search page must be a positive integer.',
     );
   }
   const keyword = args.keyword.trim();
@@ -177,6 +179,7 @@ export async function fetchIncrementalSearchPage(
   let captured: Offer[] | null = null;
   let collectedAt: string | null = null;
   let remoteHasMore: boolean | null = null;
+  let rawResponseText: string | null = null;
   await withIsolatedOperationPages(ctx, () => fetchSearch(
     ctx,
     keyword,
@@ -186,12 +189,17 @@ export async function fetchIncrementalSearchPage(
     args.pageDelayMin ?? 2,
     args.pageDelayMax ?? 4,
     {
+      pageLimit: args.page,
+      remoteFilterParams: normalizeRemoteFilterParams(args.remoteFilterParams),
       onCapturedPage(page, offers, hasMore) {
         if (page === args.page) {
           captured = offers;
           collectedAt = new Date().toISOString();
           remoteHasMore = hasMore;
         }
+      },
+      onRawResponse(page, value) {
+        if (page === args.page) rawResponseText = value;
       },
     },
   ));
@@ -214,6 +222,9 @@ export async function fetchIncrementalSearchPage(
       },
     );
   }
+  if (rawResponseText === null) {
+    throw new CliError(9, 'SEARCH_RAW_RESPONSE_MISSING', 'Search response raw evidence is missing.');
+  }
   const pageOffers = captured as Offer[];
   return {
     page: args.page,
@@ -222,6 +233,7 @@ export async function fetchIncrementalSearchPage(
     offers: pageOffers,
     hasMore: remoteHasMore,
     collectedAt: collectedAt as string,
+    rawResponseText,
   };
 }
 
@@ -315,16 +327,19 @@ async function fetchSearch(
   pageDelayMin: number,
   pageDelayMax: number,
   hooks: {
+    pageLimit?: number;
+    remoteFilterParams?: Record<string, string>;
     onCapturedPage?: (page: number, offers: Offer[], hasMore: boolean | null) => void;
+    onRawResponse?: (page: number, rawResponseText: string) => void;
   } = {},
 ): Promise<Offer[]> {
   const page = await ctx.newPage();
 
-  const baseUrl = buildSearchUrl(keyword, sort);
+  const baseUrl = buildSearchUrl(keyword, sort, hooks.remoteFilterParams);
   const sortType = remoteSortType(sort);
   const pagesWanted = Math.min(
     Math.max(1, Math.ceil(maxResults / SEARCH_REMOTE_PAGE_SIZE)),
-    SEARCH_REMOTE_PAGE_LIMIT,
+    hooks.pageLimit ?? SEARCH_REMOTE_PAGE_LIMIT,
   );
 
   // The search capture must only attach AFTER warmup: home/search pages can
@@ -646,6 +661,9 @@ async function fetchSearch(
     }
     if (pageNum === 1) await detectLoginRedirect(page);
     hooks.onCapturedPage?.(pageNum, [...capturedOffers], captureResult.remoteHasMore);
+    if (captureResult.rawResponseText !== null) {
+      hooks.onRawResponse?.(pageNum, captureResult.rawResponseText);
+    }
 
     // Accumulate with cross-page dedup. 1688 occasionally repeats P4P ad
     // slots across pages; dedup keeps the result set clean.
@@ -732,14 +750,36 @@ async function capturePaginationProbe(
   process.stderr.write(`[probe] saved ${jsonPath}, ${htmlPath}, ${screenshotPath}\n`);
 }
 
-export function buildSearchUrl(keyword: string, sort: SearchSort): string {
+export function buildSearchUrl(
+  keyword: string,
+  sort: SearchSort,
+  remoteFilterParams: Record<string, string> = {},
+): string {
   // s.1688.com is GBK-encoded — UTF-8 percent-encoding makes the server
   // search for mojibake. Encode the keyword as GBK bytes first.
   const gbkQs = encodeGbkPercent(keyword);
   const sortType = remoteSortType(sort);
   const descendOrder = sort === 'price-asc' ? 'false' : 'true';
+  const filterQuery = Object.entries(normalizeRemoteFilterParams(remoteFilterParams))
+    .map(([key, value]) => `&${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join('');
   return `https://s.1688.com/selloffer/offer_search.htm?keywords=${gbkQs}` +
-    `&sortType=${encodeURIComponent(sortType)}&descendOrder=${descendOrder}`;
+    `&sortType=${encodeURIComponent(sortType)}&descendOrder=${descendOrder}${filterQuery}`;
+}
+
+function normalizeRemoteFilterParams(
+  value: Record<string, string> | undefined,
+): Record<string, string> {
+  if (value === undefined) return {};
+  const allowed = new Set<string>(SEARCH_FILTER_REQUEST_KEYS);
+  const normalized: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (!allowed.has(key) || typeof item !== 'string' || item.length > 2_048) {
+      throw new CliError(2, 'BAD_INPUT', `Unsupported canonical search filter ${key}.`);
+    }
+    normalized[key] = item;
+  }
+  return normalized;
 }
 
 export function shouldUseMainSiteSearchSubmit(sort: SearchSort): boolean {

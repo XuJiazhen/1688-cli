@@ -41,7 +41,7 @@ const transportAuthority = {
   liveAuthorizationId: '30000000-0000-4000-8000-000000000006',
   liveAuthorizationSha256: 'a'.repeat(64),
   cohortId: '30000000-0000-4000-8000-000000000008',
-  runId: '30000000-0000-4000-8000-000000000009',
+  collectionTaskId: '30000000-0000-4000-8000-000000000009',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
 };
 const parseOptions = {

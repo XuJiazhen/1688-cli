@@ -72,6 +72,7 @@ export interface SearchOfferCaptureWaitResult {
   status: SearchOfferCaptureWaitStatus;
   offers: Offer[];
   remoteHasMore: boolean | null;
+  rawResponseText: string | null;
   diagnostics: SearchOfferCaptureDiagnostics;
 }
 
@@ -80,6 +81,7 @@ export interface SearchOfferCaptureResult<TResult> {
   status: SearchOfferCaptureWaitStatus;
   offers: Offer[];
   remoteHasMore: boolean | null;
+  rawResponseText: string | null;
   diagnostics: SearchOfferCaptureDiagnostics;
 }
 
@@ -102,6 +104,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
   let timedOut = false;
   let offers: Offer[] = [];
   let remoteHasMore: boolean | null = null;
+  let rawResponseText: string | null = null;
   let seenCount = 0;
   let matchedCount = 0;
   let parsedCount = 0;
@@ -152,6 +155,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
     timedOut = false;
     offers = [];
     remoteHasMore = null;
+    rawResponseText = null;
     seenCount = 0;
     matchedCount = 0;
     parsedCount = 0;
@@ -185,6 +189,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
       matchedCount++;
       lastMatchedUrl = diagnosticUrl;
       const responseText = await resp.text();
+      rawResponseText = responseText;
       const parsed = parseOfferItemsFromMtopText(responseText);
       const observedHasMore = readRemoteHasMore(responseText);
       remoteHasMore = observedHasMore;
@@ -232,7 +237,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
     finalStatus = result;
     timedOut = result === 'timeout';
     endedAt ??= new Date().toISOString();
-    return { status: result, offers, remoteHasMore, diagnostics: diagnostics() };
+    return { status: result, offers, remoteHasMore, rawResponseText, diagnostics: diagnostics() };
   };
 
   const waitForAction = async <TResult>(
@@ -247,6 +252,7 @@ export function startSearchOfferCapture(opts: SearchOfferCaptureOptions) {
         status: result.status,
         offers: result.offers,
         remoteHasMore: result.remoteHasMore,
+        rawResponseText: result.rawResponseText,
         diagnostics: result.diagnostics,
       };
     } finally {

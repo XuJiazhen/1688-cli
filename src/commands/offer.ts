@@ -58,6 +58,7 @@ export interface OfferBatchResult {
 export interface OfferArgs {
   offerId: string;
   headed?: boolean;
+  allowDomFallback?: boolean;
   captureTimeoutMs?: number;
   onRawComponent?: (
     component: 'core' | 'sku' | 'detail' | 'shop-card' | 'consignment',
@@ -563,7 +564,7 @@ export async function executeRaw(
         (async () => {
           const rawPage = await page.content();
           await args.onRawComponent?.('core', rawPage);
-          return readPageInfo(page);
+          return readPageInfo(page, args.allowDomFallback !== false);
         })(),
       ]);
     assertOfferPageIdentityV1(pageInfo.canonicalOfferId, args.offerId);
@@ -1533,7 +1534,7 @@ interface PageInfo {
  * Falls back to DOM scraping if the inline data isn't available for some
  * reason (e.g. server rendered a fallback view).
  */
-async function readPageInfo(page: Page): Promise<PageInfo> {
+async function readPageInfo(page: Page, allowDomFallback = true): Promise<PageInfo> {
   const debug = process.env.BB1688_DEBUG === '1';
   if (debug) {
     page.on('console', (msg) => {
@@ -1556,6 +1557,14 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
       { timeout: 8000 },
     );
   } catch {
+    if (!allowDomFallback) {
+      throw new CliError(
+        9,
+        'OFFER_CONTEXT_SCHEMA_UNRECOGNIZED',
+        'Offer page did not expose the canonical window.context payload.',
+        { category: 'protocol', retryable: false, recoveryAction: 'refresh-offer-parser' },
+      );
+    }
     return scrapeDomFallback(page);
   }
   // Modest scroll to trigger lazy modules near the SKU + 参数 section.
@@ -1830,7 +1839,17 @@ async function readPageInfo(page: Page): Promise<PageInfo> {
     }, debug)
     .catch(() => null);
 
-  if (!fromContext) return scrapeDomFallback(page);
+  if (!fromContext) {
+    if (!allowDomFallback) {
+      throw new CliError(
+        9,
+        'OFFER_CONTEXT_SCHEMA_UNRECOGNIZED',
+        'Offer page canonical context could not be normalized.',
+        { category: 'protocol', retryable: false, recoveryAction: 'refresh-offer-parser' },
+      );
+    }
+    return scrapeDomFallback(page);
+  }
 
   // Title from <title> as backup when subject empty.
   let title = fromContext.title;

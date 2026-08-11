@@ -46,7 +46,7 @@ const transportAuthority = {
   liveAuthorizationId: '40000000-0000-4000-8000-000000000003',
   liveAuthorizationSha256: 'a'.repeat(64),
   cohortId: '40000000-0000-4000-8000-000000000005',
-  runId: '40000000-0000-4000-8000-000000000006',
+  collectionTaskId: '40000000-0000-4000-8000-000000000006',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
 };
 
@@ -150,7 +150,7 @@ describe('managed daemon bootstrap', () => {
     const mismatched = signedRequest('offer-detail', 99, sampled);
     mismatched.binding.transportAuthority = {
       ...mismatched.binding.transportAuthority,
-      runId: '40000000-0000-4000-8000-000000000099',
+      collectionTaskId: '40000000-0000-4000-8000-000000000099',
     };
     await expect(options.supervisorRuntime!.handle(mismatched)).resolves.toMatchObject({
       ok: false,

@@ -5,6 +5,7 @@ import { profileRuntimeDir } from '../session/paths.js';
 import { FilePageActionAcceptanceRepository } from './file-acceptance-repository.js';
 import { FileProfileRecoveryStateRepository } from './file-recovery-state-repository.js';
 import { ProductionPageActionExecutor } from './production-page-action-executor.js';
+import { ProductionCollectionRuntime } from './production-collection-runtime.js';
 import { SharedPersistentContextHost } from './shared-context-host.js';
 import {
   DatabaseAnchoredMonotonicClock,
@@ -121,6 +122,12 @@ export async function loadManagedServerOptions(
     headful: true,
     prewarm: false,
     supervisorRuntime: runtime,
+    productionCollectionRuntime: new ProductionCollectionRuntime({
+      profileId: config.profileId,
+      profileName: config.profileName,
+      artifactDirectory: config.artifactDirectory,
+      now,
+    }),
     pageActionVerification: config.pageActionVerification,
   };
 }

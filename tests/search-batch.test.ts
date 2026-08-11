@@ -988,7 +988,7 @@ describe('incremental search batches', () => {
     }
   });
 
-  it('archives remote page-budget exhaustion instead of checkpointing page 21', () => {
+  it('continues beyond page 20 while the source reports hasMore', () => {
     const page20Unit = {
       ...unit,
       scope: {
@@ -1013,29 +1013,24 @@ describe('incremental search batches', () => {
     });
 
     expect(batch).toMatchObject({
-      status: 'completed',
+      status: 'partial',
       completeness: {
         requestedScope: 'bounded-pages',
         state: 'truncated',
         observedPages: [20],
         uniqueItems: 60,
       },
-      warnings: [
-        {
-          code: 'SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED',
-          details: {
-            page: 20,
-            remotePageLimit: 20,
-            remoteHasMore: true,
-          },
-        },
-      ],
+      warnings: [],
+      checkpoint: {
+        nextPage: 21,
+        nextCursor: encodeSearchCursor(21),
+        completedPages: [20],
+      },
     });
     expect(batch.observations).toHaveLength(60);
-    expect(batch.checkpoint).toBeUndefined();
   });
 
-  it('drains a small pageSize snapshot on page 20 before completing truncated', () => {
+  it('drains a small pageSize snapshot on page 20 before advancing to page 21', () => {
     const page20Unit = {
       ...unit,
       scope: {
@@ -1061,7 +1056,7 @@ describe('incremental search batches', () => {
       }),
     ];
 
-    while (batches.at(-1)?.checkpoint !== undefined) {
+    while ((batches.at(-1)?.checkpoint?.pendingKeys.length ?? 0) > 0) {
       const attempt = batches.length + 1;
       batches.push(createSearchPageBatch({
         unit: page20Unit,
@@ -1078,17 +1073,20 @@ describe('incremental search batches', () => {
     }
 
     expect(batches).toHaveLength(12);
-    expect(batches.slice(0, -1).every((batch) => batch.status === 'partial'))
-      .toBe(true);
+    expect(batches.every((batch) => batch.status === 'partial')).toBe(true);
     expect(batches.at(-1)).toMatchObject({
-      status: 'completed',
+      status: 'partial',
       completeness: {
         state: 'truncated',
         uniqueItems: 60,
       },
-      warnings: [{ code: 'SEARCH_REMOTE_PAGE_BUDGET_EXHAUSTED' }],
+      warnings: [],
+      checkpoint: {
+        nextPage: 21,
+        nextCursor: encodeSearchCursor(21),
+        pendingKeys: [],
+      },
     });
-    expect(batches.at(-1)?.checkpoint).toBeUndefined();
   });
 
   it('keeps unknown sales evidence unknown instead of coercing it to zero', () => {

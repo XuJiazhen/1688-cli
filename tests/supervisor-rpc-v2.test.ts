@@ -24,7 +24,7 @@ const authority: TransportAuthorityV2 = {
   liveAuthorizationId: '10000000-0000-4000-8000-000000000001',
   liveAuthorizationSha256: 'a'.repeat(64),
   cohortId: '10000000-0000-4000-8000-000000000003',
-  runId: '10000000-0000-4000-8000-000000000004',
+  collectionTaskId: '10000000-0000-4000-8000-000000000004',
   protocolSha256: SUPERVISOR_PROTOCOL_SHA256_V2,
 };
 
@@ -122,7 +122,7 @@ describe('Profile Supervisor v2 wire contract', () => {
     })).not.toThrow();
     request.binding.transportAuthority = {
       ...request.binding.transportAuthority,
-      runId: '10000000-0000-4000-8000-000000000099',
+      collectionTaskId: '10000000-0000-4000-8000-000000000099',
     };
     expect(() => validateRpcBinding(request, {
       profileId: request.binding.profileId,

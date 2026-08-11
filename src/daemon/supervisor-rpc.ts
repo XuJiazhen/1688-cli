@@ -54,7 +54,7 @@ export const SUPERVISOR_PROTOCOL_CANONICAL_CONTENT_V2 = Object.freeze({
   ],
   transportAuthorityKeys: [
     'mode', 'liveAuthorizationId', 'liveAuthorizationSha256', 'cohortId',
-    'runId', 'protocolSha256',
+    'collectionTaskId', 'protocolSha256',
   ],
   leaseFenceKeys: ['leaseId', 'generation', 'fencingToken', 'leaseNotAfter'],
   credentialEnvelopeKeys: ['payload', 'algorithm', 'signature'],
@@ -123,7 +123,7 @@ export interface TransportAuthorityV2 {
   liveAuthorizationId: string;
   liveAuthorizationSha256: string;
   cohortId: string;
-  runId: string;
+  collectionTaskId: string;
   protocolSha256: string;
 }
 
@@ -1158,7 +1158,7 @@ export function parseTransportAuthorityV2(value: unknown): TransportAuthorityV2 
     'liveAuthorizationId',
     'liveAuthorizationSha256',
     'cohortId',
-    'runId',
+    'collectionTaskId',
     'protocolSha256',
   ]);
   return {
@@ -1176,7 +1176,10 @@ export function parseTransportAuthorityV2(value: unknown): TransportAuthorityV2 
       'transportAuthority.liveAuthorizationSha256',
     ),
     cohortId: uuid(record['cohortId'], 'transportAuthority.cohortId'),
-    runId: uuid(record['runId'], 'transportAuthority.runId'),
+    collectionTaskId: uuid(
+      record['collectionTaskId'],
+      'transportAuthority.collectionTaskId',
+    ),
     protocolSha256: hash(record['protocolSha256'], 'transportAuthority.protocolSha256'),
   };
 }
