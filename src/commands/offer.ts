@@ -414,7 +414,10 @@ export async function executeRaw(
     parse: async (resp) => {
       const rawPayload = await resp.text();
       return {
-        evidence: parseOfferDetailsEvidence(rawPayload, resp.url()),
+        evidence: parseOfferDetailsEvidence(
+          resp.ok() ? rawPayload : '',
+          resp.url(),
+        ),
         rawPayload,
         requestUrl: resp.url(),
       };

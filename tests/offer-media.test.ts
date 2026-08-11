@@ -69,6 +69,36 @@ describe('parseOfferDetailsScript', () => {
     });
   });
 
+  it('parses an identity-bound response that is already a direct HTML fragment', () => {
+    const result = parseOfferDetailsEvidence(
+      '<div><p>灭火器详情</p><img src="https://cbu01.alicdn.com/img/ibank/direct-1.jpg"><img data-src="//cbu01.alicdn.com/img/ibank/direct-2.jpg"></div>',
+      'https://itemcdn.tmall.com/1688offer/sanitized',
+      '2026-08-12T00:00:00.000Z',
+    );
+
+    expect(result.media).toMatchObject({
+      availability: 'available',
+      items: [
+        { order: 0, normalizedUrl: 'https://cbu01.alicdn.com/img/ibank/direct-1.jpg' },
+        { order: 1, normalizedUrl: 'https://cbu01.alicdn.com/img/ibank/direct-2.jpg' },
+      ],
+      warnings: [],
+    });
+    expect(result.detailText).toBe('灭火器详情');
+  });
+
+  it('does not treat a full HTML error document as direct offer detail content', () => {
+    const result = parseOfferDetailsEvidence(
+      '<!doctype html><html><body><div>upstream error</div></body></html>',
+    );
+
+    expect(result).not.toHaveProperty('detailText');
+    expect(result.media).toMatchObject({
+      availability: 'failed',
+      warnings: [{ code: 'OFFER_DETAILS_CONTENT_UNREADABLE' }],
+    });
+  });
+
   it('extracts sanitized visible detail text from the same captured response', () => {
     const result = parseOfferDetailsEvidence(
       String.raw`var offer_details={content:'<style>.hidden{display:none}</style><h2>灭火器&nbsp;说明</h2><p>适用温度：&#45;20℃ <strong>至 55℃</strong></p><script>secret()</script><p>请直立使用<br>远离火源</p><img src="//img.example.test/detail.jpg">'};`,

@@ -199,7 +199,7 @@ export function parseOfferDetailsEvidence(
     collectorVersion: '1688-cli',
     parserVersion: OFFER_MEDIA_PARSER_VERSION,
   };
-  const content = readContentString(script);
+  const content = readContentString(script) ?? readDirectHtmlFragment(script);
   if (content === null) {
     return {
       media: {
@@ -361,6 +361,19 @@ function readContentString(script: string): string | null {
     } else output += escaped;
   }
   return null;
+}
+
+function readDirectHtmlFragment(payload: string): string | null {
+  const fragment = payload.trim();
+  if (
+    !fragment.startsWith('<')
+    || !fragment.endsWith('>')
+    || /<(?:!doctype|html|head|body)\b/iu.test(fragment)
+    || !/<(?:div|p|span|section|article|table|tbody|tr|td|ul|ol|li|h[1-6]|img|video|br)\b/iu.test(fragment)
+  ) {
+    return null;
+  }
+  return fragment;
 }
 
 export function normalize1688MediaUrlV2(value: string): MediaUrlNormalizationV2 {
