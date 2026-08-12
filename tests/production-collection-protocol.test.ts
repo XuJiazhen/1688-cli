@@ -139,9 +139,20 @@ describe('ProductionCollectionRuntime', () => {
       allOwnedPagesClosed: true,
     });
     expect(first.data.rawArtifactHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(first.data.resource).toMatchObject({
+      schemaVersion: 'production-collection-resource.v1',
+      measurementScope: 'daemon-process-delta-and-owned-page-network',
+      networkRequestCount: 0,
+      networkResponseCount: 0,
+    });
+    expect(first.data.resource.wallTimeMs).toBeGreaterThanOrEqual(0);
+    expect(first.data.resource.artifactBytes).toBeGreaterThan(0);
+    expect(first.data.resource.rssSampleCount).toBeGreaterThan(0);
 
     const replay = await runtime.handle(executeRequest);
     expect(replay.ok).toBe(true);
+    if (!replay.ok || replay.data === null) throw new Error('missing replay receipt');
+    expect(replay.data.resource).toEqual(first.data.resource);
     expect(execute).toHaveBeenCalledTimes(1);
 
     const lookup = await runtime.handle(parseProductionCollectionRpcRequestV1({

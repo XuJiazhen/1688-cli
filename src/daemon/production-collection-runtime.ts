@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import type { BrowserContext, Page } from 'playwright';
+import type { BrowserContext, Page, Request, Response } from 'playwright';
 import { fetchIncrementalSearchPage } from '../commands/search.js';
 import { executeRaw as collectOfferRaw } from '../commands/offer.js';
 import { buildStoreCatalogUrl } from '../commands/supplier-catalog.js';
@@ -37,7 +37,8 @@ import {
   ProductionCollectionProtocolError,
   productionCollectionRequestHashV1,
   productionCollectionRpcFailureV1,
-  type ProductionCollectionExecutionReceiptV1,
+  type ProductionCollectionExecutionReceiptV2,
+  type ProductionCollectionResourceReceiptV1,
   type ProductionCollectionRpcRequestV1,
   type ProductionCollectionRpcResponseV1,
 } from './production-collection-protocol.js';
@@ -140,7 +141,7 @@ export class ProductionCollectionRuntime {
   private async execute(
     request: ProductionCollectionRpcRequestV1,
     requestHash: string,
-  ): Promise<ProductionCollectionExecutionReceiptV1> {
+  ): Promise<ProductionCollectionExecutionReceiptV2> {
     const nowMs = this.now().getTime();
     const startMs = Date.parse(request.startNotBefore);
     const deadlineMs = Date.parse(request.deadlineAt);
@@ -155,19 +156,41 @@ export class ProductionCollectionRuntime {
     if (startMs > nowMs) await delayUntil(startMs, deadlineMs);
     const startedAt = this.now().toISOString();
     const lifecycle: {
-      cleanup: ProductionCollectionExecutionReceiptV1['cleanup'] | null;
+      cleanup: ProductionCollectionExecutionReceiptV2['cleanup'] | null;
     } = { cleanup: null };
-    let batch: CollectionBatch | null = null;
+    const resources = beginResourceMeasurement();
+    const network = {
+      requestCount: 0,
+      responseCount: 0,
+      declaredResponseBytes: 0,
+      responseBytesUnknownCount: 0,
+    };
     try {
-      const operation = async (context: BrowserContext): Promise<CollectionBatch> => {
+      let batch: CollectionBatch | null = null;
+      try {
+        const operation = async (context: BrowserContext): Promise<CollectionBatch> => {
           const pages = new Set<Page>();
           const onPage = (page: Page): void => { pages.add(page); };
+          const onRequest = (request: Request): void => {
+            if (belongsToOwnedPage(request, pages)) network.requestCount += 1;
+          };
+          const onResponse = (response: Response): void => {
+            if (!belongsToOwnedPage(response.request(), pages)) return;
+            network.responseCount += 1;
+            const declaredBytes = parseDeclaredContentLength(response.headers()['content-length']);
+            if (declaredBytes === null) network.responseBytesUnknownCount += 1;
+            else network.declaredResponseBytes += declaredBytes;
+          };
           context.on('page', onPage);
+          context.on('request', onRequest);
+          context.on('response', onResponse);
           try {
             batch = await (this.options.runCollection?.(context, request)
               ?? runProductionCollection(context, request, this.options.artifactDirectory));
           } finally {
             context.off('page', onPage);
+            context.off('request', onRequest);
+            context.off('response', onResponse);
             const closedBeforeCleanup = [...pages].filter((page) => page.isClosed()).length;
             const remaining = [...pages].filter((page) => !page.isClosed());
             const failures: string[] = [];
@@ -191,63 +214,68 @@ export class ProductionCollectionRuntime {
           if (batch === null) throw new Error('Collector returned no batch.');
           return batch;
         };
-      const result = this.options.runWithContext === undefined
-        ? await runOnSharedCtx(
-            operation,
-            { cmd: 'production-collection', args: { attemptId: request.attemptId } },
-            this.options.profileName,
-            { headful: true },
-          )
-        : await this.options.runWithContext(operation);
-      batch = result;
-    } catch (error) {
-      if (lifecycle.cleanup !== null && !lifecycle.cleanup.allOwnedPagesClosed) {
+        const result = this.options.runWithContext === undefined
+          ? await runOnSharedCtx(
+              operation,
+              { cmd: 'production-collection', args: { attemptId: request.attemptId } },
+              this.options.profileName,
+              { headful: true },
+            )
+          : await this.options.runWithContext(operation);
+        batch = result;
+      } catch (error) {
+        if (lifecycle.cleanup !== null && !lifecycle.cleanup.allOwnedPagesClosed) {
+          throw new ProductionCollectionProtocolError(
+            'PAGE_CLEANUP_FAILED',
+            'Owned production collection Pages could not be closed.',
+            false,
+            'page-cleanup',
+            lifecycle.cleanup.detail,
+          );
+        }
+        throw classifyRuntimeError(error);
+      }
+      if (lifecycle.cleanup === null || !lifecycle.cleanup.allOwnedPagesClosed) {
         throw new ProductionCollectionProtocolError(
           'PAGE_CLEANUP_FAILED',
-          'Owned production collection Pages could not be closed.',
+          'Owned production collection Page cleanup is incomplete.',
           false,
           'page-cleanup',
-          lifecycle.cleanup.detail,
+          lifecycle.cleanup?.detail,
         );
       }
-      throw classifyRuntimeError(error);
+      if (batch === null) {
+        throw new ProductionCollectionProtocolError(
+          'PRODUCTION_COLLECTION_EMPTY_RESULT',
+          'Collector returned no terminal batch.',
+          true,
+          'runtime',
+        );
+      }
+      const serialized = `${JSON.stringify(batch)}\n`;
+      const rawArtifactHash = createHash('sha256').update(serialized, 'utf8').digest('hex');
+      const artifactPath = path.join(this.batchDirectory, `${rawArtifactHash}.json`);
+      await writeAtomic(artifactPath, serialized);
+      const completedAt = this.now().toISOString();
+      const resource = resources.finish(Buffer.byteLength(serialized, 'utf8'), network);
+      return {
+        requestHash,
+        attemptId: request.attemptId,
+        executionToken: request.executionToken,
+        workItemId: request.workItemId,
+        workKind: request.workKind,
+        startedAt,
+        completedAt,
+        rawArtifactRef: `production-collection-batch:sha256:${rawArtifactHash}`,
+        rawArtifactHash,
+        payloadSchemaVersion: 'collection-batch-v1',
+        batch: structuredClone(batch) as unknown as Record<string, unknown>,
+        cleanup: lifecycle.cleanup,
+        resource,
+      };
+    } finally {
+      resources.stop();
     }
-    if (lifecycle.cleanup === null || !lifecycle.cleanup.allOwnedPagesClosed) {
-      throw new ProductionCollectionProtocolError(
-        'PAGE_CLEANUP_FAILED',
-        'Owned production collection Page cleanup is incomplete.',
-        false,
-        'page-cleanup',
-        lifecycle.cleanup?.detail,
-      );
-    }
-    if (batch === null) {
-      throw new ProductionCollectionProtocolError(
-        'PRODUCTION_COLLECTION_EMPTY_RESULT',
-        'Collector returned no terminal batch.',
-        true,
-        'runtime',
-      );
-    }
-    const completedAt = this.now().toISOString();
-    const serialized = `${JSON.stringify(batch)}\n`;
-    const rawArtifactHash = createHash('sha256').update(serialized, 'utf8').digest('hex');
-    const artifactPath = path.join(this.batchDirectory, `${rawArtifactHash}.json`);
-    await writeAtomic(artifactPath, serialized);
-    return {
-      requestHash,
-      attemptId: request.attemptId,
-      executionToken: request.executionToken,
-      workItemId: request.workItemId,
-      workKind: request.workKind,
-      startedAt,
-      completedAt,
-      rawArtifactRef: `production-collection-batch:sha256:${rawArtifactHash}`,
-      rawArtifactHash,
-      payloadSchemaVersion: 'collection-batch-v1',
-      batch: structuredClone(batch) as unknown as Record<string, unknown>,
-      cleanup: lifecycle.cleanup,
-    };
   }
 
   private assertProfile(request: ProductionCollectionRpcRequestV1): void {
@@ -263,7 +291,7 @@ export class ProductionCollectionRuntime {
 
   private assertReceiptIdentity(
     request: ProductionCollectionRpcRequestV1,
-    receipt: ProductionCollectionExecutionReceiptV1,
+    receipt: ProductionCollectionExecutionReceiptV2,
   ): void {
     if (
       receipt.attemptId !== request.attemptId
@@ -280,7 +308,7 @@ export class ProductionCollectionRuntime {
 
   private async readReceipt(
     attemptId: string,
-  ): Promise<ProductionCollectionExecutionReceiptV1 | null> {
+  ): Promise<ProductionCollectionExecutionReceiptV2 | null> {
     try {
       const value: unknown = JSON.parse(await fs.readFile(this.receiptPath(attemptId), 'utf8'));
       return validateReceipt(value);
@@ -290,7 +318,7 @@ export class ProductionCollectionRuntime {
     }
   }
 
-  private async writeReceipt(receipt: ProductionCollectionExecutionReceiptV1): Promise<void> {
+  private async writeReceipt(receipt: ProductionCollectionExecutionReceiptV2): Promise<void> {
     await writeAtomic(this.receiptPath(receipt.attemptId), `${JSON.stringify(receipt)}\n`);
   }
 
@@ -649,14 +677,14 @@ async function sleep(milliseconds: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV1 {
+function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV2 {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new ProductionCollectionProtocolError(
       'PRODUCTION_COLLECTION_RECEIPT_CORRUPT',
       'Stored receipt is not an object.',
     );
   }
-  const receipt = value as ProductionCollectionExecutionReceiptV1;
+  const receipt = value as ProductionCollectionExecutionReceiptV2;
   if (
     typeof receipt.requestHash !== 'string'
     || typeof receipt.attemptId !== 'string'
@@ -664,6 +692,7 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV1
     || typeof receipt.workItemId !== 'string'
     || receipt.payloadSchemaVersion !== 'collection-batch-v1'
     || receipt.cleanup?.allOwnedPagesClosed !== true
+    || !isValidResourceReceipt(receipt.resource)
   ) {
     throw new ProductionCollectionProtocolError(
       'PRODUCTION_COLLECTION_RECEIPT_CORRUPT',
@@ -671,6 +700,115 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV1
     );
   }
   return receipt;
+}
+
+function isValidResourceReceipt(value: unknown): value is ProductionCollectionResourceReceiptV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const resource = value as Record<string, unknown>;
+  if (
+    resource['schemaVersion'] !== 'production-collection-resource.v1'
+    || resource['measurementScope'] !== 'daemon-process-delta-and-owned-page-network'
+  ) return false;
+  const nonNegativeFields = [
+    'wallTimeMs', 'cpuUserMicros', 'cpuSystemMicros', 'rssStartBytes',
+    'rssEndBytes', 'rssPeakObservedBytes', 'fsReadOps', 'fsWriteOps',
+    'networkRequestCount', 'networkResponseCount', 'networkDeclaredResponseBytes',
+    'networkResponseBytesUnknownCount', 'artifactBytes',
+  ];
+  if (nonNegativeFields.some((field) => !isNonNegativeSafeInteger(resource[field]))) return false;
+  return isPositiveSafeInteger(resource['rssSamplingIntervalMs'])
+    && isPositiveSafeInteger(resource['rssSampleCount']);
+}
+
+function beginResourceMeasurement(): Readonly<{
+  stop: () => void;
+  finish: (
+    artifactBytes: number,
+    network: Readonly<{
+      requestCount: number;
+      responseCount: number;
+      declaredResponseBytes: number;
+      responseBytesUnknownCount: number;
+    }>,
+  ) => ProductionCollectionResourceReceiptV1;
+}> {
+  const rssSamplingIntervalMs = 250;
+  const startedHrtime = process.hrtime.bigint();
+  const startedCpu = process.cpuUsage();
+  const startedUsage = process.resourceUsage();
+  const rssStartBytes = process.memoryUsage().rss;
+  let rssPeakObservedBytes = rssStartBytes;
+  let rssSampleCount = 1;
+  let stopped = false;
+  const sampleRss = (): void => {
+    const rss = process.memoryUsage().rss;
+    rssPeakObservedBytes = Math.max(rssPeakObservedBytes, rss);
+    rssSampleCount += 1;
+  };
+  const timer = setInterval(sampleRss, rssSamplingIntervalMs);
+  timer.unref();
+  const stop = (): void => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(timer);
+    sampleRss();
+  };
+  return Object.freeze({
+    stop,
+    finish: (artifactBytes, network) => {
+      stop();
+      const completedCpu = process.cpuUsage(startedCpu);
+      const completedUsage = process.resourceUsage();
+      const rssEndBytes = process.memoryUsage().rss;
+      rssPeakObservedBytes = Math.max(rssPeakObservedBytes, rssEndBytes);
+      return Object.freeze({
+        schemaVersion: 'production-collection-resource.v1',
+        measurementScope: 'daemon-process-delta-and-owned-page-network',
+        wallTimeMs: metric(Number(process.hrtime.bigint() - startedHrtime) / 1_000_000),
+        cpuUserMicros: metric(completedCpu.user),
+        cpuSystemMicros: metric(completedCpu.system),
+        rssStartBytes: metric(rssStartBytes),
+        rssEndBytes: metric(rssEndBytes),
+        rssPeakObservedBytes: metric(rssPeakObservedBytes),
+        rssSamplingIntervalMs,
+        rssSampleCount: metric(rssSampleCount),
+        fsReadOps: metric(completedUsage.fsRead - startedUsage.fsRead),
+        fsWriteOps: metric(completedUsage.fsWrite - startedUsage.fsWrite),
+        networkRequestCount: metric(network.requestCount),
+        networkResponseCount: metric(network.responseCount),
+        networkDeclaredResponseBytes: metric(network.declaredResponseBytes),
+        networkResponseBytesUnknownCount: metric(network.responseBytesUnknownCount),
+        artifactBytes: metric(artifactBytes),
+      });
+    },
+  });
+}
+
+function belongsToOwnedPage(request: Request, pages: ReadonlySet<Page>): boolean {
+  try {
+    return pages.has(request.frame().page());
+  } catch {
+    return false;
+  }
+}
+
+function parseDeclaredContentLength(value: string | undefined): number | null {
+  if (value === undefined || !/^\d+$/.test(value)) return null;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) ? parsed : null;
+}
+
+function metric(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  return Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.round(value)));
+}
+
+function isNonNegativeSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) >= 0;
+}
+
+function isPositiveSafeInteger(value: unknown): value is number {
+  return Number.isSafeInteger(value) && Number(value) > 0;
 }
 
 function classifyRuntimeError(error: unknown): ProductionCollectionProtocolError {

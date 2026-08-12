@@ -4,7 +4,7 @@ import { SEARCH_FILTER_REQUEST_KEYS } from '../session/search-contract.js';
 export const PRODUCTION_COLLECTION_RPC_SCHEMA =
   'production-collection.rpc.v1' as const;
 export const PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA =
-  'production-collection.rpc-response.v1' as const;
+  'production-collection.rpc-response.v2' as const;
 
 export type ProductionCollectionRpcMethod =
   | 'production.collection.execute'
@@ -49,7 +49,27 @@ export interface ProductionCollectionCleanupReceiptV1 {
   detail: Record<string, unknown>;
 }
 
-export interface ProductionCollectionExecutionReceiptV1 {
+export interface ProductionCollectionResourceReceiptV1 {
+  schemaVersion: 'production-collection-resource.v1';
+  measurementScope: 'daemon-process-delta-and-owned-page-network';
+  wallTimeMs: number;
+  cpuUserMicros: number;
+  cpuSystemMicros: number;
+  rssStartBytes: number;
+  rssEndBytes: number;
+  rssPeakObservedBytes: number;
+  rssSamplingIntervalMs: number;
+  rssSampleCount: number;
+  fsReadOps: number;
+  fsWriteOps: number;
+  networkRequestCount: number;
+  networkResponseCount: number;
+  networkDeclaredResponseBytes: number;
+  networkResponseBytesUnknownCount: number;
+  artifactBytes: number;
+}
+
+export interface ProductionCollectionExecutionReceiptV2 {
   requestHash: string;
   attemptId: string;
   executionToken: string;
@@ -62,6 +82,7 @@ export interface ProductionCollectionExecutionReceiptV1 {
   payloadSchemaVersion: 'collection-batch-v1';
   batch: Record<string, unknown>;
   cleanup: ProductionCollectionCleanupReceiptV1;
+  resource: ProductionCollectionResourceReceiptV1;
 }
 
 export type ProductionCollectionRpcResponseV1 =
@@ -70,7 +91,7 @@ export type ProductionCollectionRpcResponseV1 =
       rpcId: string;
       requestHash: string;
       ok: true;
-      data: ProductionCollectionExecutionReceiptV1 | null;
+      data: ProductionCollectionExecutionReceiptV2 | null;
     }
   | {
       schema: typeof PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA;
