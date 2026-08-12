@@ -595,6 +595,19 @@ async function runProductionStorePages(
       afterPageCommitted: async (logicalPage) => {
         if (logicalPage < 3) await sleep(3_000 + Math.floor(Math.random() * 7_001));
       },
+    }).catch((error: unknown) => {
+      if (
+        error instanceof CliError
+        && error.code === 'STORE_SAMPLE_HEADER_PROFILE_INCOMPLETE'
+      ) {
+        throw new CliError(9, error.code, error.message, {
+          ...error.details,
+          category: 'store-profile-runtime',
+          retryable: true,
+          recoveryAction: 'retry-store-sample-generation',
+        });
+      }
+      throw error;
     });
     const observations = result.pages.flatMap(({ page: logicalPage, parsed }) =>
       parsed.offers.map((offer) => ({ ...offer, page: logicalPage })),
