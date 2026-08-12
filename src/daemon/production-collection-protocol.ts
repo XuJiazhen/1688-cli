@@ -4,7 +4,7 @@ import { SEARCH_FILTER_REQUEST_KEYS } from '../session/search-contract.js';
 export const PRODUCTION_COLLECTION_RPC_SCHEMA =
   'production-collection.rpc.v1' as const;
 export const PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA =
-  'production-collection.rpc-response.v2' as const;
+  'production-collection.rpc-response.v3' as const;
 
 export type ProductionCollectionRpcMethod =
   | 'production.collection.execute'
@@ -69,7 +69,17 @@ export interface ProductionCollectionResourceReceiptV1 {
   artifactBytes: number;
 }
 
-export interface ProductionCollectionExecutionReceiptV2 {
+export interface ProductionCollectionSourceTimingReceiptV1 {
+  schemaVersion: 'production-collection-source-timing.v1';
+  clock: 'playwright-request-and-daemon-monotonic-wall.v1';
+  coverage: 'full' | 'partial';
+  remoteActionStartedAt: string;
+  firstSourceByteAt: string | null;
+  sourcePayloadCompleteAt: string;
+  rawArchiveCommittedAt: string;
+}
+
+export interface ProductionCollectionExecutionReceiptV3 {
   requestHash: string;
   attemptId: string;
   executionToken: string;
@@ -83,15 +93,16 @@ export interface ProductionCollectionExecutionReceiptV2 {
   batch: Record<string, unknown>;
   cleanup: ProductionCollectionCleanupReceiptV1;
   resource: ProductionCollectionResourceReceiptV1;
+  timing: ProductionCollectionSourceTimingReceiptV1;
 }
 
-export type ProductionCollectionRpcResponseV1 =
+export type ProductionCollectionRpcResponseV3 =
   | {
       schema: typeof PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA;
       rpcId: string;
       requestHash: string;
       ok: true;
-      data: ProductionCollectionExecutionReceiptV2 | null;
+      data: ProductionCollectionExecutionReceiptV3 | null;
     }
   | {
       schema: typeof PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA;
@@ -194,7 +205,7 @@ export function productionCollectionRpcFailureV1(
     requestHash: string;
     error: unknown;
   },
-): ProductionCollectionRpcResponseV1 {
+): ProductionCollectionRpcResponseV3 {
   const error = input.error instanceof ProductionCollectionProtocolError
     ? input.error
     : new ProductionCollectionProtocolError(

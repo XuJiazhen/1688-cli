@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import type { BrowserContext, Page } from 'playwright';
+import type { BrowserContext, Page, Request, Response } from 'playwright';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { CollectionBatch } from '../src/collection/contracts.js';
 import { CliError } from '../src/io/errors.js';
@@ -131,9 +131,22 @@ describe('ProductionCollectionRuntime', () => {
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
     directories.push(artifactDirectory);
     const context = new FakeContext();
+    const nativeTimingStart = Date.now() - 20;
     const execute = vi.fn(async (): Promise<CollectionBatch> => {
       const page = new FakePage();
       context.emit('page', page as unknown as Page);
+      context.emit('response', new FakeResponse(
+        page,
+        'https://g.alicdn.com/collector/pixel.gif',
+        nativeTimingStart - 100,
+        1,
+      ) as unknown as Response);
+      context.emit('response', new FakeResponse(
+        page,
+        canonicalSearchUrl(),
+        nativeTimingStart,
+        10,
+      ) as unknown as Response);
       await page.close();
       return batch();
     });
@@ -158,11 +171,26 @@ describe('ProductionCollectionRuntime', () => {
       schemaVersion: 'production-collection-resource.v1',
       measurementScope: 'daemon-process-delta-and-owned-page-network',
       networkRequestCount: 0,
-      networkResponseCount: 0,
+      networkResponseCount: 2,
     });
     expect(first.data.resource.wallTimeMs).toBeGreaterThanOrEqual(0);
     expect(first.data.resource.artifactBytes).toBeGreaterThan(0);
     expect(first.data.resource.rssSampleCount).toBeGreaterThan(0);
+    expect(first.data.timing).toMatchObject({
+      schemaVersion: 'production-collection-source-timing.v1',
+      clock: 'playwright-request-and-daemon-monotonic-wall.v1',
+      coverage: 'full',
+    });
+    expect(first.data.timing.remoteActionStartedAt)
+      .toBe(new Date(nativeTimingStart).toISOString());
+    expect(first.data.timing.firstSourceByteAt)
+      .toBe(new Date(nativeTimingStart + 10).toISOString());
+    expect(Date.parse(first.data.timing.remoteActionStartedAt))
+      .toBeLessThanOrEqual(Date.parse(first.data.timing.firstSourceByteAt!));
+    expect(Date.parse(first.data.timing.firstSourceByteAt!))
+      .toBeLessThanOrEqual(Date.parse(first.data.timing.sourcePayloadCompleteAt));
+    expect(Date.parse(first.data.timing.sourcePayloadCompleteAt))
+      .toBeLessThanOrEqual(Date.parse(first.data.timing.rawArchiveCommittedAt));
 
     const replay = await runtime.handle(executeRequest);
     expect(replay.ok).toBe(true);
@@ -268,4 +296,38 @@ class FakePage {
   public async close(): Promise<void> { this.closed = true; }
 }
 
+class FakeRequest {
+  public constructor(
+    private readonly owner: FakePage,
+    private readonly requestUrl: string,
+    private readonly startTime: number,
+    private readonly responseStart: number,
+  ) {}
+  public frame(): { page: () => Page } {
+    return { page: () => this.owner as unknown as Page };
+  }
+  public url(): string { return this.requestUrl; }
+  public postData(): string | null { return null; }
+  public timing(): { startTime: number; responseStart: number } {
+    return { startTime: this.startTime, responseStart: this.responseStart };
+  }
+}
+
+class FakeResponse {
+  private readonly ownerRequest: FakeRequest;
+  public constructor(page: FakePage, url: string, startTime: number, responseStart: number) {
+    this.ownerRequest = new FakeRequest(page, url, startTime, responseStart);
+  }
+  public request(): Request { return this.ownerRequest as unknown as Request; }
+  public headers(): Record<string, string> { return { 'content-length': '42' }; }
+}
+
 class FakeContext extends EventEmitter {}
+
+function canonicalSearchUrl(): string {
+  const data = encodeURIComponent(JSON.stringify({
+    appId: '32517',
+    params: JSON.stringify({ method: 'getOfferList', beginPage: '1' }),
+  }));
+  return `https://h5api.m.1688.com/h5/mtop.relationrecommend.wirelessrecommend.recommend/1.0/?data=${data}`;
+}

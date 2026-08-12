@@ -18,29 +18,36 @@ import {
   waitForStoreCatalogRuntime,
   type StoreSampleProfileObservationV1,
 } from '../session/catalog-runtime.js';
-import { parseStoreCatalogModule } from '../session/alisite-module.js';
+import {
+  STORE_CATALOG_COMPONENT_KEY,
+  parseStoreCatalogModule,
+  readAlisiteModuleRequestMeta,
+} from '../session/alisite-module.js';
+import { readSearchMtopRequestMeta } from '../session/search-mtop.js';
 import {
   captureSupplierQualificationForAction,
   requestSupplierQualificationFromPage,
   requireSupplierQualificationResponse,
 } from '../session/qualification-capture.js';
 import { waitForCollectionPageAvailability } from '../session/recovery.js';
-import { mapStoreProfilePayload } from '../session/store-profile.js';
+import { STORE_PROFILE_COMPONENT_KEY, mapStoreProfilePayload } from '../session/store-profile.js';
 import {
   assertStoreProfilePayloadState,
   captureStoreProfileForAction,
   requestStoreProfileFromPage,
 } from '../session/store-profile-capture.js';
 import { runOnSharedCtx } from '../session/shared.js';
+import { SUPPLIER_QUALIFICATION_COMPONENT_KEY } from '../session/supplier-qualification.js';
 import {
   PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA,
   ProductionCollectionProtocolError,
   productionCollectionRequestHashV1,
   productionCollectionRpcFailureV1,
-  type ProductionCollectionExecutionReceiptV2,
+  type ProductionCollectionExecutionReceiptV3,
   type ProductionCollectionResourceReceiptV1,
+  type ProductionCollectionSourceTimingReceiptV1,
   type ProductionCollectionRpcRequestV1,
-  type ProductionCollectionRpcResponseV1,
+  type ProductionCollectionRpcResponseV3,
 } from './production-collection-protocol.js';
 
 export interface ProductionCollectionRuntimeOptions {
@@ -79,7 +86,7 @@ export class ProductionCollectionRuntime {
 
   public async handle(
     request: ProductionCollectionRpcRequestV1,
-  ): Promise<ProductionCollectionRpcResponseV1> {
+  ): Promise<ProductionCollectionRpcResponseV3> {
     const requestHash = productionCollectionRequestHashV1(request);
     try {
       this.assertProfile(request);
@@ -141,7 +148,7 @@ export class ProductionCollectionRuntime {
   private async execute(
     request: ProductionCollectionRpcRequestV1,
     requestHash: string,
-  ): Promise<ProductionCollectionExecutionReceiptV2> {
+  ): Promise<ProductionCollectionExecutionReceiptV3> {
     const nowMs = this.now().getTime();
     const startMs = Date.parse(request.startNotBefore);
     const deadlineMs = Date.parse(request.deadlineAt);
@@ -154,9 +161,10 @@ export class ProductionCollectionRuntime {
       );
     }
     if (startMs > nowMs) await delayUntil(startMs, deadlineMs);
-    const startedAt = this.now().toISOString();
+    const eventNow = monotonicWallClock(this.now());
+    const startedAt = eventNow();
     const lifecycle: {
-      cleanup: ProductionCollectionExecutionReceiptV2['cleanup'] | null;
+      cleanup: ProductionCollectionExecutionReceiptV3['cleanup'] | null;
     } = { cleanup: null };
     const resources = beginResourceMeasurement();
     const network = {
@@ -165,17 +173,30 @@ export class ProductionCollectionRuntime {
       declaredResponseBytes: 0,
       responseBytesUnknownCount: 0,
     };
+    const sourceTiming: {
+      remoteActionStartedAt: string | null;
+      firstSourceByteAt: string | null;
+      sourcePayloadCompleteAt: string | null;
+    } = {
+      remoteActionStartedAt: null,
+      firstSourceByteAt: null,
+      sourcePayloadCompleteAt: null,
+    };
     try {
       let batch: CollectionBatch | null = null;
       try {
         const operation = async (context: BrowserContext): Promise<CollectionBatch> => {
           const pages = new Set<Page>();
           const onPage = (page: Page): void => { pages.add(page); };
-          const onRequest = (request: Request): void => {
-            if (belongsToOwnedPage(request, pages)) network.requestCount += 1;
+          const onRequest = (ownerRequest: Request): void => {
+            if (!belongsToOwnedPage(ownerRequest, pages)) return;
+            network.requestCount += 1;
+            observeCanonicalSourceTiming(request.workKind, ownerRequest, sourceTiming, false);
           };
           const onResponse = (response: Response): void => {
-            if (!belongsToOwnedPage(response.request(), pages)) return;
+            const ownerRequest = response.request();
+            if (!belongsToOwnedPage(ownerRequest, pages)) return;
+            observeCanonicalSourceTiming(request.workKind, ownerRequest, sourceTiming, true);
             network.responseCount += 1;
             const declaredBytes = parseDeclaredContentLength(response.headers()['content-length']);
             if (declaredBytes === null) network.responseBytesUnknownCount += 1;
@@ -187,6 +208,7 @@ export class ProductionCollectionRuntime {
           try {
             batch = await (this.options.runCollection?.(context, request)
               ?? runProductionCollection(context, request, this.options.artifactDirectory));
+            sourceTiming.sourcePayloadCompleteAt = eventNow();
           } finally {
             context.off('page', onPage);
             context.off('request', onRequest);
@@ -256,8 +278,27 @@ export class ProductionCollectionRuntime {
       const rawArtifactHash = createHash('sha256').update(serialized, 'utf8').digest('hex');
       const artifactPath = path.join(this.batchDirectory, `${rawArtifactHash}.json`);
       await writeAtomic(artifactPath, serialized);
-      const completedAt = this.now().toISOString();
+      const rawArchiveCommittedAt = eventNow();
+      const completedAt = eventNow();
+      if (
+        sourceTiming.remoteActionStartedAt === null
+        || sourceTiming.sourcePayloadCompleteAt === null
+      ) {
+        throw new ProductionCollectionProtocolError(
+          'PRODUCTION_COLLECTION_SOURCE_TIMING_INCOMPLETE',
+          'Canonical source action timing was not observed.',
+        );
+      }
       const resource = resources.finish(Buffer.byteLength(serialized, 'utf8'), network);
+      const timing: ProductionCollectionSourceTimingReceiptV1 = {
+        schemaVersion: 'production-collection-source-timing.v1',
+        clock: 'playwright-request-and-daemon-monotonic-wall.v1',
+        coverage: sourceTiming.firstSourceByteAt === null ? 'partial' : 'full',
+        remoteActionStartedAt: sourceTiming.remoteActionStartedAt,
+        firstSourceByteAt: sourceTiming.firstSourceByteAt,
+        sourcePayloadCompleteAt: sourceTiming.sourcePayloadCompleteAt,
+        rawArchiveCommittedAt,
+      };
       return {
         requestHash,
         attemptId: request.attemptId,
@@ -272,6 +313,7 @@ export class ProductionCollectionRuntime {
         batch: structuredClone(batch) as unknown as Record<string, unknown>,
         cleanup: lifecycle.cleanup,
         resource,
+        timing,
       };
     } finally {
       resources.stop();
@@ -291,7 +333,7 @@ export class ProductionCollectionRuntime {
 
   private assertReceiptIdentity(
     request: ProductionCollectionRpcRequestV1,
-    receipt: ProductionCollectionExecutionReceiptV2,
+    receipt: ProductionCollectionExecutionReceiptV3,
   ): void {
     if (
       receipt.attemptId !== request.attemptId
@@ -308,7 +350,7 @@ export class ProductionCollectionRuntime {
 
   private async readReceipt(
     attemptId: string,
-  ): Promise<ProductionCollectionExecutionReceiptV2 | null> {
+  ): Promise<ProductionCollectionExecutionReceiptV3 | null> {
     try {
       const value: unknown = JSON.parse(await fs.readFile(this.receiptPath(attemptId), 'utf8'));
       return validateReceipt(value);
@@ -318,7 +360,7 @@ export class ProductionCollectionRuntime {
     }
   }
 
-  private async writeReceipt(receipt: ProductionCollectionExecutionReceiptV2): Promise<void> {
+  private async writeReceipt(receipt: ProductionCollectionExecutionReceiptV3): Promise<void> {
     await writeAtomic(this.receiptPath(receipt.attemptId), `${JSON.stringify(receipt)}\n`);
   }
 
@@ -690,14 +732,14 @@ async function sleep(milliseconds: number): Promise<void> {
   await new Promise<void>((resolve) => setTimeout(resolve, milliseconds));
 }
 
-function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV2 {
+function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV3 {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) {
     throw new ProductionCollectionProtocolError(
       'PRODUCTION_COLLECTION_RECEIPT_CORRUPT',
       'Stored receipt is not an object.',
     );
   }
-  const receipt = value as ProductionCollectionExecutionReceiptV2;
+  const receipt = value as ProductionCollectionExecutionReceiptV3;
   if (
     typeof receipt.requestHash !== 'string'
     || typeof receipt.attemptId !== 'string'
@@ -706,6 +748,7 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV2
     || receipt.payloadSchemaVersion !== 'collection-batch-v1'
     || receipt.cleanup?.allOwnedPagesClosed !== true
     || !isValidResourceReceipt(receipt.resource)
+    || !isValidSourceTimingReceipt(receipt.timing, receipt.completedAt)
   ) {
     throw new ProductionCollectionProtocolError(
       'PRODUCTION_COLLECTION_RECEIPT_CORRUPT',
@@ -713,6 +756,49 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV2
     );
   }
   return receipt;
+}
+
+function isValidSourceTimingReceipt(
+  value: unknown,
+  completedAt: string,
+): value is ProductionCollectionSourceTimingReceiptV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+  const timing = value as Record<string, unknown>;
+  if (
+    timing['schemaVersion'] !== 'production-collection-source-timing.v1'
+    || timing['clock'] !== 'playwright-request-and-daemon-monotonic-wall.v1'
+    || !['full', 'partial'].includes(String(timing['coverage']))
+  ) return false;
+  const remote = instantMs(timing['remoteActionStartedAt']);
+  const firstByte = timing['firstSourceByteAt'] === null
+    ? null
+    : instantMs(timing['firstSourceByteAt']);
+  const payloadComplete = instantMs(timing['sourcePayloadCompleteAt']);
+  const archiveCommitted = instantMs(timing['rawArchiveCommittedAt']);
+  const completed = instantMs(completedAt);
+  if ([remote, payloadComplete, archiveCommitted, completed].some((item) => item === null)) {
+    return false;
+  }
+  if (timing['coverage'] === 'full' && firstByte === null) return false;
+  if (timing['coverage'] === 'partial' && firstByte !== null) return false;
+  return remote! <= (firstByte ?? payloadComplete!)
+    && (firstByte ?? remote!) <= payloadComplete!
+    && payloadComplete! <= archiveCommitted!
+    && archiveCommitted! <= completed!;
+}
+
+function instantMs(value: unknown): number | null {
+  if (typeof value !== 'string') return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function monotonicWallClock(anchor: Date): () => string {
+  const anchorMs = anchor.getTime();
+  const anchorHr = process.hrtime.bigint();
+  return () => new Date(
+    anchorMs + Number((process.hrtime.bigint() - anchorHr) / 1_000_000n),
+  ).toISOString();
 }
 
 function isValidResourceReceipt(value: unknown): value is ProductionCollectionResourceReceiptV1 {
@@ -803,6 +889,68 @@ function belongsToOwnedPage(request: Request, pages: ReadonlySet<Page>): boolean
   } catch {
     return false;
   }
+}
+
+function observeCanonicalSourceTiming(
+  workKind: ProductionCollectionRpcRequestV1['workKind'],
+  request: Request,
+  timing: {
+    remoteActionStartedAt: string | null;
+    firstSourceByteAt: string | null;
+  },
+  includeFirstByte: boolean,
+): void {
+  if (!isCanonicalSourceRequest(workKind, request)) return;
+  const nativeTiming = request.timing();
+  if (!Number.isFinite(nativeTiming.startTime) || nativeTiming.startTime <= 0) return;
+  timing.remoteActionStartedAt = earlierInstant(
+    timing.remoteActionStartedAt,
+    nativeTiming.startTime,
+  );
+  if (
+    includeFirstByte
+    && Number.isFinite(nativeTiming.responseStart)
+    && nativeTiming.responseStart >= 0
+  ) {
+    timing.firstSourceByteAt = earlierInstant(
+      timing.firstSourceByteAt,
+      nativeTiming.startTime + nativeTiming.responseStart,
+    );
+  }
+}
+
+function isCanonicalSourceRequest(
+  workKind: ProductionCollectionRpcRequestV1['workKind'],
+  request: Request,
+): boolean {
+  if (workKind === 'search_page') {
+    return readSearchMtopRequestMeta(request.url()) !== null;
+  }
+  if (workKind === 'store_qualification' || workKind === 'store_pages') {
+    const meta = readAlisiteModuleRequestMeta(request.url(), request.postData());
+    if (meta === null) return false;
+    if (workKind === 'store_qualification') {
+      return meta.componentKey === SUPPLIER_QUALIFICATION_COMPONENT_KEY;
+    }
+    return meta.componentKey === STORE_CATALOG_COMPONENT_KEY
+      || meta.componentKey?.toLowerCase() === STORE_PROFILE_COMPONENT_KEY.toLowerCase();
+  }
+  try {
+    const url = new URL(request.url());
+    return url.hostname === 'detail.1688.com'
+      || url.hostname === 'itemcdn.tmall.com'
+      || url.hostname === 'h5api.m.1688.com'
+      || url.hostname === 'mtop.1688.com';
+  } catch {
+    return false;
+  }
+}
+
+function earlierInstant(current: string | null, candidateMs: number): string {
+  if (current === null || candidateMs < Date.parse(current)) {
+    return new Date(candidateMs).toISOString();
+  }
+  return current;
 }
 
 function parseDeclaredContentLength(value: string | undefined): number | null {
