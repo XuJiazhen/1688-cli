@@ -255,7 +255,7 @@ function parseSearchFilters(value: unknown): Record<string, string> {
 function workInputKeys(kind: ProductionCollectionWorkKind): readonly string[] {
   switch (kind) {
     case 'search_page':
-      return ['kind', 'querySnapshotHash', 'page', 'maxSearchPages'];
+      return ['kind', 'querySnapshotHash', 'page', 'maxSearchPages', 'maxCandidates'];
     case 'offer_detail':
       return ['kind', 'offerId', 'offerUrl', 'normalizedStoreUrl', 'memberId'];
     case 'store_qualification':
@@ -276,6 +276,13 @@ function validateWorkInput(
       input['maxSearchPages'],
       'workInput.maxSearchPages',
     );
+    const maxCandidates = positiveInteger(
+      input['maxCandidates'],
+      'workInput.maxCandidates',
+    );
+    if (maxCandidates > 500) {
+      invalid('workInput.maxCandidates cannot exceed 500.');
+    }
     if (maxSearchPages > 0 && page > maxSearchPages) {
       invalid('workInput.page cannot exceed a positive workInput.maxSearchPages.');
     }

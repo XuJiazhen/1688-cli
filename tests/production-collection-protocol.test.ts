@@ -24,9 +24,10 @@ afterEach(async () => {
 });
 
 describe('production collection protocol', () => {
-  it('accepts maxSearchPages=0 and rejects unknown compatibility fields', () => {
+  it('accepts the frozen Search limits and rejects unknown compatibility fields', () => {
     const parsed = parseProductionCollectionRpcRequestV1(request());
     expect(parsed.workInput.maxSearchPages).toBe(0);
+    expect(parsed.workInput.maxCandidates).toBe(5);
     expect(productionCollectionRequestHashV1(parsed)).toMatch(/^[0-9a-f]{64}$/);
     expect(() => parseProductionCollectionRpcRequestV1({
       ...request(),
@@ -42,8 +43,22 @@ describe('production collection protocol', () => {
         querySnapshotHash: '1'.repeat(64),
         page: 3,
         maxSearchPages: 2,
+        maxCandidates: 5,
       },
     })).toThrow(/cannot exceed/);
+  });
+
+  it('rejects a Search candidate limit outside the production bound', () => {
+    expect(() => parseProductionCollectionRpcRequestV1({
+      ...request(),
+      workInput: {
+        kind: 'search_page',
+        querySnapshotHash: '1'.repeat(64),
+        page: 1,
+        maxSearchPages: 1,
+        maxCandidates: 501,
+      },
+    })).toThrow(/cannot exceed 500/);
   });
 
   it('requires exactly pages 1-3 for store_pages', () => {
@@ -197,6 +212,7 @@ function request(
           querySnapshotHash: '1'.repeat(64),
           page: 1,
           maxSearchPages: 0,
+          maxCandidates: 5,
         }
       : {
           kind: 'store_pages',
