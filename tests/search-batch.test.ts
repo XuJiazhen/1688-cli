@@ -114,6 +114,7 @@ describe('incremental search batches', () => {
           supplier: {
             ...sourceOffer.supplier,
             loginId: '[redacted]',
+            sellerLoginId: 'supplier-1001',
             shopUrl: 'https://supplier-1001.1688.com/',
           },
         },

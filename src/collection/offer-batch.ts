@@ -4,6 +4,7 @@ import { CliError } from '../io/errors.js';
 import type { OfferMediaManifest } from '../session/offer-media.js';
 import { createOfferSingletonSourceKeyV1 } from '../session/offer-media.js';
 import { sanitizeCollectorPayloadV1 } from '../session/collector-raw-archive.js';
+import { normalizePublicSellerLoginIdV1 } from '../session/public-seller-identity.js';
 import {
   redactDiagnosticMetadata,
   redactTextForDiagnostics,
@@ -108,10 +109,17 @@ export function createOfferCollectionBatch(
   }
   const collectedAt = normalizeTimestamp(input.completedAt);
   const media = sanitizeMediaManifest(offer.media);
-  const sanitizedOffer = sanitizeCollectorPayloadV1({
+  const sanitizedBase = sanitizeCollectorPayloadV1({
     ...offer,
     media,
   }) as OfferResult;
+  const sanitizedOffer = {
+    ...sanitizedBase,
+    supplier: {
+      ...sanitizedBase.supplier,
+      sellerLoginId: normalizePublicSellerLoginIdV1(offer.supplier.loginId),
+    },
+  };
   const observations = unit.kind === 'offer-detail'
     ? [{ offerId: offer.offerId, offer: sanitizedOffer, collectedAt }]
     : [{ offerId: offer.offerId, media, collectedAt }];

@@ -8,8 +8,16 @@ import {
   persistCollectorRawArchiveV1,
   sanitizeCollectorPayloadV1,
 } from '../src/session/collector-raw-archive.js';
+import { normalizePublicSellerLoginIdV1 } from '../src/session/public-seller-identity.js';
 
 describe('Collector immutable sanitized raw archives', () => {
+  it('accepts only bounded public seller login identities', () => {
+    expect(normalizePublicSellerLoginIdV1('  中文卖家  ')).toBe('中文卖家');
+    expect(normalizePublicSellerLoginIdV1('[redacted]')).toBeNull();
+    expect(normalizePublicSellerLoginIdV1('seller\nlogin')).toBeNull();
+    expect(normalizePublicSellerLoginIdV1('x'.repeat(257))).toBeNull();
+  });
+
   it('recursively removes embedded contacts and secrets while preserving provenance', () => {
     const sanitized = sanitizeCollectorPayloadV1({
       title: '批发 13800138000 138-0013-8000 010-12345678 wx:fixture_shop',

@@ -1014,6 +1014,11 @@ Kind-specific observations are additive records inside the common batch:
 | `offer-detail` | `offerId`, normalized `OfferResult`, and collection time |
 | `offer-media-manifest` | `offerId`, ordered main/SKU/detail media manifest, and collection time |
 
+`search-page` and `offer-detail` observations add the validated public seller
+identity as `offer.supplier.sellerLoginId`. The original `loginId`, `userId`,
+and other generic identity fields remain redacted; raw archives do not receive
+a global seller-login exemption.
+
 An empty `certificates` array with `certificateListAvailability: "available"`
 means the returned list contained no certificate items; it does not mean that
 the supplier lacks business registration or other qualification facts.

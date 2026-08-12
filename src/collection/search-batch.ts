@@ -7,6 +7,7 @@ import {
   redactCollectorTextV1,
   sanitizeCollectorPayloadV1,
 } from '../session/collector-raw-archive.js';
+import { normalizePublicSellerLoginIdV1 } from '../session/public-seller-identity.js';
 import { SEARCH_FILTER_REQUEST_KEYS } from '../session/search-contract.js';
 import {
   assertCheckpointCompatible,
@@ -59,7 +60,9 @@ export interface SearchBatchPlan {
 export interface SearchOfferObservation {
   [key: string]: unknown;
   offerId: string;
-  offer: Offer;
+  offer: Omit<Offer, 'supplier'> & {
+    supplier: Offer['supplier'] & { readonly sellerLoginId: string | null };
+  };
   sourcePage: number;
   remoteSort: string | null;
   pageRank: number;
@@ -333,7 +336,7 @@ export function createSearchPageBatch(
   const observations: SearchOfferObservation[] = emittedCandidates.map(
     ({ offer, pageRank, rawRank, collectedAt: itemCollectedAt, remoteSort }) => {
       const raw = input.rawItems?.find((item) => item.data?.offerId === offer.offerId);
-      return sanitizeCollectorPayloadV1({
+      const sanitized = sanitizeCollectorPayloadV1({
         offerId: offer.offerId,
         offer,
         sourcePage: input.page,
@@ -353,6 +356,16 @@ export function createSearchPageBatch(
               },
             }),
       }) as SearchOfferObservation;
+      return {
+        ...sanitized,
+        offer: {
+          ...sanitized.offer,
+          supplier: {
+            ...sanitized.offer.supplier,
+            sellerLoginId: normalizePublicSellerLoginIdV1(offer.supplier.loginId),
+          },
+        },
+      };
     },
   );
   const emittedOfferIds = new Set(observations.map((item) => item.offerId));

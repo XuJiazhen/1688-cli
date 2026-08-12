@@ -113,7 +113,8 @@ describe('createOfferCollectionBatch', () => {
       offer: {
         title: '工厂直供 [redacted]',
         supplier: {
-          loginId: '[redacted]', userId: '[redacted]', memberId: 'member-1',
+          loginId: '[redacted]', sellerLoginId: 'private-login',
+          userId: '[redacted]', memberId: 'member-1',
         },
       },
     });
