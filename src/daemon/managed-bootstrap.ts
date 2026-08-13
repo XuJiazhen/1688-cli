@@ -30,6 +30,9 @@ export interface ManagedSupervisorDaemonConfigV2 {
   daemonInstanceId: string;
   supervisorGeneration: number;
   contextGeneration: number;
+  supervisorLeaseId: string;
+  supervisorFencingToken: string;
+  runtimeHostId: string;
   transportAuthority: TransportAuthorityV2;
   databaseNow: string;
   databaseTimeSampledAt: string;
@@ -125,6 +128,12 @@ export async function loadManagedServerOptions(
     productionCollectionRuntime: new ProductionCollectionRuntime({
       profileId: config.profileId,
       profileName: config.profileName,
+      supervisorLeaseId: config.supervisorLeaseId,
+      supervisorGeneration: config.supervisorGeneration,
+      supervisorFencingToken: config.supervisorFencingToken,
+      daemonInstanceId: config.daemonInstanceId,
+      contextGeneration: config.contextGeneration,
+      runtimeHostId: config.runtimeHostId,
       artifactDirectory: config.artifactDirectory,
       now,
     }),
@@ -150,7 +159,9 @@ export async function loadManagedSupervisorConfig(
 function parseManagedConfig(value: unknown): ManagedSupervisorDaemonConfigV2 {
   const record = strictRecord(value, [
     'schema', 'profileId', 'profileName', 'daemonInstanceId',
-    'supervisorGeneration', 'contextGeneration', 'databaseNow',
+    'supervisorGeneration', 'contextGeneration', 'supervisorLeaseId',
+    'supervisorFencingToken', 'databaseNow',
+    'runtimeHostId',
     'databaseTimeSampledAt', 'credentialKeys', 'pageActionVerification',
     'artifactDirectory', 'artifactReadDirectories', 'acceptanceJournalPath', 'runtimeEventPath',
     'storeSampleFreshnessMs', 'transportAuthority',
@@ -170,8 +181,14 @@ function parseManagedConfig(value: unknown): ManagedSupervisorDaemonConfigV2 {
     profileId: uuid(record['profileId'], 'profileId'),
     profileName: identifier(record['profileName'], 'profileName'),
     daemonInstanceId: uuid(record['daemonInstanceId'], 'daemonInstanceId'),
+    supervisorLeaseId: uuid(record['supervisorLeaseId'], 'supervisorLeaseId'),
     supervisorGeneration: positiveInteger(record['supervisorGeneration'], 'supervisorGeneration'),
+    supervisorFencingToken: positiveBigInteger(
+      record['supervisorFencingToken'],
+      'supervisorFencingToken',
+    ),
     contextGeneration: positiveInteger(record['contextGeneration'], 'contextGeneration'),
+    runtimeHostId: identifier(record['runtimeHostId'], 'runtimeHostId'),
     transportAuthority: parseTransportAuthorityV2(record['transportAuthority']),
     databaseNow: timestamp(record['databaseNow'], 'databaseNow'),
     databaseTimeSampledAt: timestamp(record['databaseTimeSampledAt'], 'databaseTimeSampledAt'),
@@ -335,6 +352,14 @@ function positiveInteger(value: unknown, name: string): number {
     throw new Error(`${name} must be a positive integer.`);
   }
   return value as number;
+}
+
+function positiveBigInteger(value: unknown, name: string): string {
+  const text = typeof value === 'string' ? value : String(value);
+  if (!/^[1-9][0-9]*$/u.test(text)) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return text;
 }
 
 function nonNegativeInteger(value: unknown, name: string): number {

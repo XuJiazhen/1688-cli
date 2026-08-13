@@ -5,6 +5,10 @@ export const PRODUCTION_COLLECTION_RPC_SCHEMA =
   'production-collection.rpc.v1' as const;
 export const PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA =
   'production-collection.rpc-response.v3' as const;
+export const PRODUCTION_COLLECTION_RUNTIME_ADMISSION_SCHEMA =
+  'production-collection.runtime-admission.v1' as const;
+export const PRODUCTION_COLLECTION_RUNTIME_ADMISSION_RESPONSE_SCHEMA =
+  'production-collection.runtime-admission-response.v1' as const;
 
 export type ProductionCollectionRpcMethod =
   | 'production.collection.execute'
@@ -33,6 +37,12 @@ export interface ProductionCollectionRpcRequestV1 {
   executionToken: string;
   workItemId: string;
   profileId: string;
+  supervisorLeaseId: string;
+  supervisorGeneration: number;
+  supervisorFencingToken: string;
+  daemonInstanceId: string;
+  contextGeneration: number;
+  runtimeHostId: string;
   attemptOrdinal: number;
   freshnessSeconds: number;
   startNotBefore: string;
@@ -85,6 +95,14 @@ export interface ProductionCollectionExecutionReceiptV3 {
   executionToken: string;
   workItemId: string;
   workKind: ProductionCollectionWorkKind;
+  profileId: string;
+  supervisorLeaseId: string;
+  supervisorGeneration: number;
+  supervisorFencingToken: string;
+  daemonInstanceId: string;
+  contextGeneration: number;
+  runtimeHostId: string;
+  runtimeAdmissionReceiptId: string;
   startedAt: string;
   completedAt: string;
   rawArtifactRef: string;
@@ -137,7 +155,10 @@ export function parseProductionCollectionRpcRequestV1(
 ): ProductionCollectionRpcRequestV1 {
   const record = strictRecord(value, 'ProductionCollectionRpcRequest', [
     'schema', 'rpcId', 'method', 'deadlineAt', 'attemptId', 'executionToken',
-    'workItemId', 'profileId', 'attemptOrdinal', 'freshnessSeconds',
+    'workItemId', 'profileId', 'supervisorLeaseId', 'supervisorGeneration',
+    'supervisorFencingToken', 'daemonInstanceId', 'contextGeneration',
+    'runtimeHostId',
+    'attemptOrdinal', 'freshnessSeconds',
     'startNotBefore', 'subjectKey',
     'workKind', 'workInput', 'query',
   ]);
@@ -181,6 +202,12 @@ export function parseProductionCollectionRpcRequestV1(
     executionToken: uuid(record['executionToken'], 'executionToken'),
     workItemId: uuid(record['workItemId'], 'workItemId'),
     profileId: uuid(record['profileId'], 'profileId'),
+    supervisorLeaseId: uuid(record['supervisorLeaseId'], 'supervisorLeaseId'),
+    supervisorGeneration: positiveInteger(record['supervisorGeneration'], 'supervisorGeneration'),
+    supervisorFencingToken: positiveBigInteger(record['supervisorFencingToken'], 'supervisorFencingToken'),
+    daemonInstanceId: uuid(record['daemonInstanceId'], 'daemonInstanceId'),
+    contextGeneration: positiveInteger(record['contextGeneration'], 'contextGeneration'),
+    runtimeHostId: boundedText(record['runtimeHostId'], 'runtimeHostId', 256),
     attemptOrdinal: positiveInteger(record['attemptOrdinal'], 'attemptOrdinal'),
     freshnessSeconds: positiveInteger(record['freshnessSeconds'], 'freshnessSeconds'),
     startNotBefore,
@@ -399,6 +426,12 @@ function timestamp(value: unknown, path: string): string {
 function positiveInteger(value: unknown, path: string): number {
   if (!Number.isSafeInteger(value) || Number(value) <= 0) invalid(`${path} must be positive.`);
   return Number(value);
+}
+
+function positiveBigInteger(value: unknown, path: string): string {
+  const text = typeof value === 'string' ? value : String(value);
+  if (!/^[1-9][0-9]*$/u.test(text)) invalid(`${path} must be a positive integer.`);
+  return text;
 }
 
 function nonNegativeInteger(value: unknown, path: string): number {

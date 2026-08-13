@@ -39,6 +39,8 @@ import type { ProfileDaemonRuntime } from './supervisor-runtime.js';
 import {
   PRODUCTION_COLLECTION_RPC_SCHEMA,
   PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA,
+  PRODUCTION_COLLECTION_RUNTIME_ADMISSION_RESPONSE_SCHEMA,
+  PRODUCTION_COLLECTION_RUNTIME_ADMISSION_SCHEMA,
   ProductionCollectionProtocolError,
   parseProductionCollectionRpcRequestV1,
   productionCollectionRequestHashV1,
@@ -198,6 +200,17 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
     reject(error: Error): void;
     timer: ReturnType<typeof setTimeout>;
   }>();
+  const pendingCollectionAdmissions = new Map<string, {
+    rpcId: string;
+    requestHash: string;
+    resolve(receipt: {
+      runtimeAdmissionReceiptId: string;
+      requestHash: string;
+      admittedAt: string;
+    }): void;
+    reject(error: Error): void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
   sock.on('data', (chunk: string) => {
     buf += chunk;
     if (Buffer.byteLength(buf) > SUPERVISOR_RPC_MAX_FRAME_BYTES) {
@@ -226,6 +239,66 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
           if (typeof parsedRecord['rpcId'] === 'string') {
             candidateRpcId = parsedRecord['rpcId'];
           }
+        }
+        if (
+          parsed !== null
+          && typeof parsed === 'object'
+          && !Array.isArray(parsed)
+          && (parsed as Record<string, unknown>)['schema']
+            === PRODUCTION_COLLECTION_RUNTIME_ADMISSION_RESPONSE_SCHEMA
+        ) {
+          const frame = parsed as Record<string, unknown>;
+          const admissionId = typeof frame['admissionId'] === 'string'
+            ? frame['admissionId'] : '';
+          const rpcId = typeof frame['rpcId'] === 'string' ? frame['rpcId'] : '';
+          const pending = pendingCollectionAdmissions.get(admissionId);
+          if (pending === undefined || pending.rpcId !== rpcId) {
+            throw new ProductionCollectionProtocolError(
+              'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_UNEXPECTED',
+              'Runtime admission response does not match an active execution.',
+              false,
+              'fencing',
+            );
+          }
+          clearTimeout(pending.timer);
+          pendingCollectionAdmissions.delete(admissionId);
+          if (frame['ok'] === true) {
+            const receipt = frame['receipt'];
+            if (receipt === null || typeof receipt !== 'object' || Array.isArray(receipt)) {
+              throw new ProductionCollectionProtocolError(
+                'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_INVALID',
+                'Runtime admission response receipt is invalid.',
+                false,
+                'fencing',
+              );
+            }
+            const record = receipt as Record<string, unknown>;
+            if (
+              typeof record['runtimeAdmissionReceiptId'] !== 'string'
+              || record['requestHash'] !== pending.requestHash
+              || typeof record['admittedAt'] !== 'string'
+            ) {
+              throw new ProductionCollectionProtocolError(
+                'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_MISMATCH',
+                'Runtime admission response authority differs from the execution.',
+                false,
+                'fencing',
+              );
+            }
+            pending.resolve({
+              runtimeAdmissionReceiptId: record['runtimeAdmissionReceiptId'],
+              requestHash: record['requestHash'],
+              admittedAt: record['admittedAt'],
+            });
+          } else {
+            pending.reject(new ProductionCollectionProtocolError(
+              'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_REJECTED',
+              'Current database Runtime authority rejected execution.',
+              false,
+              'fencing',
+            ));
+          }
+          continue;
         }
         if (
           parsed !== null
@@ -298,7 +371,17 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
             sock.write(`${JSON.stringify(failure)}\n`);
             continue;
           }
-          const response = opts.productionCollectionRuntime.handle(collectionRequest);
+          const response = opts.productionCollectionRuntime.handle(
+            collectionRequest,
+            collectionRequest.method === 'production.collection.execute'
+              ? (request, requestHash) => requestProductionCollectionRuntimeAdmission({
+                  sock,
+                  pendingAdmissions: pendingCollectionAdmissions,
+                  request,
+                  requestHash,
+                })
+              : undefined,
+          );
           void response.then((value) => {
             if (sock.writable) sock.write(`${JSON.stringify(value)}\n`);
           }).catch((error) => {
@@ -457,6 +540,16 @@ function handleClient(sock: net.Socket, opts: ServerOpts): void {
       ));
     }
     pendingAdmissions.clear();
+    for (const pending of pendingCollectionAdmissions.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(new ProductionCollectionProtocolError(
+        'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_CHANNEL_CLOSED',
+        'Runtime admission channel closed before database authority was granted.',
+        true,
+        'network',
+      ));
+    }
+    pendingCollectionAdmissions.clear();
     activeClients--;
     lastActivityMs = Date.now();
   });
@@ -548,6 +641,74 @@ function requestRemoteAttemptAdmission(input: {
         true,
       ));
     }
+  });
+}
+
+function requestProductionCollectionRuntimeAdmission(input: {
+  sock: net.Socket;
+  pendingAdmissions: Map<string, {
+    rpcId: string;
+    requestHash: string;
+    resolve(receipt: {
+      runtimeAdmissionReceiptId: string;
+      requestHash: string;
+      admittedAt: string;
+    }): void;
+    reject(error: Error): void;
+    timer: ReturnType<typeof setTimeout>;
+  }>;
+  request: import('./production-collection-protocol.js').ProductionCollectionRpcRequestV1;
+  requestHash: string;
+}): Promise<{
+  runtimeAdmissionReceiptId: string;
+  requestHash: string;
+  admittedAt: string;
+}> {
+  const remainingMs = Date.parse(input.request.deadlineAt) - Date.now();
+  if (!input.sock.writable || remainingMs <= 0) {
+    return Promise.reject(new ProductionCollectionProtocolError(
+      'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_UNAVAILABLE',
+      'Runtime admission channel or execution deadline is unavailable.',
+      true,
+      'fencing',
+    ));
+  }
+  const admissionId = randomUUID();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      input.pendingAdmissions.delete(admissionId);
+      reject(new ProductionCollectionProtocolError(
+        'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_TIMEOUT',
+        'Database Runtime authority did not answer before the execution deadline.',
+        true,
+        'timeout',
+      ));
+    }, remainingMs);
+    timer.unref();
+    input.pendingAdmissions.set(admissionId, {
+      rpcId: input.request.rpcId,
+      requestHash: input.requestHash,
+      resolve,
+      reject,
+      timer,
+    });
+    input.sock.write(`${JSON.stringify({
+      schema: PRODUCTION_COLLECTION_RUNTIME_ADMISSION_SCHEMA,
+      rpcId: input.request.rpcId,
+      admissionId,
+      deadlineAt: input.request.deadlineAt,
+      requestHash: input.requestHash,
+      attemptId: input.request.attemptId,
+      executionToken: input.request.executionToken,
+      workItemId: input.request.workItemId,
+      profileId: input.request.profileId,
+      supervisorLeaseId: input.request.supervisorLeaseId,
+      supervisorGeneration: input.request.supervisorGeneration,
+      supervisorFencingToken: input.request.supervisorFencingToken,
+      daemonInstanceId: input.request.daemonInstanceId,
+      contextGeneration: input.request.contextGeneration,
+      runtimeHostId: input.request.runtimeHostId,
+    })}\n`);
   });
 }
 

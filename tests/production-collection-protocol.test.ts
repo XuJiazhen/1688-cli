@@ -79,12 +79,33 @@ describe('production collection protocol', () => {
 });
 
 describe('ProductionCollectionRuntime', () => {
+  it('denies execution before opening a Context when runtime admission is absent', async () => {
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
+    directories.push(artifactDirectory);
+    const runWithContext = vi.fn(async (operation) => operation(
+      new FakeContext() as unknown as BrowserContext,
+    ));
+    const owner = runtimeOwner();
+    const runtime = new ProductionCollectionRuntime({
+      ...owner,
+      authorizeRuntime: undefined,
+      artifactDirectory,
+      runWithContext,
+    });
+
+    await expect(runtime.handle(parseProductionCollectionRpcRequestV1(request())))
+      .resolves.toMatchObject({
+        ok: false,
+        error: { code: 'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_REQUIRED' },
+      });
+    expect(runWithContext).not.toHaveBeenCalled();
+  });
+
   it('preserves external intervention categories across the daemon RPC boundary', async () => {
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
     directories.push(artifactDirectory);
     const runtime = new ProductionCollectionRuntime({
-      profileId: PROFILE_ID,
-      profileName: 'fixture-profile',
+      ...runtimeOwner(),
       artifactDirectory,
       runCollection: async () => {
         throw new CliError(4, 'RISK_CONTROL', 'Verification is required.', {
@@ -156,8 +177,7 @@ describe('ProductionCollectionRuntime', () => {
       return batch();
     });
     const runtime = new ProductionCollectionRuntime({
-      profileId: PROFILE_ID,
-      profileName: 'fixture-profile',
+      ...runtimeOwner(),
       artifactDirectory,
       runCollection: execute,
       runWithContext: (operation) => operation(context as unknown as BrowserContext),
@@ -218,6 +238,26 @@ const ATTEMPT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const EXECUTION_TOKEN = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const WORK_ITEM_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const PROFILE_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const SUPERVISOR_LEASE_ID = '11111111-1111-4111-8111-111111111111';
+const DAEMON_INSTANCE_ID = '22222222-2222-4222-8222-222222222222';
+
+function runtimeOwner() {
+  return {
+    profileId: PROFILE_ID,
+    profileName: 'fixture-profile',
+    supervisorLeaseId: SUPERVISOR_LEASE_ID,
+    supervisorGeneration: 2,
+    supervisorFencingToken: '3',
+    daemonInstanceId: DAEMON_INSTANCE_ID,
+    contextGeneration: 4,
+    runtimeHostId: 'fixture-host',
+    authorizeRuntime: async (_request: ProductionCollectionRpcRequestV1, requestHash: string) => ({
+      runtimeAdmissionReceiptId: '33333333-3333-4333-8333-333333333333',
+      requestHash,
+      admittedAt: new Date().toISOString(),
+    }),
+  } as const;
+}
 
 function request(
   kind: ProductionCollectionRpcRequestV1['workKind'] = 'search_page',
@@ -232,6 +272,12 @@ function request(
     executionToken: EXECUTION_TOKEN,
     workItemId: WORK_ITEM_ID,
     profileId: PROFILE_ID,
+    supervisorLeaseId: SUPERVISOR_LEASE_ID,
+    supervisorGeneration: 2,
+    supervisorFencingToken: '3',
+    daemonInstanceId: DAEMON_INSTANCE_ID,
+    contextGeneration: 4,
+    runtimeHostId: 'fixture-host',
     attemptOrdinal: 1,
     freshnessSeconds: 86_400,
     startNotBefore: new Date(now - 1_000).toISOString(),

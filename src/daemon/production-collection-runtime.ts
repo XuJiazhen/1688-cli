@@ -53,6 +53,12 @@ import {
 export interface ProductionCollectionRuntimeOptions {
   profileId: string;
   profileName: string;
+  supervisorLeaseId: string;
+  supervisorGeneration: number;
+  supervisorFencingToken: string;
+  daemonInstanceId: string;
+  contextGeneration: number;
+  runtimeHostId: string;
   artifactDirectory: string;
   now?: () => Date;
   runCollection?: (
@@ -62,6 +68,14 @@ export interface ProductionCollectionRuntimeOptions {
   runWithContext?: (
     operation: (context: BrowserContext) => Promise<CollectionBatch>,
   ) => Promise<CollectionBatch>;
+  authorizeRuntime?: (
+    request: ProductionCollectionRpcRequestV1,
+    requestHash: string,
+  ) => Promise<Readonly<{
+    runtimeAdmissionReceiptId: string;
+    requestHash: string;
+    admittedAt: string;
+  }>>;
 }
 
 /**
@@ -86,10 +100,12 @@ export class ProductionCollectionRuntime {
 
   public async handle(
     request: ProductionCollectionRpcRequestV1,
+    authorizeRuntime?: ProductionCollectionRuntimeOptions['authorizeRuntime'],
   ): Promise<ProductionCollectionRpcResponseV3> {
     const requestHash = productionCollectionRequestHashV1(request);
     try {
       this.assertProfile(request);
+      this.assertRuntimeAuthority(request);
       if (request.method === 'production.collection.lookupReceipt') {
         const receipt = await this.readReceipt(request.attemptId);
         if (receipt !== null) this.assertReceiptIdentity(request, receipt);
@@ -128,7 +144,7 @@ export class ProductionCollectionRuntime {
       }
       this.activeAttemptId = request.attemptId;
       try {
-        const receipt = await this.execute(request, requestHash);
+        const receipt = await this.execute(request, requestHash, authorizeRuntime);
         await this.writeReceipt(receipt);
         return {
           schema: PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA,
@@ -148,6 +164,7 @@ export class ProductionCollectionRuntime {
   private async execute(
     request: ProductionCollectionRpcRequestV1,
     requestHash: string,
+    authorizeRuntime?: ProductionCollectionRuntimeOptions['authorizeRuntime'],
   ): Promise<ProductionCollectionExecutionReceiptV3> {
     const nowMs = this.now().getTime();
     const startMs = Date.parse(request.startNotBefore);
@@ -182,6 +199,24 @@ export class ProductionCollectionRuntime {
       firstSourceByteAt: null,
       sourcePayloadCompleteAt: null,
     };
+    const authorize = authorizeRuntime ?? this.options.authorizeRuntime;
+    if (authorize === undefined) {
+      throw new ProductionCollectionProtocolError(
+        'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_REQUIRED',
+        'Managed collection execution requires current database Runtime admission.',
+        false,
+        'fencing',
+      );
+    }
+    const admission = await authorize(request, requestHash);
+    if (admission.requestHash !== requestHash) {
+      throw new ProductionCollectionProtocolError(
+        'PRODUCTION_COLLECTION_RUNTIME_ADMISSION_MISMATCH',
+        'Runtime admission receipt differs from the execution request.',
+        false,
+        'fencing',
+      );
+    }
     try {
       let batch: CollectionBatch | null = null;
       try {
@@ -311,6 +346,14 @@ export class ProductionCollectionRuntime {
         executionToken: request.executionToken,
         workItemId: request.workItemId,
         workKind: request.workKind,
+        profileId: request.profileId,
+        supervisorLeaseId: request.supervisorLeaseId,
+        supervisorGeneration: request.supervisorGeneration,
+        supervisorFencingToken: request.supervisorFencingToken,
+        daemonInstanceId: request.daemonInstanceId,
+        contextGeneration: request.contextGeneration,
+        runtimeHostId: request.runtimeHostId,
+        runtimeAdmissionReceiptId: admission.runtimeAdmissionReceiptId,
         startedAt,
         completedAt,
         rawArtifactRef: `production-collection-batch:sha256:${rawArtifactHash}`,
@@ -337,6 +380,24 @@ export class ProductionCollectionRuntime {
     }
   }
 
+  private assertRuntimeAuthority(request: ProductionCollectionRpcRequestV1): void {
+    if (
+      request.supervisorLeaseId !== this.options.supervisorLeaseId
+      || request.supervisorGeneration !== this.options.supervisorGeneration
+      || request.supervisorFencingToken !== this.options.supervisorFencingToken
+      || request.daemonInstanceId !== this.options.daemonInstanceId
+      || request.contextGeneration !== this.options.contextGeneration
+      || request.runtimeHostId !== this.options.runtimeHostId
+    ) {
+      throw new ProductionCollectionProtocolError(
+        'PRODUCTION_COLLECTION_RUNTIME_FENCE_STALE',
+        'Execution authority does not match this Profile Runtime owner.',
+        false,
+        'fencing',
+      );
+    }
+  }
+
   private assertReceiptIdentity(
     request: ProductionCollectionRpcRequestV1,
     receipt: ProductionCollectionExecutionReceiptV3,
@@ -346,6 +407,13 @@ export class ProductionCollectionRuntime {
       || receipt.executionToken !== request.executionToken
       || receipt.workItemId !== request.workItemId
       || receipt.workKind !== request.workKind
+      || receipt.profileId !== request.profileId
+      || receipt.supervisorLeaseId !== request.supervisorLeaseId
+      || receipt.supervisorGeneration !== request.supervisorGeneration
+      || receipt.supervisorFencingToken !== request.supervisorFencingToken
+      || receipt.daemonInstanceId !== request.daemonInstanceId
+      || receipt.contextGeneration !== request.contextGeneration
+      || receipt.runtimeHostId !== request.runtimeHostId
     ) {
       throw new ProductionCollectionProtocolError(
         'PRODUCTION_COLLECTION_RECEIPT_CONFLICT',
@@ -755,6 +823,15 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV3
     || typeof receipt.attemptId !== 'string'
     || typeof receipt.executionToken !== 'string'
     || typeof receipt.workItemId !== 'string'
+    || typeof receipt.profileId !== 'string'
+    || typeof receipt.supervisorLeaseId !== 'string'
+    || !isPositiveSafeInteger(receipt.supervisorGeneration)
+    || typeof receipt.supervisorFencingToken !== 'string'
+    || !/^[1-9][0-9]*$/u.test(receipt.supervisorFencingToken)
+    || typeof receipt.daemonInstanceId !== 'string'
+    || !isPositiveSafeInteger(receipt.contextGeneration)
+    || typeof receipt.runtimeHostId !== 'string'
+    || typeof receipt.runtimeAdmissionReceiptId !== 'string'
     || receipt.payloadSchemaVersion !== 'collection-batch-v1'
     || receipt.cleanup?.allOwnedPagesClosed !== true
     || !isValidResourceReceipt(receipt.resource)
