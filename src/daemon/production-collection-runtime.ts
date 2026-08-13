@@ -321,6 +321,11 @@ export class ProductionCollectionRuntime {
         sourceTiming.sourcePayloadCompleteAt,
       );
       const completedAt = notEarlierThan(eventNow(), rawArchiveCommittedAt);
+      if (batch.status !== 'completed' && sourceTiming.remoteActionStartedAt === null) {
+        // Preserve the collector's terminal failure instead of masking it when the
+        // source rejected the operation before a canonical request was observable.
+        sourceTiming.remoteActionStartedAt = startedAt;
+      }
       if (
         sourceTiming.remoteActionStartedAt === null
         || sourceTiming.sourcePayloadCompleteAt === null

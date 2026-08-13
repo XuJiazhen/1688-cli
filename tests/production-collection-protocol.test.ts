@@ -232,6 +232,46 @@ describe('ProductionCollectionRuntime', () => {
     if (!lookup.ok) throw new Error('lookup failed');
     expect(lookup.data?.attemptId).toBe(ATTEMPT_ID);
   });
+
+  it('returns a failed batch when the source rejects before canonical timing is observable', async () => {
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
+    directories.push(artifactDirectory);
+    const failedBatch: CollectionBatch = {
+      ...batch(),
+      status: 'failed',
+      errors: [{
+        code: 'OFFER_DETAIL_REJECTED',
+        message: 'The source rejected the offer detail request.',
+        retryable: true,
+      }],
+      completeness: {
+        requestedScope: 'page',
+        state: 'unknown',
+        observedPages: [],
+        failedPages: [1],
+        uniqueItems: 0,
+      },
+    };
+    const runtime = new ProductionCollectionRuntime({
+      ...runtimeOwner(),
+      artifactDirectory,
+      runCollection: async () => failedBatch,
+      runWithContext: (operation) => operation(new FakeContext() as unknown as BrowserContext),
+    });
+
+    const response = await runtime.handle(parseProductionCollectionRpcRequestV1(request()));
+
+    expect(response.ok).toBe(true);
+    if (!response.ok || response.data === null) throw new Error('missing failed batch receipt');
+    expect(response.data.timing).toMatchObject({
+      coverage: 'partial',
+      firstSourceByteAt: null,
+    });
+    expect(response.data.batch).toMatchObject({
+      status: 'failed',
+      errors: [{ code: 'OFFER_DETAIL_REJECTED', retryable: true }],
+    });
+  });
 });
 
 const ATTEMPT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
