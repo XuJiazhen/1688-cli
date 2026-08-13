@@ -17,7 +17,7 @@ import type {
 } from './supervisor-runtime.js';
 import type { ManagedPage } from './page-registry.js';
 
-const IDENTITY_PROBE_URL = 'https://myalibaba.1688.com/';
+const IDENTITY_PROBE_URL = 'https://www.1688.com/';
 const PROFILE_IDENTITY_DISCOVERY = '__vs1_profile_identity_discovery__';
 
 export interface SharedPersistentContextHostOptions {
@@ -116,22 +116,27 @@ export class SharedPersistentContextHost implements PersistentContextHost {
   }): Promise<IdentityProbeReceipt> {
     const context = await getSharedContext(this.options.profileName, { headful: true });
     const page = input.page as Page | undefined;
-    let reachable = false;
-    if (page) {
+    const discovering = input.expectedMemberId === PROFILE_IDENTITY_DISCOVERY;
+    let state = page ? await detectPageState(page).catch(() => null) : null;
+    if (page && !discovering && (state === null || state.kind === 'unknown')) {
       try {
         const response = await page.goto(IDENTITY_PROBE_URL, {
           waitUntil: 'domcontentloaded',
           timeout: 15_000,
         });
-        reachable = response !== null && response.status() < 400;
+        state = response !== null && response.status() < 400
+          ? await detectPageState(page).catch(() => null)
+          : null;
       } catch {
-        reachable = false;
+        state = null;
       }
     }
-    const state = page && reachable
-      ? await detectPageState(page).catch(() => null)
-      : null;
+    // First-time identity discovery is operator-triggered after a human login.
+    // Do not replace that Page with myalibaba: the navigation itself can raise
+    // a risk challenge and race the login ceremony. Read the current Context
+    // identity and current Page state without crossing the network instead.
     const identity = parseIdentity(await context.cookies());
+    const observedMemberId = identity?.memberId ?? null;
     const pageState = state?.kind === 'not_logged_in'
       ? 'login_required'
       : state?.kind === 'risk_challenge'
@@ -141,9 +146,7 @@ export class SharedPersistentContextHost implements PersistentContextHost {
         : state === null || state.kind === 'unknown'
           ? 'unreachable'
           : 'normal';
-    const observedMemberId = identity?.memberId ?? null;
     const probedAt = this.now().toISOString();
-    const discovering = input.expectedMemberId === PROFILE_IDENTITY_DISCOVERY;
     const passed = pageState === 'normal'
       && observedMemberId !== null
       && (discovering || observedMemberId === input.expectedMemberId);

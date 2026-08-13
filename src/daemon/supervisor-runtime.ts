@@ -471,6 +471,30 @@ export class ProfileDaemonRuntime {
             false,
           );
         }
+        // Chromium exits when its last headed Page closes. Adopt the launch
+        // Page as the first health-probe Page before orphan reconciliation so
+        // the PersistentContext remains alive until the Supervisor performs
+        // its mandatory identity probe. Restored non-blank Pages stay orphaned
+        // and are closed below.
+        const launchPages = this.options.host.pages().filter((page) => !page.isClosed());
+        let healthPage = launchPages.find((page) => page.url() === 'about:blank') ?? null;
+        if (healthPage === null && launchPages.length > 0) {
+          healthPage = await this.options.host.createPage();
+        }
+        if (healthPage !== null) {
+          const ownerId = `health-probe-${this.idFactory()}`;
+          const pageSession = await this.registry.register(healthPage, {
+            pageSessionId: `page-session-${ownerId}`,
+            playwrightPageId: this.options.host.pageId(healthPage),
+            ownerKind: 'health_probe',
+            ownerId,
+            lastUrlClass: 'health_probe',
+          });
+          this.healthProbeSession = {
+            pageSessionId: pageSession.pageSessionId,
+            ownerId,
+          };
+        }
         const reconciled = await this.registry.reconcileContextPages(
           this.options.host.pages(),
           (page) => this.options.host.pageId(page),
@@ -1212,14 +1236,9 @@ export class ProfileDaemonRuntime {
             identityMatched: probe.observedMemberId === probe.expectedMemberId,
           },
         );
-        if (probe.passed) {
-          await this.registry.close(
-            pageSessionId,
-            { ownerKind: 'health_probe', ownerId },
-            'health_probe_ready',
-          );
-          this.healthProbeSession = null;
-        }
+        // Keep the daemon-owned health Page alive after a successful probe.
+        // Headed Chromium exits when its last Page closes, while WorkItem
+        // Pages still have their own strictly bounded registry lifecycle.
         return probe;
       } catch (error) {
         if (this.healthProbeSession === null) throw error;

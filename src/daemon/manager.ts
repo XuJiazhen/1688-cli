@@ -131,15 +131,16 @@ export async function startManaged(
   );
   child.unref();
   await logFd.close();
+  const startTimeoutMs = managedStartTimeoutMs(process.env['BB1688_MANAGED_START_TIMEOUT_MS']);
   const reachable = await waitUntil(() => isDaemonReachable(profileName), {
-    timeoutMs: 15_000,
+    timeoutMs: startTimeoutMs,
     intervalMs: 250,
   });
   if (!reachable) {
     throw new CliError(
       9,
       'DAEMON_START_TIMEOUT',
-      `Managed daemon for profile "${profileName}" did not start within 15s.`,
+      `Managed daemon for profile "${profileName}" did not start within ${startTimeoutMs}ms.`,
     );
   }
   const identity = await readManagedDaemonIdentity(profileName);
@@ -164,6 +165,19 @@ export async function startManaged(
     );
   }
   return { pid: identity.daemonPid, profile: profileName };
+}
+
+export function managedStartTimeoutMs(value: string | undefined): number {
+  if (value === undefined || value.trim() === '') return 15_000;
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed < 15_000 || parsed > 120_000) {
+    throw new CliError(
+      2,
+      'INVALID_MANAGED_START_TIMEOUT',
+      'BB1688_MANAGED_START_TIMEOUT_MS must be an integer between 15000 and 120000.',
+    );
+  }
+  return parsed;
 }
 
 export async function stop(

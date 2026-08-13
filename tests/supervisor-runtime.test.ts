@@ -65,7 +65,8 @@ class FakePage implements ManagedPage {
     if (this.failClose) throw new Error('close failed');
     this.closed = true;
   }
-  url(): string { return 'about:blank'; }
+  currentUrl = 'about:blank';
+  url(): string { return this.currentUrl; }
 }
 
 class FakeHost implements PersistentContextHost {
@@ -194,6 +195,55 @@ describe('ProfileDaemonRuntime', () => {
     });
     expect(runtime.status().pageSessions.filter((page) => page.state !== 'closed'))
       .toHaveLength(0);
+  });
+
+  it('adopts the Chromium launch Page for the first health probe', async () => {
+    const host = new FakeHost();
+    const launchPage = new FakePage();
+    host.ownedPages.push(launchPage);
+    host.ids.set(launchPage, 'pw-launch');
+    const restoredPage = new FakePage();
+    restoredPage.currentUrl = 'https://example.invalid/restored';
+    host.ownedPages.push(restoredPage);
+    host.ids.set(restoredPage, 'pw-restored');
+    const runtime = makeRuntime(host, {
+      execute: async (request) => fakeResponse(request),
+    });
+
+    await runtime.ensureWarm();
+
+    expect(launchPage.closed).toBe(false);
+    expect(restoredPage.closed).toBe(true);
+    expect(runtime.status().pageSessions).toMatchObject([{
+      ownerKind: 'health_probe',
+      playwrightPageId: 'pw-launch',
+      state: 'open',
+    }]);
+    await runtime.healthProbe({
+      expectedMemberId: 'member-1',
+      probeRevision: 'probe-v1',
+    });
+    expect(host.probedPages).toEqual([launchPage]);
+    expect(launchPage.closed).toBe(false);
+    expect(runtime.status().pageSessions).toMatchObject([{
+      ownerKind: 'health_probe',
+      playwrightPageId: 'pw-launch',
+      state: 'open',
+    }]);
+    await runtime.healthProbe({
+      expectedMemberId: 'member-1',
+      probeRevision: 'probe-v2',
+    });
+    expect(host.probedPages).toEqual([launchPage, launchPage]);
+    expect(host.createCount).toBe(0);
+
+    const drained = await runtime.drain({
+      reason: 'test_shutdown',
+      deadlineAt: new Date(now.getTime() + 1_000).toISOString(),
+      cancelInFlight: false,
+    });
+    expect(drained).toMatchObject({ clean: true, activePageCount: 0 });
+    expect(launchPage.closed).toBe(true);
   });
 
   it('rejects stale Supervisor generation before Page creation', async () => {
