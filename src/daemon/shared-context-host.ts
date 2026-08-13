@@ -18,6 +18,7 @@ import type {
 import type { ManagedPage } from './page-registry.js';
 
 const IDENTITY_PROBE_URL = 'https://myalibaba.1688.com/';
+const PROFILE_IDENTITY_DISCOVERY = '__vs1_profile_identity_discovery__';
 
 export interface SharedPersistentContextHostOptions {
   profileId: string;
@@ -142,8 +143,10 @@ export class SharedPersistentContextHost implements PersistentContextHost {
           : 'normal';
     const observedMemberId = identity?.memberId ?? null;
     const probedAt = this.now().toISOString();
+    const discovering = input.expectedMemberId === PROFILE_IDENTITY_DISCOVERY;
     const passed = pageState === 'normal'
-      && observedMemberId === input.expectedMemberId;
+      && observedMemberId !== null
+      && (discovering || observedMemberId === input.expectedMemberId);
     return {
       probeReceiptId: `probe-${this.idFactory()}`,
       probeRevision: input.probeRevision,

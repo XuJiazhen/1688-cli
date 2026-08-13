@@ -25,7 +25,15 @@ const LAUNCH_OPTS = {
   viewport: { width: 1440, height: 900 },
   locale: 'zh-CN',
   timezoneId: 'Asia/Shanghai',
+  chromiumSandbox: chromiumSandboxEnabled(),
 };
+
+function chromiumSandboxEnabled(): boolean {
+  const configured = process.env.BB1688_CHROMIUM_SANDBOX;
+  if (configured === '1') return true;
+  if (configured === '0' || configured === undefined) return false;
+  throw new TypeError('BB1688_CHROMIUM_SANDBOX must be 0 or 1.');
+}
 
 let sharedCtx: BrowserContext | null = null;
 let lockRelease: (() => Promise<void>) | null = null;
