@@ -202,9 +202,10 @@ describe('ProductionCollectionRuntime', () => {
     expect(first.data.resource.artifactBytes).toBeGreaterThan(0);
     expect(first.data.resource.rssSampleCount).toBeGreaterThan(0);
     expect(first.data.timing).toMatchObject({
-      schemaVersion: 'production-collection-source-timing.v1',
+      schemaVersion: 'production-collection-source-timing.v2',
       clock: 'playwright-request-and-daemon-monotonic-wall.v1',
       coverage: 'full',
+      canonicalRequest: 'observed',
     });
     expect(first.data.timing.remoteActionStartedAt)
       .toBe(new Date(nativeTimingStart).toISOString());
@@ -264,7 +265,10 @@ describe('ProductionCollectionRuntime', () => {
     expect(response.ok).toBe(true);
     if (!response.ok || response.data === null) throw new Error('missing failed batch receipt');
     expect(response.data.timing).toMatchObject({
-      coverage: 'partial',
+      schemaVersion: 'production-collection-source-timing.v2',
+      coverage: 'missing',
+      canonicalRequest: 'unobserved',
+      remoteActionStartedAt: null,
       firstSourceByteAt: null,
     });
     expect(response.data.batch).toMatchObject({
@@ -272,6 +276,53 @@ describe('ProductionCollectionRuntime', () => {
       errors: [{ code: 'OFFER_DETAIL_REJECTED', retryable: true }],
     });
   });
+
+  it.each([
+    ['failed', false], ['failed', true],
+    ['partial', false], ['partial', true],
+    ['blocked', false], ['blocked', true],
+  ] as const)(
+    'records %s timing without inventing canonical evidence (observed=%s)',
+    async (status, observed) => {
+      const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
+      directories.push(artifactDirectory);
+      const context = new FakeContext();
+      const execute = vi.fn(async (): Promise<CollectionBatch> => {
+        if (observed) {
+          const page = new FakePage();
+          context.emit('page', page as unknown as Page);
+          context.emit('request', new FakeRequest(
+            page,canonicalSearchUrl(),Date.now()-10,0,
+          ) as unknown as Request);
+          await page.close();
+        }
+        return { ...batch(), status };
+      });
+      const runtime = new ProductionCollectionRuntime({
+        ...runtimeOwner(),artifactDirectory,runCollection: execute,
+        runWithContext: (operation) => operation(context as unknown as BrowserContext),
+      });
+      const executeRequest = parseProductionCollectionRpcRequestV1(request());
+
+      const response = await runtime.handle(executeRequest);
+
+      expect(response.ok).toBe(true);
+      if (!response.ok || response.data === null) throw new Error('missing terminal receipt');
+      expect(response.data.timing).toMatchObject(observed ? {
+        schemaVersion: 'production-collection-source-timing.v2',
+        coverage: 'partial',canonicalRequest: 'observed',firstSourceByteAt: null,
+      } : {
+        schemaVersion: 'production-collection-source-timing.v2',
+        coverage: 'missing',canonicalRequest: 'unobserved',
+        remoteActionStartedAt: null,firstSourceByteAt: null,
+      });
+      expect(response.data.batch).toMatchObject({ status });
+      await expect(runtime.handle(executeRequest)).resolves.toMatchObject({
+        ok: true,data: { timing: response.data.timing },
+      });
+      expect(execute).toHaveBeenCalledTimes(1);
+    },
+  );
 });
 
 const ATTEMPT_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';

@@ -89,6 +89,21 @@ export interface ProductionCollectionSourceTimingReceiptV1 {
   rawArchiveCommittedAt: string;
 }
 
+export interface ProductionCollectionSourceTimingReceiptV2 {
+  schemaVersion: 'production-collection-source-timing.v2';
+  clock: 'playwright-request-and-daemon-monotonic-wall.v1';
+  coverage: 'missing' | 'partial' | 'full';
+  canonicalRequest: 'unobserved' | 'observed';
+  remoteActionStartedAt: string | null;
+  firstSourceByteAt: string | null;
+  sourcePayloadCompleteAt: string;
+  rawArchiveCommittedAt: string;
+}
+
+export type ProductionCollectionSourceTimingReceipt =
+  | ProductionCollectionSourceTimingReceiptV1
+  | ProductionCollectionSourceTimingReceiptV2;
+
 export interface ProductionCollectionExecutionReceiptV3 {
   requestHash: string;
   attemptId: string;
@@ -111,7 +126,7 @@ export interface ProductionCollectionExecutionReceiptV3 {
   batch: Record<string, unknown>;
   cleanup: ProductionCollectionCleanupReceiptV1;
   resource: ProductionCollectionResourceReceiptV1;
-  timing: ProductionCollectionSourceTimingReceiptV1;
+  timing: ProductionCollectionSourceTimingReceipt;
 }
 
 export type ProductionCollectionRpcResponseV3 =

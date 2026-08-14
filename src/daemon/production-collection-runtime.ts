@@ -45,7 +45,8 @@ import {
   productionCollectionRpcFailureV1,
   type ProductionCollectionExecutionReceiptV3,
   type ProductionCollectionResourceReceiptV1,
-  type ProductionCollectionSourceTimingReceiptV1,
+  type ProductionCollectionSourceTimingReceipt,
+  type ProductionCollectionSourceTimingReceiptV2,
   type ProductionCollectionRpcRequestV1,
   type ProductionCollectionRpcResponseV3,
 } from './production-collection-protocol.js';
@@ -316,30 +317,32 @@ export class ProductionCollectionRuntime {
       const rawArtifactHash = createHash('sha256').update(serialized, 'utf8').digest('hex');
       const artifactPath = path.join(this.batchDirectory, `${rawArtifactHash}.json`);
       await writeAtomic(artifactPath, serialized);
-      const rawArchiveCommittedAt = notEarlierThan(
-        eventNow(),
-        sourceTiming.sourcePayloadCompleteAt,
-      );
-      const completedAt = notEarlierThan(eventNow(), rawArchiveCommittedAt);
-      if (batch.status !== 'completed' && sourceTiming.remoteActionStartedAt === null) {
-        // Preserve the collector's terminal failure instead of masking it when the
-        // source rejected the operation before a canonical request was observable.
-        sourceTiming.remoteActionStartedAt = startedAt;
-      }
       if (
-        sourceTiming.remoteActionStartedAt === null
-        || sourceTiming.sourcePayloadCompleteAt === null
+        batch.status === 'completed'
+        && (sourceTiming.remoteActionStartedAt === null
+          || sourceTiming.sourcePayloadCompleteAt === null)
       ) {
         throw new ProductionCollectionProtocolError(
           'PRODUCTION_COLLECTION_SOURCE_TIMING_INCOMPLETE',
           'Canonical source action timing was not observed.',
         );
       }
+      if (sourceTiming.sourcePayloadCompleteAt === null) {
+        sourceTiming.sourcePayloadCompleteAt = eventNow();
+      }
+      const rawArchiveCommittedAt = notEarlierThan(
+        eventNow(),
+        sourceTiming.sourcePayloadCompleteAt,
+      );
+      const completedAt = notEarlierThan(eventNow(), rawArchiveCommittedAt);
       const resource = resources.finish(Buffer.byteLength(serialized, 'utf8'), network);
-      const timing: ProductionCollectionSourceTimingReceiptV1 = {
-        schemaVersion: 'production-collection-source-timing.v1',
+      const timing: ProductionCollectionSourceTimingReceiptV2 = {
+        schemaVersion: 'production-collection-source-timing.v2',
         clock: 'playwright-request-and-daemon-monotonic-wall.v1',
-        coverage: sourceTiming.firstSourceByteAt === null ? 'partial' : 'full',
+        coverage: sourceTiming.remoteActionStartedAt === null
+          ? 'missing'
+          : sourceTiming.firstSourceByteAt === null ? 'partial' : 'full',
+        canonicalRequest: sourceTiming.remoteActionStartedAt === null ? 'unobserved' : 'observed',
         remoteActionStartedAt: sourceTiming.remoteActionStartedAt,
         firstSourceByteAt: sourceTiming.firstSourceByteAt,
         sourcePayloadCompleteAt: sourceTiming.sourcePayloadCompleteAt,
@@ -853,28 +856,41 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV3
 function isValidSourceTimingReceipt(
   value: unknown,
   completedAt: string,
-): value is ProductionCollectionSourceTimingReceiptV1 {
+): value is ProductionCollectionSourceTimingReceipt {
   if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
   const timing = value as Record<string, unknown>;
+  if (timing['clock'] !== 'playwright-request-and-daemon-monotonic-wall.v1') return false;
+  const version = timing['schemaVersion'];
+  const coverage = timing['coverage'];
   if (
-    timing['schemaVersion'] !== 'production-collection-source-timing.v1'
-    || timing['clock'] !== 'playwright-request-and-daemon-monotonic-wall.v1'
-    || !['full', 'partial'].includes(String(timing['coverage']))
+    version !== 'production-collection-source-timing.v1'
+    && version !== 'production-collection-source-timing.v2'
   ) return false;
-  const remote = instantMs(timing['remoteActionStartedAt']);
+  if (version === 'production-collection-source-timing.v1') {
+    if (!['full', 'partial'].includes(String(coverage))) return false;
+  } else if (!['missing', 'full', 'partial'].includes(String(coverage))) return false;
+  const remote = timing['remoteActionStartedAt'] === null
+    ? null
+    : instantMs(timing['remoteActionStartedAt']);
   const firstByte = timing['firstSourceByteAt'] === null
     ? null
     : instantMs(timing['firstSourceByteAt']);
   const payloadComplete = instantMs(timing['sourcePayloadCompleteAt']);
   const archiveCommitted = instantMs(timing['rawArchiveCommittedAt']);
   const completed = instantMs(completedAt);
-  if ([remote, payloadComplete, archiveCommitted, completed].some((item) => item === null)) {
+  if ([payloadComplete, archiveCommitted, completed].some((item) => item === null)) {
     return false;
   }
-  if (timing['coverage'] === 'full' && firstByte === null) return false;
-  if (timing['coverage'] === 'partial' && firstByte !== null) return false;
-  return remote! <= (firstByte ?? payloadComplete!)
-    && (firstByte ?? remote!) <= payloadComplete!
+  if (version === 'production-collection-source-timing.v1' && remote === null) return false;
+  if (coverage === 'full' && (remote === null || firstByte === null)) return false;
+  if (coverage === 'partial' && (remote === null || firstByte !== null)) return false;
+  if (coverage === 'missing' && (remote !== null || firstByte !== null)) return false;
+  if (version === 'production-collection-source-timing.v2') {
+    if ((coverage === 'missing') !== (timing['canonicalRequest'] === 'unobserved')) return false;
+    if ((coverage !== 'missing') !== (timing['canonicalRequest'] === 'observed')) return false;
+  }
+  return (remote === null || remote <= (firstByte ?? payloadComplete!))
+    && (firstByte ?? remote ?? payloadComplete!) <= payloadComplete!
     && payloadComplete! <= archiveCommitted!
     && archiveCommitted! <= completed!;
 }
