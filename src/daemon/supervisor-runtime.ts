@@ -435,7 +435,7 @@ export class ProfileDaemonRuntime {
       'cleanupGraceMs',
     );
     this.interventionTransferGraceMs = positiveInteger(
-      options.interventionTransferGraceMs ?? 60_000,
+      options.interventionTransferGraceMs ?? 30 * 60_000,
       'interventionTransferGraceMs',
     );
     this.registry = this.newRegistry();
