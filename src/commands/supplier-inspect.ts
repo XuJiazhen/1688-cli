@@ -295,7 +295,15 @@ async function inspectStoreQualification(
     info(`Inspecting registered business scope ${memberId}...`);
     const result = await captureSupplierQualificationForAction(
       page,
-      { memberId, timeoutMs: 15_000 },
+      {
+        memberId,
+        timeoutMs: 15_000,
+        onRiskChallenge: async (challengeUrl) => {
+          if (!headed) return;
+          await page.goto(challengeUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+          await waitForCollectionPageAvailability(page, { headed: true });
+        },
+      },
       async () => {
         await goto1688(page, shopUrl, 'supplier shop', headed);
         await requestSupplierQualificationFromPage(page, memberId);

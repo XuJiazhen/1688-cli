@@ -511,7 +511,15 @@ async function collectQualificationUnit(
     );
     let capture = await captureSupplierQualificationForAction(
       page,
-      { memberId, timeoutMs: 15_000 },
+      {
+        memberId,
+        timeoutMs: 15_000,
+        onRiskChallenge: async (challengeUrl) => {
+          if (!headed) return;
+          await page.goto(challengeUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+          await waitForCollectionPageAvailability(page, { headed: true });
+        },
+      },
       () => requestSupplierQualificationFromPage(page, memberId),
     );
     if (!capture.qualification) {

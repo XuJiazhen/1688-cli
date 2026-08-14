@@ -25,6 +25,7 @@ export interface SupplierQualificationCaptureOptions {
   memberId?: string;
   timeoutMs?: number;
   onRawResponse?: (rawResponseText: string) => Promise<void>;
+  onRiskChallenge?: (challengeUrl: string) => Promise<void>;
 }
 
 export interface SupplierQualificationRuntimeOptions {
@@ -318,6 +319,7 @@ export async function captureSupplierQualificationForAction<TResult>(
   action: () => Promise<TResult>,
 ): Promise<SupplierQualificationCaptureResult<TResult>> {
   let riskControlDetected = false;
+  let riskChallengeUrl: string | undefined;
   const capture = startResponseCapture<{
     qualification: SupplierQualification;
     sanitizedRawPayload: unknown;
@@ -345,6 +347,7 @@ export async function captureSupplierQualificationForAction<TResult>(
         throw error;
       }
       riskControlDetected ||= qualificationResponseSignalsRiskControl(rawPayload);
+      riskChallengeUrl ??= supplierQualificationRiskChallengeUrl(rawPayload);
       await options.onRawResponse?.(rawResponseText);
       return {
         qualification: mapSupplierQualificationPayload(
@@ -359,10 +362,16 @@ export async function captureSupplierQualificationForAction<TResult>(
   try {
     result = await capture.waitForAction(action);
   } catch (error) {
-    if (riskControlDetected) throw qualificationRiskControlError();
+    if (riskControlDetected) {
+      await deliverRiskChallenge(options, riskChallengeUrl);
+      throw qualificationRiskControlError();
+    }
     throw error;
   }
-  if (riskControlDetected) throw qualificationRiskControlError();
+  if (riskControlDetected) {
+    await deliverRiskChallenge(options, riskChallengeUrl);
+    throw qualificationRiskControlError();
+  }
   return {
     actionResult: result.actionResult,
     qualification: result.response?.qualification ?? null,
@@ -391,6 +400,33 @@ function qualificationResponseSignalsRiskControl(value: unknown): boolean {
   const challengeUrl = (data as Record<string, unknown>).url;
   return typeof challengeUrl === 'string'
     && /(?:punish|x5secdata|captcha|nocaptcha)/iu.test(challengeUrl);
+}
+
+export function supplierQualificationRiskChallengeUrl(value: unknown): string | undefined {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return undefined;
+  const data = (value as Record<string, unknown>).data;
+  if (data === null || typeof data !== 'object' || Array.isArray(data)) return undefined;
+  const rawUrl = (data as Record<string, unknown>).url;
+  if (typeof rawUrl !== 'string') return undefined;
+  try {
+    const url = new URL(rawUrl);
+    if (url.protocol !== 'https:') return undefined;
+    if (!/(^|\.)(?:1688\.com|taobao\.com|tmall\.com|alibaba\.com)$/iu.test(url.hostname)) {
+      return undefined;
+    }
+    return url.href;
+  } catch {
+    return undefined;
+  }
+}
+
+async function deliverRiskChallenge(
+  options: SupplierQualificationCaptureOptions,
+  challengeUrl: string | undefined,
+): Promise<void> {
+  if (challengeUrl !== undefined && options.onRiskChallenge !== undefined) {
+    await options.onRiskChallenge(challengeUrl);
+  }
 }
 
 function qualificationRiskControlError(): CliError {

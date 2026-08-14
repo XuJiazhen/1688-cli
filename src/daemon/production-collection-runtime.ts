@@ -208,7 +208,10 @@ export class ProductionCollectionRuntime {
           try {
             batch = await (this.options.runCollection?.(context, request)
               ?? runProductionCollection(context, request, this.options.artifactDirectory));
-            sourceTiming.sourcePayloadCompleteAt = eventNow();
+            sourceTiming.sourcePayloadCompleteAt = notEarlierThan(
+              eventNow(),
+              sourceTiming.firstSourceByteAt,
+            );
           } finally {
             context.off('page', onPage);
             context.off('request', onRequest);
@@ -278,8 +281,11 @@ export class ProductionCollectionRuntime {
       const rawArtifactHash = createHash('sha256').update(serialized, 'utf8').digest('hex');
       const artifactPath = path.join(this.batchDirectory, `${rawArtifactHash}.json`);
       await writeAtomic(artifactPath, serialized);
-      const rawArchiveCommittedAt = eventNow();
-      const completedAt = eventNow();
+      const rawArchiveCommittedAt = notEarlierThan(
+        eventNow(),
+        sourceTiming.sourcePayloadCompleteAt,
+      );
+      const completedAt = notEarlierThan(eventNow(), rawArchiveCommittedAt);
       if (
         sourceTiming.remoteActionStartedAt === null
         || sourceTiming.sourcePayloadCompleteAt === null
@@ -524,6 +530,10 @@ async function runProductionQualification(
             artifactDirectory,
             payload,
           ));
+        },
+        onRiskChallenge: async (challengeUrl) => {
+          await page.goto(challengeUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+          await waitForCollectionPageAvailability(page, { headed: true });
         },
       },
       () => requestSupplierQualificationFromPage(page, memberId),
@@ -951,6 +961,11 @@ function earlierInstant(current: string | null, candidateMs: number): string {
     return new Date(candidateMs).toISOString();
   }
   return current;
+}
+
+function notEarlierThan(observed: string, lowerBound: string | null): string {
+  if (lowerBound !== null && Date.parse(observed) < Date.parse(lowerBound)) return lowerBound;
+  return observed;
 }
 
 function parseDeclaredContentLength(value: string | undefined): number | null {

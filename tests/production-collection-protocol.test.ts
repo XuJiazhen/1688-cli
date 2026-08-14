@@ -28,6 +28,7 @@ describe('production collection protocol', () => {
     const parsed = parseProductionCollectionRpcRequestV1(request());
     expect(parsed.workInput.maxSearchPages).toBe(0);
     expect(parsed.workInput.maxCandidates).toBe(5);
+    expect(parsed.workInput.candidatesPerPage).toBe(5);
     expect(productionCollectionRequestHashV1(parsed)).toMatch(/^[0-9a-f]{64}$/);
     expect(() => parseProductionCollectionRpcRequestV1({
       ...request(),
@@ -44,6 +45,7 @@ describe('production collection protocol', () => {
         page: 3,
         maxSearchPages: 2,
         maxCandidates: 5,
+        candidatesPerPage: 5,
       },
     })).toThrow(/cannot exceed/);
   });
@@ -57,6 +59,7 @@ describe('production collection protocol', () => {
         page: 1,
         maxSearchPages: 1,
         maxCandidates: 501,
+        candidatesPerPage: 5,
       },
     })).toThrow(/cannot exceed 500/);
   });
@@ -131,7 +134,9 @@ describe('ProductionCollectionRuntime', () => {
     const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'collection-runtime-'));
     directories.push(artifactDirectory);
     const context = new FakeContext();
-    const nativeTimingStart = Date.now() - 20;
+    // Playwright's native epoch clock may lead the daemon's monotonic wall
+    // anchor by a few milliseconds. The receipt must still preserve causality.
+    const nativeTimingStart = Date.now() + 20;
     const execute = vi.fn(async (): Promise<CollectionBatch> => {
       const page = new FakePage();
       context.emit('page', page as unknown as Page);
@@ -241,6 +246,7 @@ function request(
           page: 1,
           maxSearchPages: 0,
           maxCandidates: 5,
+          candidatesPerPage: 5,
         }
       : {
           kind: 'store_pages',

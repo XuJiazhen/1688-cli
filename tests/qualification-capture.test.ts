@@ -142,11 +142,15 @@ describe('captureSupplierQualificationForAction', () => {
     });
   });
 
-  it('turns a correlated validation response into a non-retryable risk stop', async () => {
+  it('delivers an allowlisted correlated challenge before the risk stop', async () => {
     const page = new MockPage() as Page & MockPage;
+    const delivered: string[] = [];
     await expect(captureSupplierQualificationForAction(
       page,
-      { memberId: 'b2b-target', timeoutMs: 50 },
+      {
+        memberId: 'b2b-target',timeoutMs: 50,
+        onRiskChallenge: async (challengeUrl) => { delivered.push(challengeUrl); },
+      },
       async () => {
         page.emit('response', response(url('b2b-target'), {
           ret: ['FAIL_SYS_USER_VALIDATE', 'RGV587_ERROR::SM'],
@@ -167,7 +171,31 @@ describe('captureSupplierQualificationForAction', () => {
         recoveryAction: 'pause_for_manual_challenge',
       }),
     });
+    expect(delivered).toEqual([
+      'https://h5api.m.taobao.com/punish?x5secdata=must-not-escape',
+    ]);
     expect(page.listenerCount('response')).toBe(0);
+  });
+
+  it('never delivers a non-Alibaba challenge URL', async () => {
+    const page = new MockPage() as Page & MockPage;
+    const delivered: string[] = [];
+    await expect(captureSupplierQualificationForAction(
+      page,
+      {
+        memberId: 'b2b-target',timeoutMs: 50,
+        onRiskChallenge: async (challengeUrl) => { delivered.push(challengeUrl); },
+      },
+      async () => {
+        page.emit('response', response(url('b2b-target'), {
+          ret: ['FAIL_SYS_USER_VALIDATE'],
+          data: { url: 'https://evil.example/punish?cookie=secret' },
+        }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        throw new Error('The page runtime rejected the request.');
+      },
+    )).rejects.toMatchObject({ code: 'RISK_CONTROL' });
+    expect(delivered).toEqual([]);
   });
 
   it('preserves the risk stop when raw archive persistence also fails', async () => {
