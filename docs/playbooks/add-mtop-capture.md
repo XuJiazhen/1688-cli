@@ -29,6 +29,6 @@ For a page-Runtime request:
 7. Record counts, durations, parser version, hashed scope, and terminal code.
    Redact URLs and never write replayable request material.
 
-Runtime/DOM fallback must be explicit. A successful Runtime request cannot be
-followed by DOM actions. Deterministic schema, scope, and control failures are
-not fallback candidates.
+Each production fact has one canonical capture path. A Runtime request cannot
+be followed by DOM actions, and deterministic schema, scope, or control
+failures must remain terminal for that attempt.

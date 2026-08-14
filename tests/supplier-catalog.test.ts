@@ -19,12 +19,8 @@ vi.mock('../src/commands/supplier-inspect.js', () => ({
 
 import {
   buildStoreCatalogUrl,
-  catalogSortInteraction,
   createPlaywrightCatalogAdapter,
-  findCatalogCategoryName,
-  normalizeCatalogTransport,
   normalizeCatalogTarget,
-  planCatalogNavigation,
   resolveCatalogSupplier,
   supplierInspectionTarget,
 } from '../src/commands/supplier-catalog.js';
@@ -364,18 +360,6 @@ describe('supplier catalog command helpers', () => {
     expect(scoped.searchParams.get('charset')).toBe('utf8');
   });
 
-  it('replays earlier UI pages before collecting a resumed page in a fresh browser', () => {
-    expect(planCatalogNavigation(1, false)).toEqual(['goto']);
-    expect(planCatalogNavigation(2, false)).toEqual(['goto', 'next:2']);
-    expect(planCatalogNavigation(4, false)).toEqual([
-      'goto',
-      'next:2',
-      'next:3',
-      'next:4',
-    ]);
-    expect(planCatalogNavigation(4, true)).toEqual(['next:4']);
-  });
-
   it('collects a resumed page with one Runtime request and no DOM replay', async () => {
     const mockPage = new RuntimeCatalogPage();
     const adapter = createPlaywrightCatalogAdapter(
@@ -385,7 +369,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       false,
-      'runtime',
     );
 
     const parsed = await adapter.collectPage({
@@ -429,7 +412,7 @@ describe('supplier catalog command helpers', () => {
     ['scope-mismatch', 'CATALOG_RESPONSE_SCOPE_MISMATCH'],
     ['schema-changed', 'CATALOG_RESPONSE_SCHEMA_CHANGED'],
   ] as const)(
-    'classifies a %s Runtime response without DOM fallback',
+    'classifies a %s Runtime response without an alternate collector',
     async (responseMode, code) => {
       const mockPage = new RuntimeCatalogPage(responseMode);
       const adapter = createPlaywrightCatalogAdapter(
@@ -439,7 +422,6 @@ describe('supplier catalog command helpers', () => {
           memberId: 'b2b-fixture-ordinary',
         },
         false,
-        'runtime',
         { responseMs: 100 },
       );
 
@@ -468,7 +450,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       false,
-      'runtime',
       { responseMs: 50 },
     );
 
@@ -504,7 +485,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       true,
-      'runtime',
       { runtimeRequestMs: 500, responseMs: 500 },
     );
 
@@ -539,7 +519,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       true,
-      'auto',
       { responseMs: 500 },
     );
 
@@ -575,7 +554,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       false,
-      'runtime',
       { responseMs: 5 },
     );
 
@@ -602,7 +580,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       false,
-      'runtime',
       { runtimeRequestMs: 500, responseMs: 500 },
     );
 
@@ -629,7 +606,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       false,
-      'runtime',
       { runtimeRequestMs: 500, responseMs: 500 },
     );
 
@@ -680,7 +656,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       false,
-      'runtime',
       { responseMs: 500 },
     );
 
@@ -705,44 +680,6 @@ describe('supplier catalog command helpers', () => {
     );
   });
 
-  it('falls back to DOM only when auto mode explicitly allows it', async () => {
-    const mockPage = new RuntimeCatalogPage('exact', false);
-    const adapter = createPlaywrightCatalogAdapter(
-      mockPage as unknown as Page,
-      {
-        shopUrl: 'https://shop-example.1688.com/',
-        memberId: 'b2b-fixture-ordinary',
-      },
-      false,
-      'auto',
-      { runtimeReadyMs: 5, responseMs: 20 },
-    );
-
-    const parsed = await adapter.collectPage({
-      kind: 'store-catalog',
-      page: 1,
-      pageSize: 30,
-      memberId: 'b2b-fixture-ordinary',
-      sort: 'wangpu_score',
-    });
-
-    expect(mockPage.runtimeRequests).toEqual([]);
-    expect(mockPage.navigations).toEqual([
-      'https://shop-example.1688.com/',
-      'https://shop-example.1688.com/',
-      'https://shop-example.1688.com/page/offerlist.html?sortType=wangpu_score&charset=utf8',
-    ]);
-    expect(parsed.warnings).toContainEqual(
-      expect.objectContaining({
-        code: 'CATALOG_DOM_FALLBACK',
-      }),
-    );
-    expect(adapter.diagnosticsForPage?.(1)).toMatchObject({
-      transport: 'dom',
-      fallbackReason: 'CATALOG_MTOP_RUNTIME_UNAVAILABLE',
-    });
-  });
-
   it('rebuilds the loaded page once before explicit Runtime mode fails', async () => {
     const mockPage = new RuntimeCatalogPage('exact', false);
     const adapter = createPlaywrightCatalogAdapter(
@@ -752,7 +689,6 @@ describe('supplier catalog command helpers', () => {
         memberId: 'b2b-fixture-ordinary',
       },
       false,
-      'runtime',
       { runtimeReadyMs: 5 },
     );
 
@@ -777,44 +713,4 @@ describe('supplier catalog command helpers', () => {
     });
   });
 
-  it('validates the explicit catalog transport mode', () => {
-    expect(normalizeCatalogTransport(undefined)).toBe('auto');
-    expect(normalizeCatalogTransport('RUNTIME')).toBe('runtime');
-    expect(normalizeCatalogTransport('dom')).toBe('dom');
-    expect(() => normalizeCatalogTransport('other')).toThrow(
-      /runtime, dom, or auto/,
-    );
-  });
-
-  it('maps stable sort values and category ids to page interactions', () => {
-    expect(catalogSortInteraction(undefined)).toEqual({ label: null, clicks: 0 });
-    expect(catalogSortInteraction('wangpu_score')).toEqual({ label: null, clicks: 0 });
-    expect(catalogSortInteraction('tradenumdown')).toEqual({ label: '销量', clicks: 1 });
-    expect(catalogSortInteraction('pricedown')).toEqual({ label: '价格', clicks: 1 });
-    expect(catalogSortInteraction('priceup')).toEqual({ label: '价格', clicks: 2 });
-    expect(() => catalogSortInteraction('unknown-sort')).toThrow(/sortType/i);
-
-    expect(
-      findCatalogCategoryName(
-        [
-          {
-            id: 'root',
-            name: '工具',
-            fullName: null,
-            count: 2,
-            children: [
-              {
-                id: 'category-1',
-                name: '电圆锯',
-                fullName: null,
-                count: 2,
-                children: [],
-              },
-            ],
-          },
-        ],
-        'category-1',
-      ),
-    ).toBe('电圆锯');
-  });
 });

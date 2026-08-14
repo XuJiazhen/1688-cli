@@ -966,13 +966,12 @@ type CatalogPageDiagnostics = {
   parserVersion: string,
   memberScopeHash?: string,
   runtimeResultStatus?: "parsed" | "unrecognized" | "pending" | "rejected",
-  fallbackReason?: string,
 }
 ```
 
 Batch metrics aggregate these values as `catalogRuntimePages`,
 `catalogDomPages`, `catalogRequestCount`, `catalogRuntimeReadyMs`,
-`catalogResponseWaitMs`, `catalogParseMs`, and `catalogFallbackPages`.
+`catalogResponseWaitMs`, and `catalogParseMs`.
 Hashes are one-way diagnostic scopes; raw member credentials, MTOP tokens,
 signatures, request bodies, and headers are excluded.
 
@@ -980,13 +979,12 @@ Catalog and bounded response failures use stable scheduler-facing codes:
 
 | Code | Category / retry default |
 |---|---|
-| `CATALOG_MTOP_RUNTIME_UNAVAILABLE` | process / retryable; `auto` may rebuild then use DOM |
+| `CATALOG_MTOP_RUNTIME_UNAVAILABLE` | process / retryable; may rebuild once and retry the same Runtime request |
 | `CATALOG_REQUEST_INVALID` | contract / non-retryable |
 | `CATALOG_REQUEST_REJECTED` | process / retryable only when `details.retryable=true` |
 | `CATALOG_RESPONSE_TIMEOUT` | timeout / retryable |
 | `CATALOG_RESPONSE_SCOPE_MISMATCH` | protocol / non-retryable |
 | `CATALOG_RESPONSE_SCHEMA_CHANGED` | protocol / non-retryable |
-| `CATALOG_DOM_CONTROL_MISSING` | protocol / non-retryable |
 | `STORE_PROFILE_SHOP_URL_MISSING` | input/source / non-retryable |
 | `STORE_PROFILE_MEMBER_ID_MISSING` | input/source / non-retryable |
 | `STORE_PROFILE_RESPONSE_TIMEOUT` | timeout / retryable |
@@ -997,10 +995,7 @@ Catalog and bounded response failures use stable scheduler-facing codes:
 | `QUALIFICATION_MTOP_RUNTIME_UNAVAILABLE` | process / retryable |
 | `QUALIFICATION_REQUEST_REJECTED` | process / retryable |
 
-`CATALOG_DOM_CONTROL_MISSING` retains
-`details.legacyCode="CATALOG_NEXT_PAGE_MISSING"` for diagnostic migration.
-The legacy `OFFER_SKU_CAPTURE_INCOMPLETE` remains recognized by adapters, but
-new timeout results use `OFFER_SKU_RESPONSE_TIMEOUT`.
+Offer SKU timeouts use only `OFFER_SKU_RESPONSE_TIMEOUT`.
 
 Kind-specific observations are additive records inside the common batch:
 
@@ -1045,8 +1040,7 @@ checkpoint and complete-result file. Stdin accepts either the legacy naked
 1688 collect @unit.json --checkpoint @checkpoint.json --output batch.json --json
 cat unit.json | 1688 collect - --json
 cat collect-envelope.json | 1688 collect - --json
-cat collect-envelope.json | 1688 collect - --catalog-transport runtime \
-  --request-id worker-attempt-42 --json
+cat collect-envelope.json | 1688 collect - --request-id worker-attempt-42 --json
 ```
 
 ```ts
@@ -1061,8 +1055,8 @@ remains compatible, including when the unit itself comes from stdin, but a
 checkpoint must not be supplied both in the stdin envelope and through
 `--checkpoint`.
 
-`--catalog-transport runtime|dom|auto` controls only store-catalog transport
-and defaults to `auto`. `--request-id` is optional for human calls and should
+Store catalog offers always use the page-owned MTOP Runtime; there is no
+alternate DOM collector. `--request-id` is optional for human calls and should
 be set by process adapters so terminal errors, CLI events, attempts, and
 archived batches can be joined.
 

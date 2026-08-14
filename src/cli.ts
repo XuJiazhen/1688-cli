@@ -83,7 +83,7 @@ program
   .option('--csv', 'Emit CSV')
   .option('--output <file>', 'Write JSONL/CSV export to a file')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (keywords, opts) => {
     const { run } = await import('./commands/research.js');
     await run({ ...opts, keywords });
@@ -96,7 +96,7 @@ program
   .option('--csv', 'Emit CSV')
   .option('--output <file>', 'Write CSV export to a file')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (offerIds, opts) => {
     const { run } = await import('./commands/compare.js');
     await run({ ...opts, offerIds });
@@ -111,7 +111,7 @@ supplier
   .description('Inspect supplier signals from an offerId or b2b-* memberId')
   .argument('<target>', 'offerId, offer URL, b2b-* memberId, or factory-card URL')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (target, opts) => {
     const { run } = await import('./commands/supplier-inspect.js');
     await run({ ...opts, target });
@@ -129,13 +129,8 @@ supplier
   .option('--max-pages <n>', 'Maximum pages in this batch', '1')
   .option('--max-items <n>', 'Maximum unique offers in this batch')
   .option('--full', 'Request a resumable full scan, still bounded by --max-pages')
-  .option(
-    '--catalog-transport <mode>',
-    'Catalog transport: runtime, dom, or auto',
-    'auto',
-  )
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (target, opts) => {
     const { run } = await import('./commands/supplier-catalog.js');
     await run({ ...opts, target });
@@ -157,7 +152,7 @@ supplier
   .option('--csv', 'Emit CSV')
   .option('--output <file>', 'Write JSONL/CSV export to a file')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (keywords, opts) => {
     const { run } = await import('./commands/supplier-search.js');
     await run({ ...opts, keywords });
@@ -179,7 +174,7 @@ supplier
   .option('--csv', 'Emit CSV')
   .option('--output <file>', 'Write JSONL/CSV export to a file')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (keywords, opts) => {
     const { runResearch } = await import('./commands/supplier-search.js');
     await runResearch({ ...opts, keywords });
@@ -191,7 +186,7 @@ program
   .argument('<imagePathOrUrl>', 'Local file path OR http(s) image URL')
   .option('--max <n>', 'Maximum number of results', '20')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (imagePath, opts) => {
     const { run } = await import('./commands/image-search.js');
     await run({ ...opts, imagePath });
@@ -202,7 +197,7 @@ program
   .description('Show details of one or more 1688 offers')
   .argument('<offerIds...>', 'One or more offer IDs (digits)')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a browser window (fallback for risk control)')
+  .option('--headed', 'Open a browser window for manual risk intervention')
   .option('--pro', 'Deep collect one or more offers through the Profile daemon')
   .action(async (offerIds: string[], opts) => {
     const { run } = await import('./commands/offer.js');
@@ -216,14 +211,9 @@ program
   .option('--checkpoint <value>', 'CollectionCheckpoint JSON or @file')
   .option('--fixture <file>', 'Replay a sanitized fixture without a browser')
   .option('--output <file>', 'Write the complete CollectionBatch JSON to a file')
-  .option(
-    '--catalog-transport <mode>',
-    'Catalog transport: runtime, dom, or auto',
-    'auto',
-  )
   .option('--request-id <id>', 'Correlation ID for collection events')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (unit, opts) => {
     const { run } = await import('./commands/collect.js');
     await run({ ...opts, unit });
@@ -237,7 +227,7 @@ program
   .argument('<offerId>', 'Offer ID (digits)')
   .option('--max <n>', 'Maximum number of similar offers', '20')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (offerId, opts) => {
     const { run } = await import('./commands/similar.js');
     await run({ ...opts, offerId });
@@ -383,7 +373,7 @@ cart
   .command('list')
   .description('List items in your cart')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (opts) => {
     const { run } = await import('./commands/cart-list.js');
     await run(opts);
@@ -394,7 +384,7 @@ program
   .description('Combined order detail + logistics for one orderId')
   .argument('<orderId>', 'Order ID (digits)')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (orderId, opts) => {
     const { runShipped } = await import('./commands/workflows.js');
     await runShipped({ ...opts, orderId });
@@ -406,7 +396,7 @@ program
   .option('--days <n>', 'Threshold in days', '3')
   .option('--limit <n>', 'Max orders to return', '50')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (opts) => {
     const { runStuck } = await import('./commands/workflows.js');
     await runStuck(opts);
@@ -421,7 +411,7 @@ program
   .option('--limit <n>', 'Max flagged orders to return', '50')
   .option('--debug', 'Print logistics status/remark for each candidate')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (opts) => {
     const { runFakeShipped } = await import('./commands/workflows.js');
     await runFakeShipped(opts);
@@ -433,7 +423,7 @@ program
   .argument('<seller>', 'Seller loginId or company name (partial match OK)')
   .option('--max-pages <n>', 'Max order list pages to scan (50/page)', '10')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (seller, opts) => {
     const { runSellerHistory } = await import('./commands/workflows.js');
     await runSellerHistory({ ...opts, seller });
@@ -453,7 +443,7 @@ order
     'Narrow scan to one tradeStatus (waitbuyerreceive, waitsellersend, ...) — faster for heavy accounts',
   )
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (orderId, opts) => {
     const { run } = await import('./commands/order-logistics.js');
     await run({ ...opts, orderId });
@@ -469,7 +459,7 @@ order
     'Narrow scan to one tradeStatus (waitbuyerreceive, ...) — faster for heavy accounts',
   )
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (orderId, opts) => {
     const { run } = await import('./commands/order-get.js');
     await run({ ...opts, orderId });
@@ -486,7 +476,7 @@ order
   .option('--page <n>', 'Page number', '1')
   .option('--page-size <n>', 'Page size (max 50)', '10')
   .option('--profile <name>', 'Profile name (default: default)')
-  .option('--headed', 'Open a window (fallback for risk control)')
+  .option('--headed', 'Open a window for manual risk intervention')
   .action(async (opts) => {
     const { run } = await import('./commands/order-list.js');
     await run(opts);

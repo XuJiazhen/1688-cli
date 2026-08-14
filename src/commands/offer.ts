@@ -1291,7 +1291,6 @@ export function requireSkuSelectorModel(
       failureKind: 'response-timeout',
       recoveryAction: 'retry-later',
       retryable: true,
-      legacyCode: 'OFFER_SKU_CAPTURE_INCOMPLETE',
       matchedCount: diagnostics.matchedCount,
       parsedCount: diagnostics.parsedCount,
       emptyResultCount: diagnostics.emptyResultCount,

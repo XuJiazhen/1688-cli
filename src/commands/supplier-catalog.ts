@@ -16,12 +16,10 @@ import {
   STORE_CATEGORIES_COMPONENT_KEY,
   STORE_CATALOG_PARSER_VERSION,
   parseStoreCatalogModule,
-  readAlisiteModuleRequestMeta,
   startAlisiteModuleCapture,
   type AlisiteModuleCaptureTarget,
   type AlisiteModuleCaptureDiagnostics,
   type CapturedAlisiteModule,
-  type StoreCatalogCategory,
   type StoreCatalogParseResult,
 } from '../session/alisite-module.js';
 import {
@@ -32,7 +30,6 @@ import { dispatch } from '../session/dispatch.js';
 import { detectPageState } from '../session/page-state.js';
 import { sanitizeEvidenceRef } from '../session/redaction.js';
 import { waitForCollectionPageAvailability } from '../session/recovery.js';
-import { waitWithDeadline } from '../session/wait.js';
 import {
   execute as inspectSupplier,
   resolveSupplierNavigationFromOffer,
@@ -43,8 +40,6 @@ const DEFAULT_SORT = 'wangpu_score';
 const CATALOG_RUNTIME_READY_TIMEOUT_MS = 15_000;
 const CATALOG_RUNTIME_REQUEST_TIMEOUT_MS = 15_000;
 const CATALOG_RESPONSE_TIMEOUT_MS = 20_000;
-
-export type CatalogTransportMode = 'runtime' | 'dom' | 'auto';
 
 export interface CatalogAdapterDeadlineOptions {
   runtimeReadyMs?: number;
@@ -70,7 +65,6 @@ export interface SupplierCatalogOpts {
   maxPages?: string;
   maxItems?: string;
   full?: boolean;
-  catalogTransport?: string;
   profile?: string;
   headed?: boolean;
 }
@@ -79,7 +73,6 @@ export interface SupplierCatalogArgs {
   unit: CollectionUnit;
   checkpoint?: CollectionCheckpoint;
   headed?: boolean;
-  catalogTransport?: CatalogTransportMode;
 }
 
 export interface ResolvedCatalogSupplier {
@@ -126,7 +119,6 @@ export async function run(opts: SupplierCatalogOpts): Promise<void> {
   const maxPages = positiveInt(opts.maxPages, '--max-pages', 1, 100);
   const pageSize = positiveInt(opts.pageSize, '--page-size', DEFAULT_PAGE_SIZE, 100);
   const maxItems = optionalPositiveInt(opts.maxItems, '--max-items');
-  const catalogTransport = normalizeCatalogTransport(opts.catalogTransport);
   const unit = normalizeCollectionUnit({
     schemaVersion: 1,
     unitId: `supplier-catalog-${Date.now()}`,
@@ -157,7 +149,7 @@ export async function run(opts: SupplierCatalogOpts): Promise<void> {
   });
   const data = await dispatch<SupplierCatalogArgs, CollectionBatch>(
     'supplier-catalog',
-    { unit, headed: opts.headed, catalogTransport },
+    { unit, headed: opts.headed },
     { profile: opts.profile, headed: opts.headed },
   );
   emit({
@@ -187,7 +179,6 @@ export async function execute(
     page,
     resolved,
     args.headed === true,
-    args.catalogTransport ?? 'auto',
   );
   try {
     return await executeCatalogBatch({ unit, checkpoint: args.checkpoint, adapter });
@@ -269,13 +260,11 @@ export function createPlaywrightCatalogAdapter(
   page: Page,
   supplier: ResolvedCatalogSupplier,
   headed = false,
-  transportMode: CatalogTransportMode = 'auto',
   deadlineOptions: CatalogAdapterDeadlineOptions = {},
 ): CatalogPageAdapter {
   const captures = new Map<number, CapturedAlisiteModule>();
   const diagnostics = new Map<number, CatalogPageDiagnostics>();
   const evidence = new Set<string>();
-  let currentCatalogPage: number | null = null;
   let runtimeInitialized = false;
 
   const saveCapture = (
@@ -331,9 +320,8 @@ export function createPlaywrightCatalogAdapter(
         {
           category: 'catalog-runtime',
           failureKind: 'member-scope-unavailable',
-          recoveryAction: 'use-dom-fallback',
+          recoveryAction: 'resolve-member-scope',
           retryable: false,
-          fallbackAllowed: true,
         },
       );
     }
@@ -485,7 +473,6 @@ export function createPlaywrightCatalogAdapter(
         // A navigation at the next page tears down a Runtime evaluate that did
         // not settle after its correlated network response.
         runtimeInitialized = false;
-        currentCatalogPage = null;
       }
       diagnostics.set(request.page, {
         transport: 'runtime',
@@ -533,52 +520,27 @@ export function createPlaywrightCatalogAdapter(
     }
   };
 
-  const collectDomPage = async (
+  const collectCategoriesPage = async (
     request: CatalogPageRequest,
-    fallbackReason?: string,
     allowManualRiskChallenge = true,
   ): Promise<StoreCatalogParseResult> => {
+    if (request.kind !== 'store-categories') {
+      throw new CliError(
+        2,
+        'BAD_INPUT',
+        'Store offer pages require the canonical MTOP runtime collector.',
+      );
+    }
     const expected = captureTarget(request, supplier);
     const capture = startAlisiteModuleCapture({
       page,
-      targets: [expected, ...bootstrapTargets(request, supplier)],
+      targets: [expected],
       ...manualRiskChallengeOptions(allowManualRiskChallenge, request),
     });
     const responseStartedAt = Date.now();
     try {
       const result = await capture.waitForAction(
-        async () => {
-          if (request.kind === 'store-categories') {
-            await gotoStore(page, supplier.shopUrl);
-            return;
-          }
-          const actions = planCatalogNavigation(
-            request.page,
-            currentCatalogPage !== null,
-          );
-          for (const action of actions) {
-            if (action === 'goto') {
-              await gotoStore(
-                page,
-                buildStoreCatalogUrl(supplier.shopUrl, {
-                  categoryId: request.categoryId,
-                  storeKeyword: request.storeKeyword,
-                  sort: request.sort,
-                }),
-              );
-              await applyCatalogScope(page, request, capture);
-              currentCatalogPage = 1;
-              continue;
-            }
-            const targetPage = Number(action.slice('next:'.length));
-            if (targetPage < request.page) {
-              await clickAndWaitForCatalogPage(page, targetPage);
-            } else {
-              await clickCatalogNextPage(page);
-            }
-            currentCatalogPage = targetPage;
-          }
-        },
+        () => gotoStore(page, supplier.shopUrl),
         catalogCaptureWaitOptions(
           page,
           request,
@@ -597,7 +559,6 @@ export function createPlaywrightCatalogAdapter(
         ...(supplier.memberId
           ? { memberScopeHash: hashMemberScope(supplier.memberId) }
           : {}),
-        ...(fallbackReason ? { fallbackReason } : {}),
       });
       const captured = result.captures.find(
         (entry) => entry.targetId === expected.id,
@@ -614,10 +575,7 @@ export function createPlaywrightCatalogAdapter(
           result.captures,
         );
       }
-      const parsed = saveCapture(request.page, captured);
-      return fallbackReason
-        ? withCatalogFallbackWarning(parsed, fallbackReason)
-        : parsed;
+      return saveCapture(request.page, captured);
     } catch (error) {
       if (!diagnostics.has(request.page)) {
         const captureDiagnostics = capture.diagnostics();
@@ -632,7 +590,6 @@ export function createPlaywrightCatalogAdapter(
           ...(supplier.memberId
             ? { memberScopeHash: hashMemberScope(supplier.memberId) }
             : {}),
-          ...(fallbackReason ? { fallbackReason } : {}),
         });
       }
       throw error;
@@ -641,19 +598,17 @@ export function createPlaywrightCatalogAdapter(
     }
   };
 
-  const collectDomWithPageRebuild = async (
+  const collectCategoriesWithPageRebuild = async (
     request: CatalogPageRequest,
-    fallbackReason?: string,
   ): Promise<StoreCatalogParseResult> => {
     try {
-      return await collectDomPage(request, fallbackReason);
+      return await collectCategoriesPage(request);
     } catch (error) {
       if (!(error instanceof CatalogManualRiskChallengeRecoveredError)) {
         throw error;
       }
-      currentCatalogPage = null;
       diagnostics.delete(request.page);
-      return collectDomPage(request, fallbackReason, false);
+      return collectCategoriesPage(request, false);
     }
   };
 
@@ -665,7 +620,6 @@ export function createPlaywrightCatalogAdapter(
     } catch (error) {
       if (error instanceof CatalogManualRiskChallengeRecoveredError) {
         runtimeInitialized = false;
-        currentCatalogPage = null;
         diagnostics.delete(request.page);
         return collectRuntimePage(request, false);
       }
@@ -677,7 +631,6 @@ export function createPlaywrightCatalogAdapter(
         throw error;
       }
       runtimeInitialized = false;
-      currentCatalogPage = null;
       diagnostics.delete(request.page);
       try {
         return await collectRuntimePage(request);
@@ -703,27 +656,9 @@ export function createPlaywrightCatalogAdapter(
 
   return {
     async collectPage(request) {
-      if (request.kind === 'store-categories' || transportMode === 'dom') {
-        return collectDomWithPageRebuild(request);
-      }
-      try {
-        return await collectRuntimeWithPageRebuild(request);
-      } catch (error) {
-        if (
-          transportMode !== 'auto' ||
-          !(error instanceof CliError) ||
-          (
-            error.details.fallbackAllowed !== true
-            && !(
-              error.code === 'CATALOG_MTOP_RUNTIME_UNAVAILABLE'
-              && error.details.failureKind === 'runtime-unavailable'
-            )
-          )
-        ) {
-          throw error;
-        }
-        return collectDomWithPageRebuild(request, error.code);
-      }
+      return request.kind === 'store-categories'
+        ? collectCategoriesWithPageRebuild(request)
+        : collectRuntimeWithPageRebuild(request);
     },
     sourceRefForPage(pageNumber) {
       return captures.get(pageNumber)?.sourceRef;
@@ -742,59 +677,6 @@ class CatalogManualRiskChallengeRecoveredError extends Error {
     super('Catalog manual risk challenge recovered.');
     this.name = 'CatalogManualRiskChallengeRecoveredError';
   }
-}
-
-export function catalogSortInteraction(sort: string | undefined): {
-  label: '销量' | '价格' | null;
-  clicks: number;
-} {
-  switch (sort ?? DEFAULT_SORT) {
-    case DEFAULT_SORT:
-      return { label: null, clicks: 0 };
-    case 'tradenumdown':
-      return { label: '销量', clicks: 1 };
-    case 'pricedown':
-      return { label: '价格', clicks: 1 };
-    case 'priceup':
-      return { label: '价格', clicks: 2 };
-    default:
-      throw new CliError(
-        2,
-        'BAD_INPUT',
-        `Unsupported store sortType: ${sort}. Use wangpu_score, tradenumdown, pricedown, or priceup.`,
-      );
-  }
-}
-
-export function findCatalogCategoryName(
-  categories: StoreCatalogCategory[],
-  categoryId: string,
-): string | null {
-  for (const category of categories) {
-    if (category.id === categoryId) {
-      return category.name ?? category.fullName;
-    }
-    const nested = findCatalogCategoryName(category.children, categoryId);
-    if (nested) return nested;
-  }
-  return null;
-}
-
-export function planCatalogNavigation(
-  requestedPage: number,
-  hasCurrentPage: boolean,
-): string[] {
-  if (!Number.isInteger(requestedPage) || requestedPage < 1) {
-    throw new CliError(2, 'BAD_INPUT', 'Catalog page must be a positive integer.');
-  }
-  if (hasCurrentPage) return [`next:${requestedPage}`];
-  return [
-    'goto',
-    ...Array.from(
-      { length: requestedPage - 1 },
-      (_, index) => `next:${index + 2}`,
-    ),
-  ];
 }
 
 function catalogCaptureWaitOptions(
@@ -822,23 +704,6 @@ function catalogCaptureWaitOptions(
       }
       return state.kind === 'risk_challenge';
     },
-  };
-}
-
-function withCatalogFallbackWarning(
-  parsed: StoreCatalogParseResult,
-  fallbackReason: string,
-): StoreCatalogParseResult {
-  return {
-    ...parsed,
-    warnings: [
-      ...parsed.warnings,
-      {
-        code: 'CATALOG_DOM_FALLBACK',
-        fieldPath: '$transport',
-        message: `Catalog collection used the DOM fallback after ${fallbackReason}.`,
-      },
-    ],
   };
 }
 
@@ -871,246 +736,11 @@ function captureTarget(
   };
 }
 
-function bootstrapTargets(
-  request: CatalogPageRequest,
-  supplier: ResolvedCatalogSupplier,
-): AlisiteModuleCaptureTarget[] {
-  if (request.kind !== 'store-catalog' || !request.categoryId) return [];
-  const memberScope = supplier.memberId
-    ? { memberId: supplier.memberId }
-    : {};
-  return [
-    {
-      id: 'store-category-tree-bootstrap',
-      componentKey: STORE_CATEGORIES_COMPONENT_KEY,
-      request: memberScope,
-      required: false,
-    },
-    {
-      id: 'store-catalog-bootstrap',
-      componentKey: STORE_CATALOG_COMPONENT_KEY,
-      request: {
-        ...memberScope,
-        pageNum: 1,
-        count: request.pageSize ?? DEFAULT_PAGE_SIZE,
-        catId: null,
-        keywords: null,
-        sortType: DEFAULT_SORT,
-      },
-      required: false,
-    },
-  ];
-}
-
-async function applyCatalogScope(
-  page: Page,
-  request: CatalogPageRequest,
-  capture: { captures(): CapturedAlisiteModule[] },
-): Promise<void> {
-  if (request.categoryId) {
-    const categoryName = await waitWithDeadline(
-      async () => {
-        for (const candidate of capture.captures()) {
-          const name = findCatalogCategoryName(
-            candidate.parsed.categories,
-            request.categoryId!,
-          );
-          if (name) return name;
-        }
-        return null;
-      },
-      {
-        timeoutMs: 10_000,
-        intervalMs: 100,
-        onTimeout: () => null,
-      },
-    );
-    if (!categoryName) {
-      throw new CliError(
-        9,
-        'CATALOG_CATEGORY_NOT_FOUND',
-        `Store category ${request.categoryId} was not present in the collected category tree.`,
-      );
-    }
-    const label = page
-      .locator('.first-category label')
-      .filter({ hasText: new RegExp(`^${escapeRegExp(categoryName)}$`) })
-      .first();
-    await catalogActionAndResponse(
-      page,
-      (meta) => meta.catId === request.categoryId,
-      async () => {
-        await label.waitFor({ state: 'visible', timeout: 10_000 });
-        await label.click();
-      },
-      'category filter',
-    );
-  }
-
-  if (request.storeKeyword) {
-    const input = page.locator('input.input-search[placeholder="请输入商品名称"]');
-    await catalogActionAndResponse(
-      page,
-      (meta) =>
-        meta.catId === (request.categoryId ?? undefined) &&
-        meta.keywords === request.storeKeyword,
-      async () => {
-        await input.waitFor({ state: 'visible', timeout: 10_000 });
-        await input.fill(request.storeKeyword!);
-        await input.press('Enter');
-      },
-      'store keyword search',
-    );
-  }
-
-  const sort = catalogSortInteraction(request.sort);
-  for (let clickIndex = 0; clickIndex < sort.clicks; clickIndex += 1) {
-    const expectedSort =
-      sort.label === '价格' && clickIndex === 0
-        ? 'pricedown'
-        : request.sort;
-    await catalogActionAndResponse(
-      page,
-      (meta) =>
-        meta.catId === (request.categoryId ?? undefined) &&
-        meta.keywords === (request.storeKeyword ?? undefined) &&
-        meta.sortType === expectedSort,
-      () => clickCatalogSort(page, sort.label!),
-      `${sort.label} sort`,
-    );
-  }
-}
-
-async function catalogActionAndResponse(
-  page: Page,
-  predicate: (meta: NonNullable<ReturnType<typeof readAlisiteModuleRequestMeta>>) => boolean,
-  action: () => Promise<void>,
-  label: string,
-): Promise<void> {
-  const response = page.waitForResponse(
-    (candidate) => {
-      const meta = readAlisiteModuleRequestMeta(
-        candidate.url(),
-        candidate.request().postData(),
-      );
-      return !!(
-        meta &&
-        meta.componentKey === STORE_CATALOG_COMPONENT_KEY &&
-        predicate(meta)
-      );
-    },
-    { timeout: 20_000 },
-  );
-  let actionCompleted = false;
-  try {
-    await action();
-    actionCompleted = true;
-    await response;
-  } catch (error) {
-    await response.catch(() => {});
-    throw new CliError(
-      9,
-      actionCompleted
-        ? 'CATALOG_RESPONSE_TIMEOUT'
-        : 'CATALOG_DOM_CONTROL_MISSING',
-      `Store ${label} did not produce the expected catalog response: ${errorMessage(error)}`,
-      {
-        category: 'catalog-dom',
-        failureKind: actionCompleted
-          ? 'response-timeout'
-          : 'control-missing',
-        recoveryAction: actionCompleted ? 'retry-later' : 'inspect-page-template',
-        retryable: actionCompleted,
-        ...(actionCompleted
-          ? {}
-          : { legacyCode: 'CATALOG_NEXT_PAGE_MISSING' }),
-      },
-    );
-  }
-}
-
-async function clickCatalogSort(
-  page: Page,
-  label: '销量' | '价格',
-): Promise<void> {
-  const locator = label === '价格'
-    ? page.locator('xpath=//div[normalize-space(text()[1])="价格"]').first()
-    : page.getByText('销量', { exact: true }).last();
-  await locator.waitFor({ state: 'visible', timeout: 10_000 });
-  await locator.click();
-}
-
 async function gotoStore(page: Page, url: string): Promise<void> {
   try {
     await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
   } catch (error) {
     throw new CliError(9, 'NETWORK_ERROR', `Failed to load supplier shop: ${errorMessage(error)}`);
-  }
-}
-
-async function clickCatalogNextPage(page: Page): Promise<void> {
-  const candidates = [
-    page.getByRole('button', { name: /下一页/ }),
-    page.getByRole('link', { name: /下一页/ }),
-    page.locator('[aria-label="下一页"], .next-next, .pagination-next').first(),
-    page.getByText('下一页', { exact: true }).first(),
-  ];
-  await candidates[0]?.waitFor({ state: 'visible', timeout: 10_000 }).catch(() => {});
-  for (const candidate of candidates) {
-    if (await candidate.isVisible().catch(() => false)) {
-      await candidate.click({ timeout: 10_000 });
-      return;
-    }
-  }
-  throw new CliError(
-    9,
-    'CATALOG_DOM_CONTROL_MISSING',
-    'Could not find the supplier catalog next-page control.',
-    {
-      category: 'catalog-dom',
-      failureKind: 'control-missing',
-      recoveryAction: 'inspect-page-template',
-      retryable: false,
-      legacyCode: 'CATALOG_NEXT_PAGE_MISSING',
-    },
-  );
-}
-
-async function clickAndWaitForCatalogPage(
-  page: Page,
-  targetPage: number,
-): Promise<void> {
-  const response = page.waitForResponse(
-    (candidate) => {
-      const meta = readAlisiteModuleRequestMeta(
-        candidate.url(),
-        candidate.request().postData(),
-      );
-      return !!(
-        meta &&
-        meta.componentKey === STORE_CATALOG_COMPONENT_KEY &&
-        meta.pageNum === targetPage
-      );
-    },
-    { timeout: 20_000 },
-  );
-  try {
-    await clickCatalogNextPage(page);
-    await response;
-  } catch (error) {
-    await response.catch(() => {});
-    if (error instanceof CliError) throw error;
-    throw new CliError(
-      9,
-      'CATALOG_RESPONSE_TIMEOUT',
-      `Catalog DOM navigation did not produce page ${targetPage}.`,
-      {
-        category: 'catalog-dom',
-        failureKind: 'response-timeout',
-        recoveryAction: 'retry-later',
-        retryable: true,
-      },
-    );
   }
 }
 
@@ -1297,24 +927,6 @@ function isShopHost(hostname: string): boolean {
   return !/^(?:www|s|detail|login|passport|h5api|trade|order|cart|factory)\.1688\.com$/i.test(hostname);
 }
 
-export function normalizeCatalogTransport(
-  value: string | undefined,
-): CatalogTransportMode {
-  const normalized = value?.trim().toLowerCase() ?? 'auto';
-  if (
-    normalized === 'runtime' ||
-    normalized === 'dom' ||
-    normalized === 'auto'
-  ) {
-    return normalized;
-  }
-  throw new CliError(
-    2,
-    'BAD_INPUT',
-    '--catalog-transport must be runtime, dom, or auto.',
-  );
-}
-
 function positiveInt(raw: string | undefined, name: string, fallback: number, max: number): number {
   if (raw === undefined) return fallback;
   const value = Number(raw);
@@ -1331,8 +943,4 @@ function optionalPositiveInt(raw: string | undefined, name: string): number | un
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

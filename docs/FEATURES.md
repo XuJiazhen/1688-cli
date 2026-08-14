@@ -11,8 +11,8 @@ Last updated: 2026-07-28
 |---|---|---|
 | Collection protocol v1 | Done | Added versioned `CollectionUnit`, `CollectionBatch`, checkpoints, fingerprints, field availability, partial results, and login/risk action requirements. |
 | Incremental search batches | Done | `collect` can fetch one search page with source rank, supplier identity, deduplication, and a resumable cursor while preserving legacy `search` output. |
-| Store catalog collector | Done | `supplier catalog` and `collect` support bounded all-offer scans, categories, category filtering, store keyword search, UI-backed sorting, deduplication, drift warnings, and page checkpoints. |
-| Store profile facts | Done | `store-profile` is a first-class collection kind with field-level common-header facts, region/address and trust evidence, deterministic fixture replay, natural Store-page capture, and a same-page MTOP Runtime fallback. |
+| Store catalog collector | Done | `supplier catalog` and `collect` support bounded all-offer scans, categories, category filtering, store keyword search, Runtime sorting, deduplication, drift warnings, and page checkpoints through one offer transport. |
+| Store profile facts | Done | `store-profile` is a first-class collection kind with field-level common-header facts, region/address and trust evidence, deterministic fixture replay, natural Store-page capture, and an explicit same-source Runtime request when the natural response is absent. |
 | Supplier qualification facts | Done | Qualification collection includes registered business scope, business line, company identity, service/summary facts, certificates, images, and explicit availability. |
 | Offer media manifests | Done | Offer collection preserves nullable SKU facts and extracts ordered main, SKU, and detail image references without downloading image bytes. |
 | Fixture/Playwright parity | Done | All seven collection kinds run through the same runtime contract with sanitized fixture replay and live Playwright adapters. |

@@ -47,7 +47,6 @@ export interface CatalogPageDiagnostics {
   parserVersion: string;
   memberScopeHash?: string;
   runtimeResultStatus?: 'parsed' | 'unrecognized' | 'pending' | 'rejected';
-  fallbackReason?: string;
 }
 
 export interface ExecuteCatalogBatchOptions {
@@ -596,9 +595,6 @@ export async function executeCatalogBatch(
         'responseWaitMs',
       ),
       catalogParseMs: sumPageDiagnostic(pageDiagnostics, 'parseMs'),
-      catalogFallbackPages: [...pageDiagnostics.values()].filter(
-        (entry) => entry.fallbackReason !== undefined,
-      ).length,
     },
   });
 }

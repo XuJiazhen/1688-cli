@@ -81,25 +81,18 @@ Stable behavior belongs in `tests/` with fixtures where possible.
 
 ## Catalog Transport
 
-`store-catalog` defaults to the page Runtime transport. The adapter loads the
+`store-catalog` uses only the page Runtime transport. The adapter loads the
 shop once, starts a scope-correlated response listener, and invokes
 `window.lib.mtop.request` for the exact target page. The page owns cookies,
 tokens, and request signing. The CLI neither accepts nor persists those
 materials.
 
-The supported modes are:
-
-- `runtime`: exact-page Runtime requests only.
-- `dom`: the legacy filter/sort/pagination UI path for diagnosis or rollback.
-- `auto`: Runtime first; rebuild the loaded page once when the Runtime is
-  unavailable, then use DOM only when the structured error explicitly permits
-  fallback.
-
-Runtime success never triggers DOM work. Schema changes, scope mismatches, and
-missing DOM controls are deterministic protocol failures rather than reasons
-to rotate through every Profile. Runtime request, correlated response, and
-page-state waits have bounded deadlines. A catalog checkpoint starts directly
-at `nextPage`; completed pages are not replayed. It carries the first observed
+A transient missing Runtime may rebuild the owned Page once and retry the same
+request. It never switches to a DOM offer collector. Schema changes and scope
+mismatches are deterministic protocol failures rather than reasons to rotate
+through every Profile. Runtime request, correlated response, and page-state
+waits have bounded deadlines. A catalog checkpoint starts directly at
+`nextPage`; completed pages are not replayed. It carries the first observed
 item/page cardinality plus a non-decreasing page ceiling so continuation
 batches can report drift without completing early.
 
@@ -112,8 +105,8 @@ or request failures. Diagnostics retain only return codes and payload key/type
 summaries; the validation URL is never persisted.
 
 Catalog observations and batch metrics report transport, target page, request
-count, Runtime readiness, response wait, parse time, parser version, fallback
-count/reason, Runtime fulfillment status, and a hashed member scope.
+count, Runtime readiness, response wait, parse time, parser version, Runtime
+fulfillment status, and a hashed member scope.
 Diagnostics must remain non-replayable.
 
 Offer SKU and supplier qualification response waits are also bounded below the

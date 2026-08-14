@@ -543,18 +543,18 @@ describe('executeCatalogBatch', () => {
     ]);
   });
 
-  it('preserves deterministic DOM-control failure semantics in the batch', async () => {
+  it('preserves deterministic runtime protocol failure semantics in the batch', async () => {
     const batch = await executeCatalogBatch({
       unit: unit(),
       adapter: {
         async collectPage() {
           throw new CliError(
             9,
-            'CATALOG_DOM_CONTROL_MISSING',
-            'The next-page control is missing.',
+            'CATALOG_RESPONSE_SCOPE_MISMATCH',
+            'The response does not match the requested member and page.',
             {
               retryable: false,
-              legacyCode: 'CATALOG_NEXT_PAGE_MISSING',
+              failureKind: 'scope-mismatch',
             },
           );
         },
@@ -564,13 +564,13 @@ describe('executeCatalogBatch', () => {
 
     expect(batch.errors).toEqual([
       {
-        code: 'CATALOG_DOM_CONTROL_MISSING',
-        message: 'The next-page control is missing.',
+        code: 'CATALOG_RESPONSE_SCOPE_MISMATCH',
+        message: 'The response does not match the requested member and page.',
         retryable: false,
         details: {
           page: 1,
           retryable: false,
-          legacyCode: 'CATALOG_NEXT_PAGE_MISSING',
+          failureKind: 'scope-mismatch',
         },
       },
     ]);

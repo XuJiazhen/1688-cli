@@ -61,9 +61,7 @@ import { execute as collectOffer } from './offer.js';
 import { fetchIncrementalSearchPage } from './search.js';
 import {
   execute as collectSupplierCatalog,
-  normalizeCatalogTransport,
   resolveCatalogSupplier,
-  type CatalogTransportMode,
 } from './supplier-catalog.js';
 import { normalizeSearchSort } from './sourcing-utils.js';
 
@@ -72,7 +70,6 @@ export interface CollectOpts {
   checkpoint?: string;
   fixture?: string;
   output?: string;
-  catalogTransport?: string;
   requestId?: string;
   profile?: string;
   headed?: boolean;
@@ -82,7 +79,6 @@ export interface CollectArgs {
   unit: CollectionUnit;
   checkpoint?: CollectionCheckpoint;
   headed?: boolean;
-  catalogTransport?: CatalogTransportMode;
   requestId?: string;
 }
 
@@ -166,7 +162,6 @@ export async function executeCollectCommand(
   opts: CollectOpts,
   dependencies: CollectCommandDependencies = {},
 ): Promise<CollectionBatch> {
-  const catalogTransport = normalizeCatalogTransport(opts.catalogTransport);
   const requestId = normalizeCollectRequestId(opts.requestId);
   const input = await readJsonValue(opts.unit, 'CollectionUnit or collect envelope');
   const explicitCheckpoint = opts.checkpoint
@@ -212,7 +207,6 @@ export async function executeCollectCommand(
       unit,
       checkpoint,
       headed: opts.headed,
-      catalogTransport,
       ...(requestId === undefined ? {} : { requestId }),
     },
     {
@@ -264,7 +258,6 @@ export async function execute(
     runtime: createPlaywrightCollectionRuntime(
       ctx,
       args.headed === true,
-      args.catalogTransport ?? 'auto',
     ),
   }), args.requestId);
 }
@@ -296,7 +289,6 @@ export async function executeCollectionUnit(
 export function createPlaywrightCollectionRuntime(
   ctx: BrowserContext,
   headed: boolean,
-  catalogTransport: CatalogTransportMode = 'auto',
 ): CollectionRuntime {
   return {
     async collect(unit, checkpoint) {
@@ -311,7 +303,6 @@ export function createPlaywrightCollectionRuntime(
             unit,
             checkpoint,
             headed,
-            catalogTransport,
           });
         case 'store-qualification':
           return collectQualificationUnit(ctx, unit, checkpoint, headed);
@@ -603,7 +594,7 @@ export async function collectStoreProfileUnit(
       throw new CliError(
         9,
         'STORE_PROFILE_MEMBER_ID_MISSING',
-        'The supplier shop page did not expose a profile response, and the collection unit has no safe memberId for the runtime fallback.',
+        'The supplier shop page did not expose a profile response, and the collection unit has no safe memberId for an explicit runtime request.',
         {
           category: 'store-profile',
           failureKind: 'member-id-missing',
@@ -614,7 +605,7 @@ export async function collectStoreProfileUnit(
       );
     }
 
-    const fallback = await captureStoreProfileForAction(
+    const requestedCapture = await captureStoreProfileForAction(
       page,
       {
         memberId: knownMemberId,
@@ -647,10 +638,10 @@ export async function collectStoreProfileUnit(
       },
     );
     const payload =
-      fallback.captured?.payload ?? fallback.actionResult.payload ?? null;
+      requestedCapture.captured?.payload ?? requestedCapture.actionResult.payload ?? null;
     if (payload === null) {
-      if (fallback.actionResult.error !== null) {
-        throw fallback.actionResult.error;
+      if (requestedCapture.actionResult.error !== null) {
+        throw requestedCapture.actionResult.error;
       }
       const stateError = pageStateError(await detectPageState(page), headed);
       if (stateError !== null) throw stateError;
@@ -663,21 +654,21 @@ export async function collectStoreProfileUnit(
           failureKind: 'response-timeout',
           recoveryAction: 'retry-later',
           retryable: true,
-          responseCapture: fallback.diagnostics,
+          responseCapture: requestedCapture.diagnostics,
         },
       );
     }
-    assertStoreProfilePayloadState(payload, fallback.diagnostics);
+    assertStoreProfilePayloadState(payload, requestedCapture.diagnostics);
     const stateError = pageStateError(await detectPageState(page), headed);
     if (stateError !== null) throw stateError;
     const sourceRef =
-      fallback.captured?.sourceRef ?? STORE_PROFILE_RUNTIME_SOURCE_REF;
+      requestedCapture.captured?.sourceRef ?? STORE_PROFILE_RUNTIME_SOURCE_REF;
     return storeProfileBatchFromLivePayload(
       unit,
       checkpoint,
       startedAt,
       payload,
-      fallback.captured?.collectedAt ?? new Date().toISOString(),
+      requestedCapture.captured?.collectedAt ?? new Date().toISOString(),
       sourceRef,
     );
   } finally {

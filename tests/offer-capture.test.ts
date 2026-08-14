@@ -186,7 +186,6 @@ describe('requireSkuSelectorModel', () => {
         code: 'OFFER_SKU_RESPONSE_TIMEOUT',
         details: expect.objectContaining({
           retryable: true,
-          legacyCode: 'OFFER_SKU_CAPTURE_INCOMPLETE',
           matchedCount: 0,
           parsedCount: 0,
           timedOut: true,

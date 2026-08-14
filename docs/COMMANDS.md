@@ -106,20 +106,19 @@ offer ID, `b2b-*` member ID, or 1688 shop URL:
 1688 supplier catalog https://example.1688.com --category-id 123 --max-pages 2
 1688 supplier catalog https://example.1688.com --keyword 帐篷 --sort tradenumdown
 1688 supplier catalog https://example.1688.com --full --max-pages 3 --max-items 80
-1688 supplier catalog 628196518518 --catalog-transport runtime --max-pages 2 --json
+1688 supplier catalog 628196518518 --max-pages 2 --json
 ```
 
 `--full` describes the requested scope but does not make one invocation
 unbounded. `--max-pages` and `--max-items` still cap the batch; a partial batch
 returns a checkpoint for the caller to persist and schedule.
 
-Store-offer pages default to `--catalog-transport auto`. The CLI loads the
-shop once, asks that page's MTOP Runtime for the exact `pageNum`, and therefore
-resumes `checkpoint.nextPage=N` without replaying pages 1 through N-1.
-`runtime` disables DOM fallback; `dom` preserves the legacy UI path for
-diagnosis and rollback. `auto` rebuilds the loaded page once when the Runtime
-is unavailable, then falls back only for an explicitly allowed error. Store
-category snapshots continue to use their bounded DOM capture.
+Store-offer pages have one collector: the CLI loads the shop once and asks that
+page's MTOP Runtime for the exact `pageNum`, so
+`checkpoint.nextPage=N` resumes without replaying pages 1 through N-1. A
+transient missing Runtime may rebuild the owned Page once and retry the same
+request; it never switches collectors. Store category snapshots are a distinct
+operation and continue to use their bounded page capture.
 
 `collect` is the stable worker integration entry point. It accepts one
 `CollectionUnit` as inline JSON, `@file`, or stdin (`-`), and always runs
@@ -130,8 +129,7 @@ inline rather than through the five-minute daemon request path:
 cat unit.json | 1688 collect - --json
 printf '{"unit":%s,"checkpoint":%s}\n' "$(cat unit.json)" "$(cat checkpoint.json)" \
   | 1688 collect - --json
-cat unit.json | 1688 collect - --catalog-transport auto \
-  --request-id worker-attempt-42 --json
+cat unit.json | 1688 collect - --request-id worker-attempt-42 --json
 
 1688 collect '{"schemaVersion":1,"unitId":"tent-search-1","kind":"search-page","subject":{"keyword":"帐篷"},"scope":{"requestedScope":"page","pageSize":60}}' --json
 ```
@@ -158,9 +156,10 @@ its qualified-SKU target. See [JSON_CONTRACTS.md](JSON_CONTRACTS.md#collection-p
 `store-profile` uses an upstream supplier shop URL when one is present.
 Otherwise it first resolves a canonical shop URL from a safe `b2b-*`
 `memberId` or `sourceOfferId`; unresolved identities fail closed before Store
-Profile collection. Live collection then reuses the Store page's natural
-`wp_pc_common_header` response and uses that page's active MTOP Runtime as a
-bounded fallback when a safe `memberId` is available. Source-offer inspection
+Profile collection. Live collection first observes the Store page's natural
+`wp_pc_common_header` response; when it is absent and a safe `memberId` is
+available, the same Page makes one bounded explicit MTOP Runtime request for
+that canonical source. Source-offer inspection
 is only an identity bootstrap, not a source of profile facts. Matched-source
 omissions are explicit `not-present`; parse failures remain `failed` and
 checkpointed.
