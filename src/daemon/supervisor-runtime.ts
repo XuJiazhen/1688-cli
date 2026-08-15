@@ -19,6 +19,10 @@ import {
   normalizePageActionExecuteResponseV1,
 } from '../collection/page-action-contracts.js';
 import type { PageLifecycleReceiptV1 } from '../session/page-lifecycle.js';
+import type {
+  ProductionCollectionRetainedPageReceiptV1,
+  ProductionCollectionWorkKind,
+} from './production-collection-protocol.js';
 import {
   PageRegistryError,
   ProfilePageRegistry,
@@ -49,6 +53,8 @@ import {
   type RemoteAttemptAdmissionRequestV2,
   type RemoteAttemptAdmissionReceiptV2,
   type TransportAuthorityV2,
+  type ViewerPrepareCommandV1,
+  type LoginResetCommandV1,
 } from './supervisor-rpc.js';
 
 export type SupervisorDaemonRuntimeState =
@@ -99,6 +105,11 @@ export interface PersistentContextHost {
     probeRevision: string;
     page?: ManagedPage;
   }): Promise<IdentityProbeReceipt>;
+  prepareViewerPage(input: {
+    page: ManagedPage;
+    navigateTo?: 'https://www.1688.com/';
+  }): Promise<{ url: string }>;
+  resetLoginState(): Promise<{ page: ManagedPage; closedContextPageCount: number; url: string }>;
 }
 
 export interface CredentialAuthorizationInput {
@@ -388,9 +399,19 @@ interface ActiveExecution {
 interface ActiveIntervention {
   interventionSessionId: string;
   pageSessionId: string;
+  workUnitId: string;
   operatorId: string;
   expiresAt: string;
   probeReceipt: IdentityProbeReceipt | null;
+}
+
+interface PendingProductionIntervention {
+  attemptId: string;
+  workItemId: string;
+  workKind: ProductionCollectionWorkKind;
+  pageSessionId: string;
+  pendingInterventionSessionId: string;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 /** Direct, fenced runtime for one daemon, one Profile and one Context. */
@@ -401,6 +422,7 @@ export class ProfileDaemonRuntime {
   private registry: ProfilePageRegistry;
   private active: ActiveExecution | null = null;
   private intervention: ActiveIntervention | null = null;
+  private pendingProductionIntervention: PendingProductionIntervention | null = null;
   private healthProbeSession: { pageSessionId: string; ownerId: string } | null = null;
   private cooldownUntil: string | null = null;
   private readonly verifiedInterventionEndReceipts = new Map<
@@ -532,14 +554,91 @@ export class ProfileDaemonRuntime {
         && !this.active.interventionCustodyEstablished
         ? this.active.request.logicalLineage.workUnitId
         : null,
-      activePageSessionId: this.active?.pageSessionId ?? null,
+      activePageSessionId: this.active?.pageSessionId
+        ?? this.pendingProductionIntervention?.pageSessionId
+        ?? null,
       interventionPendingWorkUnitId: this.active?.interventionCustodyEstablished
         ? this.active.request.logicalLineage.workUnitId
-        : null,
+        : this.pendingProductionIntervention?.workItemId ?? null,
       interventionSessionId: this.intervention?.interventionSessionId ?? null,
       cooldownUntil: this.cooldownUntil,
       pageSessions: this.registry.snapshot(),
     };
+  }
+
+  async retainProductionCollectionRiskPage(input: {
+    page: ManagedPage;
+    attemptId: string;
+    workItemId: string;
+    workKind: ProductionCollectionWorkKind;
+  }): Promise<ProductionCollectionRetainedPageReceiptV1> {
+    return this.controlSerial(async () => {
+      if (
+        this.state !== 'warm'
+        || this.active !== null
+        || this.intervention !== null
+        || this.pendingProductionIntervention !== null
+      ) {
+        throw new SupervisorRuntimeError(
+          'PRODUCTION_INTERVENTION_BUSY',
+          'Production risk Page transfer requires an otherwise idle warm Runtime.',
+          true,
+        );
+      }
+      if (input.page.isClosed()) {
+        throw new SupervisorRuntimeError(
+          'PRODUCTION_INTERVENTION_PAGE_LOST',
+          'The exact production risk Page closed before custody transfer.',
+          false,
+        );
+      }
+      const pageSessionId = `production-page-${required(input.attemptId, 'attemptId')}`;
+      const pendingInterventionSessionId = `pending-production-intervention-${input.attemptId}`;
+      const registered = await this.registry.register(input.page, {
+        pageSessionId,
+        playwrightPageId: this.options.host.pageId(input.page),
+        ownerKind: 'work_unit',
+        ownerId: required(input.workItemId, 'workItemId'),
+        taskType: taskTypeForProductionCollection(input.workKind),
+        lastUrlClass: 'risk_challenge',
+      });
+      const transferred = await this.registry.transferToIntervention(
+        registered.pageSessionId,
+        input.workItemId,
+        pendingInterventionSessionId,
+      );
+      const timer = setTimeout(() => {
+        void this.expirePendingProductionIntervention(
+          pendingInterventionSessionId,
+          'production_intervention_transfer_expired',
+        );
+      }, this.interventionTransferGraceMs);
+      timer.unref();
+      this.pendingProductionIntervention = {
+        attemptId: input.attemptId,
+        workItemId: input.workItemId,
+        workKind: input.workKind,
+        pageSessionId: transferred.pageSessionId,
+        pendingInterventionSessionId,
+        timer,
+      };
+      await this.event('production_intervention_transfer_pending', {
+        attemptId: input.attemptId,
+        workItemId: input.workItemId,
+        workKind: input.workKind,
+        pageSessionId: transferred.pageSessionId,
+        pendingInterventionSessionId,
+      });
+      return {
+        schemaVersion: 'production-collection-retained-page.v1',
+        pageSessionId: transferred.pageSessionId,
+        pendingInterventionSessionId,
+        workItemId: input.workItemId,
+        workKind: input.workKind,
+        url: input.page.url(),
+        transferredAt: transferred.transferredAt!,
+      };
+    });
   }
 
   async handle(
@@ -575,6 +674,12 @@ export class ProfileDaemonRuntime {
           break;
         case 'supervisor.health.probe':
           data = await this.healthProbe(request.payload);
+          break;
+        case 'supervisor.viewer.prepare':
+          data = await this.prepareViewer(request.payload);
+          break;
+        case 'supervisor.profile.reset-login':
+          data = await this.resetLogin(request.payload);
           break;
         case 'supervisor.intervention.begin':
           data = await this.beginIntervention(request.payload);
@@ -847,12 +952,32 @@ export class ProfileDaemonRuntime {
           false,
         );
       }
+      if (this.pendingProductionIntervention !== null && !command.cancelInFlight) {
+        await this.event('daemon_drain_incomplete', {
+          reason: 'production_intervention_transfer_pending',
+          pageSessionId: this.pendingProductionIntervention.pageSessionId,
+        });
+        return this.drainReceipt(command.reason, false);
+      }
       this.state = 'draining';
       await this.event('daemon_draining', { reason: command.reason });
       if (command.cancelInFlight) {
         this.active?.abort.abort();
         if (this.active?.awaitingIntervention) {
           await this.expirePendingIntervention(this.active);
+        }
+        const pending = this.pendingProductionIntervention;
+        if (pending !== null) {
+          clearTimeout(pending.timer);
+          await this.registry.close(
+            pending.pageSessionId,
+            {
+              ownerKind: 'intervention',
+              ownerId: pending.pendingInterventionSessionId,
+            },
+            'forced_drain_before_intervention_begin',
+          );
+          this.pendingProductionIntervention = null;
         }
       }
       const deadline = Date.parse(command.deadlineAt);
@@ -900,6 +1025,51 @@ export class ProfileDaemonRuntime {
           'Profile already has an active InterventionSession.',
           false,
         );
+      }
+      const productionPending = this.pendingProductionIntervention;
+      if (productionPending !== null) {
+        if (
+          this.state !== 'warm'
+          || productionPending.pageSessionId !== command.pageSessionId
+          || productionPending.workItemId !== command.expectedWorkUnitId
+        ) {
+          throw new SupervisorRuntimeError(
+            'INTERVENTION_PAGE_NOT_OWNED',
+            'Intervention command does not match the retained production risk Page.',
+            false,
+          );
+        }
+        if (this.now().getTime() >= Date.parse(command.expiresAt)) {
+          throw new SupervisorRuntimeError(
+            'INTERVENTION_EXPIRED',
+            'InterventionSession has already expired.',
+            false,
+          );
+        }
+        const transferred = await this.registry.adoptPendingIntervention(
+          command.pageSessionId,
+          productionPending.pendingInterventionSessionId,
+          command.interventionSessionId,
+        );
+        clearTimeout(productionPending.timer);
+        this.pendingProductionIntervention = null;
+        this.intervention = {
+          interventionSessionId: command.interventionSessionId,
+          pageSessionId: transferred.pageSessionId,
+          workUnitId: command.expectedWorkUnitId,
+          operatorId: command.operatorId,
+          expiresAt: command.expiresAt,
+          probeReceipt: null,
+        };
+        this.state = 'intervention';
+        await this.event('intervention_started', {
+          interventionSessionId: command.interventionSessionId,
+          pageSessionId: command.pageSessionId,
+          operatorId: command.operatorId,
+          source: 'production_collection_retained_page',
+          chromiumPid: this.descriptor?.chromiumPid,
+        });
+        return this.interventionHandle(this.intervention);
       }
       if (this.state !== 'warm' || this.active === null) {
         throw new SupervisorRuntimeError(
@@ -957,6 +1127,7 @@ export class ProfileDaemonRuntime {
       this.intervention = {
         interventionSessionId: command.interventionSessionId,
         pageSessionId: transferred.pageSessionId,
+        workUnitId: command.expectedWorkUnitId,
         operatorId: command.operatorId,
         expiresAt: command.expiresAt,
         probeReceipt: null,
@@ -1025,6 +1196,184 @@ export class ProfileDaemonRuntime {
         identityMatched: probe.observedMemberId === probe.expectedMemberId,
       });
       return probe;
+    });
+  }
+
+  async prepareViewer(command: ViewerPrepareCommandV1): Promise<{
+    schema: 'profile-supervisor.viewer-prepare-receipt.v1';
+    viewerSessionId: string;
+    mode: ViewerPrepareCommandV1['mode'];
+    pageSessionId: string;
+    url: string;
+    daemonInstanceId: string;
+    contextGeneration: number;
+    preparedAt: string;
+  }> {
+    return this.controlSerial(async () => {
+      let page: ManagedPage;
+      let pageSessionId: string;
+      if (command.mode === 'work_unit_challenge') {
+        const intervention = this.requireIntervention(required(
+          command.interventionSessionId,
+          'interventionSessionId',
+        ));
+        pageSessionId = required(command.pageSessionId, 'pageSessionId');
+        if (intervention.pageSessionId !== pageSessionId) {
+          throw new SupervisorRuntimeError(
+            'VIEWER_PAGE_AUTHORITY_MISMATCH',
+            'ViewerSession is not bound to the active intervention Page.',
+            false,
+          );
+        }
+        if (intervention.workUnitId !== required(command.workUnitId, 'workUnitId')) {
+          throw new SupervisorRuntimeError(
+            'VIEWER_WORK_UNIT_AUTHORITY_MISMATCH',
+            'ViewerSession is not bound to the active intervention WorkUnit.',
+            false,
+          );
+        }
+        const entry = this.registry.get(pageSessionId);
+        if (
+          entry === null
+          || entry.ownerKind !== 'intervention'
+          || entry.ownerId !== intervention.interventionSessionId
+        ) {
+          throw new SupervisorRuntimeError(
+            'INTERVENTION_PAGE_LOST',
+            'The exact retained challenge Page is no longer under intervention custody.',
+            false,
+          );
+        }
+        page = this.options.host.pages().find(
+          (candidate) => this.options.host.pageId(candidate) === entry.playwrightPageId,
+        )!;
+        if (page === undefined || page.isClosed()) {
+          throw new SupervisorRuntimeError(
+            'INTERVENTION_PAGE_LOST',
+            'The exact retained challenge Page is no longer present in the Context.',
+            false,
+          );
+        }
+      } else {
+        if (this.state !== 'warm') {
+          throw new SupervisorRuntimeError(
+            'DAEMON_NOT_WARM',
+            `Daemon is ${this.state}; it cannot prepare a login viewer.`,
+            true,
+          );
+        }
+        if (this.healthProbeSession === null) {
+          page = await this.options.host.createPage();
+          const ownerId = `viewer-login-${this.idFactory()}`;
+          const pageSession = await this.registry.register(page, {
+            pageSessionId: `page-session-${ownerId}`,
+            playwrightPageId: this.options.host.pageId(page),
+            ownerKind: 'health_probe',
+            ownerId,
+            lastUrlClass: 'login',
+          });
+          pageSessionId = pageSession.pageSessionId;
+          this.healthProbeSession = { pageSessionId, ownerId };
+        } else {
+          pageSessionId = this.healthProbeSession.pageSessionId;
+          const entry = this.registry.get(pageSessionId);
+          page = this.options.host.pages().find(
+            (candidate) => entry !== null
+              && this.options.host.pageId(candidate) === entry.playwrightPageId,
+          )!;
+          if (entry === null || page === undefined || page.isClosed()) {
+            this.healthProbeSession = null;
+            throw new SupervisorRuntimeError(
+              'HEALTH_PROBE_PAGE_LOST',
+              'The headed login Page is no longer present.',
+              true,
+            );
+          }
+        }
+      }
+      const prepared = await this.options.host.prepareViewerPage({
+        page,
+        ...(command.mode === 'work_unit_challenge'
+          ? {}
+          : { navigateTo: 'https://www.1688.com/' as const }),
+      });
+      const preparedAt = this.now().toISOString();
+      await this.event('viewer_page_prepared', {
+        viewerSessionId: command.viewerSessionId,
+        mode: command.mode,
+        pageSessionId,
+        url: prepared.url,
+      });
+      return {
+        schema: 'profile-supervisor.viewer-prepare-receipt.v1',
+        viewerSessionId: command.viewerSessionId,
+        mode: command.mode,
+        pageSessionId,
+        url: prepared.url,
+        daemonInstanceId: this.options.daemonInstanceId,
+        contextGeneration: this.contextGeneration,
+        preparedAt,
+      };
+    });
+  }
+
+  async resetLogin(command: LoginResetCommandV1): Promise<{
+    schema: 'profile-supervisor.login-reset-receipt.v1';
+    resetRequestId: string;
+    pageSessionId: string;
+    url: string;
+    closedContextPageCount: number;
+    daemonInstanceId: string;
+    contextGeneration: number;
+    resetAt: string;
+  }> {
+    return this.controlSerial(async () => {
+      if (this.state !== 'warm' || this.active !== null || this.intervention !== null) {
+        throw new SupervisorRuntimeError(
+          'LOGIN_RESET_RUNTIME_BUSY',
+          'Login reset requires a warm Runtime with no WorkUnit or intervention custody.',
+          true,
+        );
+      }
+      const unsafe = this.registry.snapshot().filter(
+        (page) => page.state !== 'closed'
+          && (page.ownerKind === 'work_unit' || page.ownerKind === 'intervention'),
+      );
+      if (unsafe.length !== 0) {
+        throw new SupervisorRuntimeError(
+          'LOGIN_RESET_PAGE_AUTHORITY_ACTIVE',
+          'Login reset cannot discard a WorkUnit or intervention Page.',
+          false,
+        );
+      }
+      await this.registry.closeAll('profile_login_reset');
+      this.healthProbeSession = null;
+      const reset = await this.options.host.resetLoginState();
+      const ownerId = `login-reset-${command.resetRequestId}`;
+      const pageSession = await this.registry.register(reset.page, {
+        pageSessionId: `page-session-${this.idFactory()}`,
+        playwrightPageId: this.options.host.pageId(reset.page),
+        ownerKind: 'health_probe',
+        ownerId,
+        lastUrlClass: 'login',
+      });
+      this.healthProbeSession = { pageSessionId: pageSession.pageSessionId,ownerId };
+      const resetAt = this.now().toISOString();
+      await this.event('profile_login_reset', {
+        resetRequestId: command.resetRequestId,
+        pageSessionId: pageSession.pageSessionId,
+        closedContextPageCount: reset.closedContextPageCount,
+      });
+      return {
+        schema: 'profile-supervisor.login-reset-receipt.v1',
+        resetRequestId: command.resetRequestId,
+        pageSessionId: pageSession.pageSessionId,
+        url: reset.url,
+        closedContextPageCount: reset.closedContextPageCount,
+        daemonInstanceId: this.options.daemonInstanceId,
+        contextGeneration: this.contextGeneration,
+        resetAt,
+      };
     });
   }
 
@@ -1833,6 +2182,40 @@ export class ProfileDaemonRuntime {
     }
   }
 
+  private async expirePendingProductionIntervention(
+    pendingInterventionSessionId: string,
+    reason: string,
+  ): Promise<void> {
+    await this.controlSerial(async () => {
+      const pending = this.pendingProductionIntervention;
+      if (
+        pending === null
+        || pending.pendingInterventionSessionId !== pendingInterventionSessionId
+      ) return;
+      clearTimeout(pending.timer);
+      try {
+        await this.registry.close(
+          pending.pageSessionId,
+          {
+            ownerKind: 'intervention',
+            ownerId: pending.pendingInterventionSessionId,
+          },
+          reason,
+        );
+      } catch (error) {
+        await this.handleCleanupFailure(error);
+      } finally {
+        this.pendingProductionIntervention = null;
+        await this.event('production_intervention_transfer_expired', {
+          attemptId: pending.attemptId,
+          workItemId: pending.workItemId,
+          pageSessionId: pending.pageSessionId,
+          reason,
+        });
+      }
+    });
+  }
+
   private async event(type: string, detail?: Record<string, unknown>): Promise<void> {
     await this.options.eventSink?.append({
       eventId: this.idFactory(),
@@ -2259,6 +2642,17 @@ function taskTypeForAction(actionKind: PageActionRequestV1['actionKind']): strin
     case 'offer-detail': return 'OFFER_DETAIL';
     case 'store-qualification': return 'STORE_QUALIFICATION';
     case 'store-sample': return 'STORE_CATALOG_SAMPLE';
+  }
+}
+
+function taskTypeForProductionCollection(
+  workKind: ProductionCollectionWorkKind,
+): string {
+  switch (workKind) {
+    case 'search_page': return 'SEARCH_DISCOVERY';
+    case 'offer_detail': return 'OFFER_DETAIL';
+    case 'store_qualification': return 'STORE_QUALIFICATION';
+    case 'store_pages': return 'STORE_CATALOG_SAMPLE';
   }
 }
 

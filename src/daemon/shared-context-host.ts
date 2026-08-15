@@ -172,6 +172,43 @@ export class SharedPersistentContextHost implements PersistentContextHost {
     };
   }
 
+  async prepareViewerPage(input: {
+    page: ManagedPage;
+    navigateTo?: typeof IDENTITY_PROBE_URL;
+  }): Promise<{ url: string }> {
+    const page = input.page as Page;
+    if (input.navigateTo !== undefined) {
+      await page.goto(input.navigateTo, {
+        waitUntil: 'domcontentloaded',
+        timeout: 15_000,
+      });
+    }
+    await page.bringToFront();
+    return { url: page.url() };
+  }
+
+  async resetLoginState(): Promise<{
+    page: ManagedPage;
+    closedContextPageCount: number;
+    url: string;
+  }> {
+    const context = await getSharedContext(this.options.profileName, { headful: true });
+    const existingPages = context.pages();
+    await Promise.all(existingPages.map(async (page) => {
+      if (!page.isClosed()) await page.close();
+    }));
+    await context.clearCookies();
+    await context.clearPermissions();
+    const page = await context.newPage();
+    this.pageId(page);
+    await page.goto(IDENTITY_PROBE_URL, {
+      waitUntil: 'domcontentloaded',
+      timeout: 15_000,
+    });
+    await page.bringToFront();
+    return { page,closedContextPageCount: existingPages.length,url: page.url() };
+  }
+
   private assertOwner(input: {
     profileId: string;
     profileName: string;

@@ -67,6 +67,7 @@ class FakePage implements ManagedPage {
   }
   currentUrl = 'about:blank';
   url(): string { return this.currentUrl; }
+  async bringToFront(): Promise<void> {}
 }
 
 class FakeHost implements PersistentContextHost {
@@ -78,6 +79,7 @@ class FakeHost implements PersistentContextHost {
   readonly ids = new WeakMap<FakePage, string>();
   failPageClose = false;
   probedPages: ManagedPage[] = [];
+  loginResetCount = 0;
 
   async ensureStarted(input: {
     profileId: string; profileName: string; daemonInstanceId: string;
@@ -121,6 +123,23 @@ class FakeHost implements PersistentContextHost {
       safeEvidenceHash: 'f'.repeat(64),
     };
   }
+  async prepareViewerPage(input: { page: ManagedPage; navigateTo?: 'https://www.1688.com/' }) {
+    const page = input.page as FakePage;
+    if (input.navigateTo !== undefined) page.currentUrl = input.navigateTo;
+    await page.bringToFront();
+    return { url: page.url() };
+  }
+  async resetLoginState() {
+    this.loginResetCount += 1;
+    for (const page of this.ownedPages) page.closed = true;
+    const page = await this.createPage() as FakePage;
+    page.currentUrl = 'https://www.1688.com/';
+    return {
+      page,
+      closedContextPageCount: this.ownedPages.length - 1,
+      url: page.currentUrl,
+    };
+  }
 }
 
 class CloseObservingAcceptanceRepository
@@ -162,6 +181,26 @@ extends InMemoryPageActionAcceptanceRepository {
 }
 
 describe('ProfileDaemonRuntime', () => {
+  it('clears login state only when no WorkUnit or intervention owns a Page', async () => {
+    const host = new FakeHost();
+    const runtime = makeRuntime(host, { execute: async (request) => fakeResponse(request) });
+    await runtime.ensureWarm();
+    await runtime.prepareViewer({ viewerSessionId: 'viewer-1',mode: 'onboarding_login' });
+
+    const receipt = await runtime.resetLogin({ resetRequestId: 'reset-command-1' });
+
+    expect(receipt).toMatchObject({
+      schema: 'profile-supervisor.login-reset-receipt.v1',
+      resetRequestId: 'reset-command-1',
+      url: 'https://www.1688.com/',
+      daemonInstanceId: DAEMON_ID,
+      contextGeneration: 1,
+    });
+    expect(host.loginResetCount).toBe(1);
+    expect(runtime.status().pageSessions.filter((page) => page.state === 'open'))
+      .toMatchObject([{ ownerKind: 'health_probe' }]);
+  });
+
   it('executes 100 actions through one headful Context and returns to zero Pages', async () => {
     const host = new FakeHost();
     const runtime = makeRuntime(host, {

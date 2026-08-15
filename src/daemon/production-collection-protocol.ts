@@ -55,8 +55,19 @@ export interface ProductionCollectionRpcRequestV1 {
 export interface ProductionCollectionCleanupReceiptV1 {
   ownedPageCount: number;
   closedPageCount: number;
+  transferredPageCount?: number;
   allOwnedPagesClosed: boolean;
   detail: Record<string, unknown>;
+}
+
+export interface ProductionCollectionRetainedPageReceiptV1 {
+  schemaVersion: 'production-collection-retained-page.v1';
+  pageSessionId: string;
+  pendingInterventionSessionId: string;
+  workItemId: string;
+  workKind: ProductionCollectionWorkKind;
+  url: string;
+  transferredAt: string;
 }
 
 export interface ProductionCollectionResourceReceiptV1 {
@@ -125,6 +136,7 @@ export interface ProductionCollectionExecutionReceiptV3 {
   payloadSchemaVersion: 'collection-batch-v1';
   batch: Record<string, unknown>;
   cleanup: ProductionCollectionCleanupReceiptV1;
+  retainedPage?: ProductionCollectionRetainedPageReceiptV1;
   resource: ProductionCollectionResourceReceiptV1;
   timing: ProductionCollectionSourceTimingReceipt;
 }

@@ -30,6 +30,8 @@ export const SUPERVISOR_RPC_METHODS = Object.freeze([
   'supervisor.drain',
   'supervisor.restart',
   'supervisor.health.probe',
+  'supervisor.viewer.prepare',
+  'supervisor.profile.reset-login',
   'supervisor.intervention.begin',
   'supervisor.intervention.verify',
   'supervisor.intervention.end',
@@ -92,6 +94,11 @@ export const SUPERVISOR_PROTOCOL_CANONICAL_CONTENT_V2 = Object.freeze({
   interventionEndPayloadKeys: [
     'interventionSessionId', 'reason', 'completionIntentSha256?',
   ],
+  viewerPreparePayloadKeys: [
+    'viewerSessionId', 'mode', 'interventionSessionId?', 'workUnitId?',
+    'pageSessionId?',
+  ],
+  loginResetPayloadKeys: ['resetRequestId'],
   interventionEndReceiptKeys: [
     'schema', 'interventionSessionId', 'completionIntentSha256',
     'daemonInstanceId', 'contextGeneration', 'pageSessionId', 'endedAt',
@@ -112,6 +119,8 @@ export type SupervisorRpcOperation =
   | 'drain'
   | 'restart'
   | 'health_probe'
+  | 'prepare_viewer'
+  | 'reset_login'
   | 'begin_intervention'
   | 'verify_intervention'
   | 'end_intervention';
@@ -317,6 +326,18 @@ export interface HealthProbeCommandV1 {
   probeRevision: string;
 }
 
+export interface ViewerPrepareCommandV1 {
+  viewerSessionId: string;
+  mode: 'onboarding_login' | 'account_recovery' | 'work_unit_challenge';
+  interventionSessionId?: string;
+  workUnitId?: string;
+  pageSessionId?: string;
+}
+
+export interface LoginResetCommandV1 {
+  resetRequestId: string;
+}
+
 export interface VerifyInterventionCommandV1 {
   interventionSessionId: string;
   expectedMemberId: string;
@@ -348,6 +369,12 @@ export type ParsedSupervisorRpcRequestV2 =
   | (SupervisorRpcRequestV2<RestartCommandV1> & { method: 'supervisor.restart' })
   | (SupervisorRpcRequestV2<HealthProbeCommandV1> & {
       method: 'supervisor.health.probe';
+    })
+  | (SupervisorRpcRequestV2<ViewerPrepareCommandV1> & {
+      method: 'supervisor.viewer.prepare';
+    })
+  | (SupervisorRpcRequestV2<LoginResetCommandV1> & {
+      method: 'supervisor.profile.reset-login';
     })
   | (SupervisorRpcRequestV2<BeginInterventionCommandV1> & {
       method: 'supervisor.intervention.begin';
@@ -583,6 +610,10 @@ export function parseSupervisorRpcRequest(
       return { ...base, method, payload: parseRestart(record['payload']) };
     case 'supervisor.health.probe':
       return { ...base, method, payload: parseHealthProbe(record['payload']) };
+    case 'supervisor.viewer.prepare':
+      return { ...base, method, payload: parseViewerPrepare(record['payload']) };
+    case 'supervisor.profile.reset-login':
+      return { ...base, method, payload: parseLoginReset(record['payload']) };
     case 'supervisor.intervention.begin':
       return { ...base, method, payload: parseBeginIntervention(record['payload']) };
     case 'supervisor.intervention.verify':
@@ -601,6 +632,8 @@ export function supervisorRpcOperation(method: SupervisorRpcMethod): SupervisorR
     case 'supervisor.drain': return 'drain';
     case 'supervisor.restart': return 'restart';
     case 'supervisor.health.probe': return 'health_probe';
+    case 'supervisor.viewer.prepare': return 'prepare_viewer';
+    case 'supervisor.profile.reset-login': return 'reset_login';
     case 'supervisor.intervention.begin': return 'begin_intervention';
     case 'supervisor.intervention.verify': return 'verify_intervention';
     case 'supervisor.intervention.end': return 'end_intervention';
@@ -1053,6 +1086,51 @@ function parseBeginIntervention(value: unknown): BeginInterventionCommandV1 {
   };
 }
 
+function parseViewerPrepare(value: unknown): ViewerPrepareCommandV1 {
+  const record = strictRecord(value, 'ViewerPrepareCommand', [
+    'viewerSessionId', 'mode', 'interventionSessionId', 'workUnitId', 'pageSessionId',
+  ]);
+  const mode = enumValue(
+    record['mode'],
+    ['onboarding_login', 'account_recovery', 'work_unit_challenge'] as const,
+    'mode',
+  );
+  const interventionSessionId = optionalIdentifier(
+    record['interventionSessionId'],
+    'interventionSessionId',
+  );
+  const workUnitId = optionalIdentifier(record['workUnitId'], 'workUnitId');
+  const pageSessionId = optionalIdentifier(record['pageSessionId'], 'pageSessionId');
+  const hasChallengeAuthority = interventionSessionId !== undefined
+    || workUnitId !== undefined
+    || pageSessionId !== undefined;
+  if (
+    (mode === 'work_unit_challenge'
+      && (interventionSessionId === undefined
+        || workUnitId === undefined
+        || pageSessionId === undefined))
+    || (mode !== 'work_unit_challenge' && hasChallengeAuthority)
+  ) {
+    throw new SupervisorRpcError(
+      'VIEWER_PREPARE_AUTHORITY_INVALID',
+      'Challenge viewer preparation requires exactly one InterventionSession, WorkUnit and PageSession authority tuple.',
+      false,
+    );
+  }
+  return {
+    viewerSessionId: identifier(record['viewerSessionId'], 'viewerSessionId'),
+    mode,
+    ...(interventionSessionId === undefined ? {} : { interventionSessionId }),
+    ...(workUnitId === undefined ? {} : { workUnitId }),
+    ...(pageSessionId === undefined ? {} : { pageSessionId }),
+  };
+}
+
+function parseLoginReset(value: unknown): LoginResetCommandV1 {
+  const record = strictRecord(value, 'LoginResetCommand', ['resetRequestId']);
+  return { resetRequestId: identifier(record['resetRequestId'], 'resetRequestId') };
+}
+
 function parseVerifyIntervention(value: unknown): VerifyInterventionCommandV1 {
   const record = strictRecord(value, 'VerifyInterventionCommand', [
     'interventionSessionId', 'expectedMemberId', 'probeRevision', 'phase',
@@ -1212,6 +1290,10 @@ function uuid(value: unknown, path: string): string {
 
 function nullableIdentifier(value: unknown, path: string): string | null {
   return value === null ? null : identifier(value, path);
+}
+
+function optionalIdentifier(value: unknown, path: string): string | undefined {
+  return value === undefined ? undefined : identifier(value, path);
 }
 
 function boundedString(value: unknown, path: string, maximum: number): string {

@@ -25,7 +25,10 @@ import {
 } from '../session/search-mtop.js';
 import { parseMtopJsonp } from '../session/mtop.js';
 import { sleep } from '../session/wait.js';
-import { withIsolatedOperationPages } from '../session/page-lifecycle.js';
+import {
+  withIsolatedOperationPages,
+  withIsolatedOperationPagesReceipt,
+} from '../session/page-lifecycle.js';
 import { SEARCH_FILTER_REQUEST_KEYS } from '../session/search-contract.js';
 import type { OfferResult, OfferArgs } from './offer.js';
 import {
@@ -104,6 +107,7 @@ export interface IncrementalSearchPageArgs {
   pageDelayMin?: number;
   pageDelayMax?: number;
   remoteFilterParams?: Record<string, string>;
+  onRiskPage?: (page: Page) => void;
 }
 
 export interface IncrementalSearchPageResult {
@@ -180,7 +184,7 @@ export async function fetchIncrementalSearchPage(
   let collectedAt: string | null = null;
   let remoteHasMore: boolean | null = null;
   let rawResponseText: string | null = null;
-  await withIsolatedOperationPages(ctx, () => fetchSearch(
+  await withIsolatedOperationPagesReceipt(ctx, (ownership) => fetchSearch(
     ctx,
     keyword,
     args.headed === true,
@@ -200,6 +204,10 @@ export async function fetchIncrementalSearchPage(
       },
       onRawResponse(page, value) {
         if (page === args.page) rawResponseText = value;
+      },
+      onRiskPage(page) {
+        ownership.transferToIntervention(page);
+        args.onRiskPage?.(page);
       },
     },
   ));
@@ -331,6 +339,7 @@ async function fetchSearch(
     remoteFilterParams?: Record<string, string>;
     onCapturedPage?: (page: number, offers: Offer[], hasMore: boolean | null) => void;
     onRawResponse?: (page: number, rawResponseText: string) => void;
+    onRiskPage?: (page: Page) => void;
   } = {},
 ): Promise<Offer[]> {
   const page = await ctx.newPage();
@@ -651,6 +660,7 @@ async function fetchSearch(
         await detectLoginRedirect(page);
       }
       if (failure === 'risk_control') {
+        hooks.onRiskPage?.(page);
         throw riskControlError(headed);
       }
       info(

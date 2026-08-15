@@ -15,6 +15,7 @@ export interface ManagedPage {
   isClosed(): boolean;
   close(): Promise<void>;
   url(): string;
+  bringToFront(): Promise<void>;
 }
 
 export interface ManagedPageSession {

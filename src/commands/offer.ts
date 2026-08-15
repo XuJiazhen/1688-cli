@@ -64,6 +64,7 @@ export interface OfferArgs {
     component: 'core' | 'sku' | 'detail' | 'shop-card' | 'consignment',
     rawPayload: unknown,
   ) => Promise<void>;
+  onRiskPage?: (page: Page) => void;
 }
 
 export interface OfferResult {
@@ -642,6 +643,11 @@ export async function executeRaw(
       },
     });
     return result;
+  } catch (error) {
+    if (error instanceof CliError && error.code === 'RISK_CONTROL') {
+      args.onRiskPage?.(page);
+    }
+    throw error;
   } finally {
     skuCapture.dispose();
     shopCardCapture.dispose();

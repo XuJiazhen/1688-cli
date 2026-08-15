@@ -44,6 +44,7 @@ import {
   productionCollectionRequestHashV1,
   productionCollectionRpcFailureV1,
   type ProductionCollectionExecutionReceiptV3,
+  type ProductionCollectionRetainedPageReceiptV1,
   type ProductionCollectionResourceReceiptV1,
   type ProductionCollectionSourceTimingReceipt,
   type ProductionCollectionSourceTimingReceiptV2,
@@ -77,6 +78,12 @@ export interface ProductionCollectionRuntimeOptions {
     requestHash: string;
     admittedAt: string;
   }>>;
+  retainRiskPage?: (input: {
+    page: Page;
+    attemptId: string;
+    workItemId: string;
+    workKind: ProductionCollectionRpcRequestV1['workKind'];
+  }) => Promise<ProductionCollectionRetainedPageReceiptV1>;
 }
 
 /**
@@ -220,9 +227,11 @@ export class ProductionCollectionRuntime {
     }
     try {
       let batch: CollectionBatch | null = null;
+      let retainedPage: ProductionCollectionRetainedPageReceiptV1 | null = null;
       try {
         const operation = async (context: BrowserContext): Promise<CollectionBatch> => {
           const pages = new Set<Page>();
+          const riskPageHolder: { page: Page | null } = { page: null };
           const onPage = (page: Page): void => { pages.add(page); };
           const onRequest = (ownerRequest: Request): void => {
             if (!belongsToOwnedPage(ownerRequest, pages)) return;
@@ -242,8 +251,32 @@ export class ProductionCollectionRuntime {
           context.on('request', onRequest);
           context.on('response', onResponse);
           try {
-            batch = await (this.options.runCollection?.(context, request)
-              ?? runProductionCollection(context, request, this.options.artifactDirectory));
+            try {
+              batch = await (this.options.runCollection?.(context, request)
+                ?? runProductionCollection(
+                  context,
+                  request,
+                  this.options.artifactDirectory,
+                  (page) => { riskPageHolder.page = page; },
+                ));
+            } catch (error) {
+              if (!isRiskControlError(error) || riskPageHolder.page === null) throw error;
+              batch = createRiskControlBatch(request, error);
+            }
+            const riskPage = riskPageHolder.page;
+            if (
+              riskPage !== null
+              && !riskPage.isClosed()
+              && batch.actionRequired?.type === 'risk-control'
+              && this.options.retainRiskPage !== undefined
+            ) {
+              retainedPage = await this.options.retainRiskPage({
+                page: riskPage,
+                attemptId: request.attemptId,
+                workItemId: request.workItemId,
+                workKind: request.workKind,
+              });
+            }
             sourceTiming.sourcePayloadCompleteAt = notEarlierThan(
               eventNow(),
               sourceTiming.firstSourceByteAt,
@@ -253,7 +286,10 @@ export class ProductionCollectionRuntime {
             context.off('request', onRequest);
             context.off('response', onResponse);
             const closedBeforeCleanup = [...pages].filter((page) => page.isClosed()).length;
-            const remaining = [...pages].filter((page) => !page.isClosed());
+            const remaining = [...pages].filter(
+              (page) => !page.isClosed()
+                && (retainedPage === null || page !== riskPageHolder.page),
+            );
             const failures: string[] = [];
             for (const page of remaining) {
               await page.close().catch((error: unknown) => {
@@ -261,14 +297,26 @@ export class ProductionCollectionRuntime {
               });
             }
             const closedPageCount = [...pages].filter((page) => page.isClosed()).length;
+            const transferredPageCount = retainedPage === null ? 0 : 1;
             lifecycle.cleanup = {
               ownedPageCount: pages.size,
               closedPageCount,
-              allOwnedPagesClosed: closedPageCount === pages.size && failures.length === 0,
+              transferredPageCount,
+              allOwnedPagesClosed:
+                closedPageCount + transferredPageCount === pages.size
+                && failures.length === 0,
               detail: {
                 closedBeforeCleanup,
                 forcedCloseCount: remaining.length,
                 closeFailureCount: failures.length,
+                transferredPageCount,
+                ...(retainedPage === null
+                  ? {}
+                  : {
+                      retainedPageSessionId: retainedPage.pageSessionId,
+                      pendingInterventionSessionId:
+                        retainedPage.pendingInterventionSessionId,
+                    }),
               },
             };
           }
@@ -369,6 +417,7 @@ export class ProductionCollectionRuntime {
         payloadSchemaVersion: 'collection-batch-v1',
         batch: structuredClone(batch) as unknown as Record<string, unknown>,
         cleanup: lifecycle.cleanup,
+        ...(retainedPage === null ? {} : { retainedPage }),
         resource,
         timing,
       };
@@ -515,6 +564,7 @@ async function runProductionCollection(
   context: BrowserContext,
   request: ProductionCollectionRpcRequestV1,
   artifactDirectory: string,
+  onRiskPage: (page: Page) => void,
 ): Promise<CollectionBatch> {
   const unit = collectionUnit(request);
   if (request.workKind === 'offer_detail') {
@@ -525,6 +575,7 @@ async function runProductionCollection(
         offerId: String(request.workInput['offerId']),
         headed: true,
         allowDomFallback: false,
+        onRiskPage,
         onRawComponent: async (component, payload) => {
           rawEvidenceRefs.push(await persistProductionCollectionRawEvidence(
             artifactDirectory,
@@ -549,10 +600,10 @@ async function runProductionCollection(
     }
   }
   if (request.workKind === 'store_qualification') {
-    return runProductionQualification(context, request, unit, artifactDirectory);
+    return runProductionQualification(context, request, unit, artifactDirectory, onRiskPage);
   }
   if (request.workKind === 'store_pages') {
-    return runProductionStorePages(context, request, unit, artifactDirectory);
+    return runProductionStorePages(context, request, unit, artifactDirectory, onRiskPage);
   }
   if (request.query === null) throw new TypeError('search query is missing');
   const startedAt = new Date().toISOString();
@@ -563,6 +614,7 @@ async function runProductionCollection(
     sort: request.query.sort === 'sales' ? 'best-selling' : request.query.sort,
     headed: true,
     remoteFilterParams: request.query.filters as Record<string, string>,
+    onRiskPage,
   });
   const rawEvidenceRef = await persistProductionCollectionRawEvidence(
     artifactDirectory,
@@ -587,12 +639,14 @@ async function runProductionQualification(
   request: ProductionCollectionRpcRequestV1,
   unit: CollectionUnit,
   artifactDirectory: string,
+  onRiskPage: (page: Page) => void,
 ): Promise<CollectionBatch> {
   const startedAt = new Date().toISOString();
   const memberId = String(request.workInput['memberId']);
   const storeUrl = String(request.workInput['normalizedStoreUrl']);
   const page = await context.newPage();
   const rawEvidenceRefs: string[] = [];
+  let retainedForRisk = false;
   try {
     await page.goto(storeUrl, { waitUntil: 'domcontentloaded', timeout: 30_000 });
     await waitForCollectionPageAvailability(page, { headed: true });
@@ -627,8 +681,14 @@ async function runProductionQualification(
       sourceRef: rawEvidenceRefs[0],
       rawEvidenceRefs,
     });
+  } catch (error) {
+    if (isRiskControlError(error)) {
+      retainedForRisk = true;
+      onRiskPage(page);
+    }
+    throw error;
   } finally {
-    await page.close().catch(() => undefined);
+    if (!retainedForRisk) await page.close().catch(() => undefined);
   }
 }
 
@@ -637,12 +697,14 @@ async function runProductionStorePages(
   request: ProductionCollectionRpcRequestV1,
   unit: CollectionUnit,
   artifactDirectory: string,
+  onRiskPage: (page: Page) => void,
 ): Promise<CollectionBatch> {
   const startedAt = new Date().toISOString();
   const memberId = String(request.workInput['memberId']);
   const storeUrl = String(request.workInput['normalizedStoreUrl']);
   const page = await context.newPage();
   const rawEvidenceRefs: string[] = [];
+  let retainedForRisk = false;
   try {
     const result = await collectBoundedStoreSampleV1({
       memberId,
@@ -788,8 +850,14 @@ async function runProductionStorePages(
         storeCategories: result.categories.length,
       },
     });
+  } catch (error) {
+    if (isRiskControlError(error)) {
+      retainedForRisk = true;
+      onRiskPage(page);
+    }
+    throw error;
   } finally {
-    await page.close().catch(() => undefined);
+    if (!retainedForRisk) await page.close().catch(() => undefined);
   }
 }
 
@@ -841,7 +909,7 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV3
     || typeof receipt.runtimeHostId !== 'string'
     || typeof receipt.runtimeAdmissionReceiptId !== 'string'
     || receipt.payloadSchemaVersion !== 'collection-batch-v1'
-    || receipt.cleanup?.allOwnedPagesClosed !== true
+    || !isValidCleanupReceipt(receipt.cleanup, receipt.retainedPage)
     || !isValidResourceReceipt(receipt.resource)
     || !isValidSourceTimingReceipt(receipt.timing, receipt.completedAt)
   ) {
@@ -851,6 +919,32 @@ function validateReceipt(value: unknown): ProductionCollectionExecutionReceiptV3
     );
   }
   return receipt;
+}
+
+function isValidCleanupReceipt(
+  cleanup: ProductionCollectionExecutionReceiptV3['cleanup'],
+  retainedPage: ProductionCollectionExecutionReceiptV3['retainedPage'],
+): boolean {
+  if (cleanup === null || typeof cleanup !== 'object') return false;
+  if (
+    !isNonNegativeSafeInteger(cleanup.ownedPageCount)
+    || !isNonNegativeSafeInteger(cleanup.closedPageCount)
+    || cleanup.allOwnedPagesClosed !== true
+  ) return false;
+  const transferredPageCount = cleanup.transferredPageCount ?? 0;
+  if (!isNonNegativeSafeInteger(transferredPageCount)) return false;
+  if (cleanup.closedPageCount + transferredPageCount !== cleanup.ownedPageCount) return false;
+  if (retainedPage === undefined) return transferredPageCount === 0;
+  return transferredPageCount === 1
+    && retainedPage.schemaVersion === 'production-collection-retained-page.v1'
+    && typeof retainedPage.pageSessionId === 'string'
+    && retainedPage.pageSessionId.length > 0
+    && typeof retainedPage.pendingInterventionSessionId === 'string'
+    && retainedPage.pendingInterventionSessionId.length > 0
+    && typeof retainedPage.workItemId === 'string'
+    && typeof retainedPage.workKind === 'string'
+    && typeof retainedPage.url === 'string'
+    && instantMs(retainedPage.transferredAt) !== null;
 }
 
 function isValidSourceTimingReceipt(
@@ -1112,6 +1206,52 @@ function classifyRuntimeError(error: unknown): ProductionCollectionProtocolError
     true,
     'runtime',
   );
+}
+
+function isRiskControlError(error: unknown): error is CliError {
+  return error instanceof CliError && error.code === 'RISK_CONTROL';
+}
+
+function createRiskControlBatch(
+  request: ProductionCollectionRpcRequestV1,
+  error: CliError,
+): CollectionBatch {
+  const unit = collectionUnit(request);
+  const now = new Date().toISOString();
+  return normalizeCollectionBatch({
+    schemaVersion: 1,
+    batchId: randomUUID(),
+    sourceRequestId: request.attemptId,
+    unitId: unit.unitId,
+    kind: unit.kind,
+    status: 'blocked',
+    startedAt: now,
+    completedAt: now,
+    subject: { ...unit.subject },
+    scope: { ...(unit.scope ?? {}) },
+    observations: [],
+    completeness: {
+      requestedScope: unit.scope?.requestedScope ?? 'page',
+      state: 'unknown',
+      observedPages: [],
+      failedPages: [],
+      uniqueItems: 0,
+    },
+    duplicateObservations: [],
+    warnings: [],
+    errors: [{
+      code: error.code,
+      message: error.message,
+      retryable: false,
+      details: { category: 'risk-control' },
+    }],
+    actionRequired: {
+      type: 'risk-control',
+      message: 'The exact risk-control Page was retained for operator intervention.',
+    },
+    rawEvidenceRefs: [],
+    metrics: {},
+  });
 }
 
 async function writeAtomic(filePath: string, contents: string): Promise<void> {

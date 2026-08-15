@@ -16,6 +16,37 @@ import { SharedPersistentContextHost } from '../src/daemon/shared-context-host.j
 const DISCOVERY = '__vs1_profile_identity_discovery__';
 
 describe('SharedPersistentContextHost identity discovery', () => {
+  it('clears browser authentication state and opens the canonical 1688 login surface', async () => {
+    const close = vi.fn(async () => undefined);
+    const oldPage = { isClosed: () => false,close } as unknown as Page;
+    let currentUrl = 'about:blank';
+    const goto = vi.fn(async (url: string) => { currentUrl = url; });
+    const bringToFront = vi.fn(async () => undefined);
+    const newPage = {
+      isClosed: () => false,close: vi.fn(),goto,bringToFront,url: () => currentUrl,
+    } as unknown as Page;
+    const clearCookies = vi.fn(async () => undefined);
+    const clearPermissions = vi.fn(async () => undefined);
+    shared.context = {
+      pages: () => [oldPage],newPage: async () => newPage,clearCookies,clearPermissions,
+    } as unknown as BrowserContext;
+    const host = new SharedPersistentContextHost({
+      profileId: 'profile-1',profileName: 'profile-1',daemonInstanceId: 'daemon-1',
+      contextGeneration: 1,idFactory: () => 'page-1',
+    });
+
+    const reset = await host.resetLoginState();
+
+    expect(close).toHaveBeenCalledOnce();
+    expect(clearCookies).toHaveBeenCalledOnce();
+    expect(clearPermissions).toHaveBeenCalledOnce();
+    expect(goto).toHaveBeenCalledWith('https://www.1688.com/', {
+      waitUntil: 'domcontentloaded',timeout: 15_000,
+    });
+    expect(bringToFront).toHaveBeenCalledOnce();
+    expect(reset).toMatchObject({ closedContextPageCount: 1,url: 'https://www.1688.com/' });
+  });
+
   it('binds the current logged-in Context without navigating the human login Page', async () => {
     const goto = vi.fn();
     const page = {

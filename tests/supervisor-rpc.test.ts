@@ -151,6 +151,22 @@ describe('Profile Supervisor RPC protocol', () => {
     }, parseOptions)).toThrow(/only valid for a verified/u);
   });
 
+  it('accepts only the reset request id for a fenced login reset', () => {
+    const reset = {
+      ...controlRequest(),
+      method: 'supervisor.profile.reset-login',
+      payload: { resetRequestId: 'reset-command-1' },
+    };
+    expect(parseSupervisorRpcRequest(reset, parseOptions)).toMatchObject({
+      method: 'supervisor.profile.reset-login',
+      payload: { resetRequestId: 'reset-command-1' },
+    });
+    expect(() => parseSupervisorRpcRequest({
+      ...reset,
+      payload: { resetRequestId: 'reset-command-1',deleteProfileVolume: true },
+    }, parseOptions)).toThrow(/unknown fields/u);
+  });
+
   it('enforces the framed transport size before JSON parsing', () => {
     expect(() => parseSupervisorRpcFrame('x'.repeat(101), {
       verification,
