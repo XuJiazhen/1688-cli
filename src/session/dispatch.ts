@@ -77,6 +77,10 @@ const REGISTRY: Record<string, () => Promise<Executor<unknown, unknown>>> = {
     import('../commands/seller-messages.js').then(
       (m) => m.execute as Executor<unknown, unknown>,
     ),
+  'supplier-inquiry-action': () =>
+    import('./supplier-inquiry-actions.js').then(
+      (m) => m.execute as Executor<unknown, unknown>,
+    ),
   inbox: () =>
     import('../commands/inbox.js').then(
       (m) => m.execute as Executor<unknown, unknown>,

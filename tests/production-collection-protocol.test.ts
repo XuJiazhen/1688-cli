@@ -12,9 +12,15 @@ import {
   type ProductionCollectionRpcRequestV1,
 } from '../src/daemon/production-collection-protocol.js';
 import {
+  claimSupplierInquiryAction,
+  completeSupplierInquiryActionClaim,
   persistProductionCollectionRawEvidence,
   ProductionCollectionRuntime,
 } from '../src/daemon/production-collection-runtime.js';
+import type {
+  SupplierInquiryActionInput,
+  SupplierInquiryActionResult,
+} from '../src/session/supplier-inquiry-actions.js';
 
 const directories: string[] = [];
 
@@ -75,6 +81,57 @@ describe('production collection protocol', () => {
         lastPageInclusive: 4,
       },
     })).toThrow(/exactly pages 1-3/);
+  });
+});
+
+describe('supplier inquiry durable idempotency claims', () => {
+  it('blocks a second attempt until the first outcome is reconciled and then replays it', async () => {
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'supplier-claim-'));
+    directories.push(artifactDirectory);
+    const input = supplierActionInput();
+    const first = await claimSupplierInquiryAction(
+      artifactDirectory,
+      input,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      '2026-08-20T01:00:00.000Z',
+    );
+    expect(first).toMatchObject({ allowExternalSideEffect: true, replayResult: null });
+
+    const unknown = await claimSupplierInquiryAction(
+      artifactDirectory,
+      input,
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      '2026-08-20T01:01:00.000Z',
+    );
+    expect(unknown).toMatchObject({ allowExternalSideEffect: false, replayResult: null });
+
+    const result = supplierActionResult(input);
+    await completeSupplierInquiryActionClaim(first, result, '2026-08-20T01:02:00.000Z');
+    const replay = await claimSupplierInquiryAction(
+      artifactDirectory,
+      input,
+      'cccccccc-cccc-4ccc-8ccc-cccccccccccc',
+      '2026-08-20T01:03:00.000Z',
+    );
+    expect(replay.replayResult).toEqual(result);
+  });
+
+  it('rejects reuse of an idempotency key for a different frozen action', async () => {
+    const artifactDirectory = await fs.mkdtemp(path.join(os.tmpdir(), 'supplier-claim-'));
+    directories.push(artifactDirectory);
+    const input = supplierActionInput();
+    await claimSupplierInquiryAction(
+      artifactDirectory,
+      input,
+      'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+      '2026-08-20T01:00:00.000Z',
+    );
+    await expect(claimSupplierInquiryAction(
+      artifactDirectory,
+      { ...input, offerId: '654321' },
+      'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+      '2026-08-20T01:01:00.000Z',
+    )).rejects.toMatchObject({ code: 'SUPPLIER_INQUIRY_IDEMPOTENCY_CONFLICT' });
   });
 });
 
@@ -348,6 +405,51 @@ function runtimeOwner() {
       admittedAt: new Date().toISOString(),
     }),
   } as const;
+}
+
+function supplierActionInput(): SupplierInquiryActionInput {
+  return {
+    action: 'share_offer',
+    conversationScope: 'offer',
+    idempotencyKey: 'supplier:test:share',
+    canonicalStoreId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd',
+    memberId: 'seller-login',
+    normalizedStoreUrl: 'https://seller.1688.com/',
+    offerId: '123456',
+  };
+}
+
+function supplierActionResult(input: SupplierInquiryActionInput): SupplierInquiryActionResult {
+  return {
+    action: input.action,
+    idempotencyKey: input.idempotencyKey,
+    conversation: {
+      canonicalStoreId: input.canonicalStoreId!,
+      memberId: input.memberId,
+      normalizedStoreUrl: input.normalizedStoreUrl,
+      observedMemberId: input.memberId,
+      observedStoreUrl: input.normalizedStoreUrl,
+      identityRawEvidenceRef: 'artifact:identity',
+      activationUrl: `https://air.1688.com/chat?touid=cnalichn${input.memberId}`,
+      activationVerifiedAt: '2026-08-20T01:00:00.000Z',
+      cid: 'cid-1',
+      scope: input.conversationScope,
+      offerId: input.offerId ?? null,
+      directUrl: 'https://air.1688.com/conversation',
+    },
+    offerId: input.offerId,
+    cardAnchorId: 'dom:card',
+    messageId: 'message-1',
+    sentAt: '2026-08-20T01:01:00.000Z',
+    card: {
+      offerId: input.offerId!,
+      title: 'Fixture',
+      price: null,
+      image: null,
+      url: 'https://detail.1688.com/offer/123456.html',
+      domSha256: 'a'.repeat(64),
+    },
+  };
 }
 
 function request(

@@ -2653,6 +2653,7 @@ function taskTypeForProductionCollection(
     case 'offer_detail': return 'OFFER_DETAIL';
     case 'store_qualification': return 'STORE_QUALIFICATION';
     case 'store_pages': return 'STORE_CATALOG_SAMPLE';
+    case 'supplier_inquiry': return 'SUPPLIER_INQUIRY';
   }
 }
 

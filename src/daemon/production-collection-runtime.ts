@@ -37,6 +37,11 @@ import {
   requestStoreProfileFromPage,
 } from '../session/store-profile-capture.js';
 import { runOnSharedCtx } from '../session/shared.js';
+import {
+  executeSupplierInquiryAction,
+  type SupplierInquiryActionInput,
+  type SupplierInquiryActionResult,
+} from '../session/supplier-inquiry-actions.js';
 import { SUPPLIER_QUALIFICATION_COMPONENT_KEY } from '../session/supplier-qualification.js';
 import {
   PRODUCTION_COLLECTION_RPC_RESPONSE_SCHEMA,
@@ -66,10 +71,10 @@ export interface ProductionCollectionRuntimeOptions {
   runCollection?: (
     context: BrowserContext,
     request: ProductionCollectionRpcRequestV1,
-  ) => Promise<CollectionBatch>;
+  ) => Promise<ProductionWorkBatch>;
   runWithContext?: (
-    operation: (context: BrowserContext) => Promise<CollectionBatch>,
-  ) => Promise<CollectionBatch>;
+    operation: (context: BrowserContext) => Promise<ProductionWorkBatch>,
+  ) => Promise<ProductionWorkBatch>;
   authorizeRuntime?: (
     request: ProductionCollectionRpcRequestV1,
     requestHash: string,
@@ -85,6 +90,30 @@ export interface ProductionCollectionRuntimeOptions {
     workKind: ProductionCollectionRpcRequestV1['workKind'];
   }) => Promise<ProductionCollectionRetainedPageReceiptV1>;
 }
+
+interface SupplierInquiryActionBatch {
+  readonly schemaVersion: 1;
+  readonly batchId: string;
+  readonly sourceRequestId: string;
+  readonly unitId: string;
+  readonly kind: 'supplier-inquiry';
+  readonly status: 'completed';
+  readonly startedAt: string;
+  readonly completedAt: string;
+  readonly subject: Readonly<Record<string, unknown>>;
+  readonly scope: Readonly<Record<string, unknown>>;
+  readonly observations: readonly Readonly<Record<string, unknown>>[];
+  readonly completeness: Readonly<Record<string, unknown>>;
+  readonly duplicateObservations: readonly never[];
+  readonly warnings: readonly never[];
+  readonly errors: readonly never[];
+  readonly rawEvidenceRefs: readonly string[];
+  readonly metrics: Readonly<Record<string, number>>;
+  readonly result: SupplierInquiryActionResult;
+  readonly actionRequired?: CollectionBatch['actionRequired'];
+}
+
+type ProductionWorkBatch = CollectionBatch | SupplierInquiryActionBatch;
 
 /**
  * The production task boundary inside one persistent Profile daemon.
@@ -226,10 +255,10 @@ export class ProductionCollectionRuntime {
       );
     }
     try {
-      let batch: CollectionBatch | null = null;
+      let batch: ProductionWorkBatch | null = null;
       let retainedPage: ProductionCollectionRetainedPageReceiptV1 | null = null;
       try {
-        const operation = async (context: BrowserContext): Promise<CollectionBatch> => {
+        const operation = async (context: BrowserContext): Promise<ProductionWorkBatch> => {
           const pages = new Set<Page>();
           const riskPageHolder: { page: Page | null } = { page: null };
           const onPage = (page: Page): void => { pages.add(page); };
@@ -367,6 +396,7 @@ export class ProductionCollectionRuntime {
       await writeAtomic(artifactPath, serialized);
       if (
         batch.status === 'completed'
+        && request.workKind !== 'supplier_inquiry'
         && (sourceTiming.remoteActionStartedAt === null
           || sourceTiming.sourcePayloadCompleteAt === null)
       ) {
@@ -557,6 +587,8 @@ function collectionUnit(request: ProductionCollectionRpcRequestV1): CollectionUn
           sort: 'wangpu_score',
         },
       };
+    case 'supplier_inquiry':
+      throw new TypeError('supplier_inquiry produces an action receipt, not a collection unit.');
   }
 }
 
@@ -565,7 +597,10 @@ async function runProductionCollection(
   request: ProductionCollectionRpcRequestV1,
   artifactDirectory: string,
   onRiskPage: (page: Page) => void,
-): Promise<CollectionBatch> {
+): Promise<ProductionWorkBatch> {
+  if (request.workKind === 'supplier_inquiry') {
+    return runProductionSupplierInquiry(context, request, artifactDirectory);
+  }
   const unit = collectionUnit(request);
   if (request.workKind === 'offer_detail') {
     const startedAt = new Date().toISOString();
@@ -632,6 +667,257 @@ async function runProductionCollection(
     completedAt: new Date().toISOString(),
     rawEvidenceRefs: [rawEvidenceRef],
   });
+}
+
+async function runProductionSupplierInquiry(
+  context: BrowserContext,
+  request: ProductionCollectionRpcRequestV1,
+  artifactDirectory: string,
+): Promise<SupplierInquiryActionBatch> {
+  const input = request.workInput as unknown as SupplierInquiryActionInput & {
+    readonly realSendAuthorizationId: string;
+  };
+  assertSupplierInquiryRuntimeAuthorization(input, process.env);
+  const startedAt = new Date().toISOString();
+  const idempotency = await claimSupplierInquiryAction(
+    artifactDirectory,
+    input,
+    request.attemptId,
+    startedAt,
+  );
+  const result = idempotency.replayResult === null
+    ? await executeSupplierInquiryAction(context, input, {
+        allowExternalSideEffect: idempotency.allowExternalSideEffect,
+        persistRawEvidence: (payload) => persistProductionCollectionRawEvidence(
+          artifactDirectory,
+          payload,
+        ),
+      })
+    : Object.freeze({ ...idempotency.replayResult, replayed: true });
+  if (idempotency.replayResult === null) {
+    await completeSupplierInquiryActionClaim(idempotency, result, new Date().toISOString());
+  }
+  const completedAt = new Date().toISOString();
+  return Object.freeze({
+    schemaVersion: 1,
+    batchId: randomUUID(),
+    sourceRequestId: request.attemptId,
+    unitId: request.workItemId,
+    kind: 'supplier-inquiry',
+    status: 'completed',
+    startedAt,
+    completedAt,
+    subject: Object.freeze({
+      inquiryTaskId: request.workInput['inquiryTaskId'],
+      outboundIntentId: request.workInput['outboundIntentId'],
+      canonicalStoreId: request.workInput['canonicalStoreId'],
+    }),
+    scope: Object.freeze({
+      action: input.action,
+      conversationScope: input.conversationScope,
+    }),
+    observations: Object.freeze([
+      Object.freeze({
+        kind: 'verified-store-conversation-identity',
+        canonicalStoreId: result.conversation.canonicalStoreId,
+        memberId: result.conversation.observedMemberId,
+        normalizedStoreUrl: result.conversation.observedStoreUrl,
+        rawEvidenceRef: result.conversation.identityRawEvidenceRef,
+      }),
+      ...(result.card === undefined
+        ? []
+        : [Object.freeze({ kind: 'observed-offer-card', ...result.card })]),
+    ]),
+    completeness: Object.freeze({
+      requestedScope: 'browser-action',
+      state: 'complete',
+      observedPages: [1],
+      failedPages: [],
+      uniqueItems: 1,
+    }),
+    duplicateObservations: Object.freeze([]),
+    warnings: Object.freeze([]),
+    errors: Object.freeze([]),
+    rawEvidenceRefs: Object.freeze([result.conversation.identityRawEvidenceRef]),
+    metrics: Object.freeze({}),
+    result,
+  });
+}
+
+export interface SupplierInquiryActionClaimV1 {
+  readonly schemaVersion: 'supplier-inquiry-action-claim.v1';
+  readonly idempotencyKey: string;
+  readonly requestHash: string;
+  readonly state: 'in_flight' | 'completed';
+  readonly ownerAttemptId: string;
+  readonly startedAt: string;
+  readonly completedAt?: string;
+  readonly result?: SupplierInquiryActionResult;
+}
+
+export interface SupplierInquiryActionClaimHandle {
+  readonly path: string;
+  readonly claim: SupplierInquiryActionClaimV1;
+  readonly allowExternalSideEffect: boolean;
+  readonly replayResult: SupplierInquiryActionResult | null;
+}
+
+export async function claimSupplierInquiryAction(
+  artifactDirectory: string,
+  input: SupplierInquiryActionInput,
+  attemptId: string,
+  startedAt: string,
+): Promise<SupplierInquiryActionClaimHandle> {
+  const requestHash = supplierInquiryActionRequestHash(input);
+  const keyHash = createHash('sha256').update(input.idempotencyKey, 'utf8').digest('hex');
+  const claimPath = path.join(
+    artifactDirectory,
+    'supplier-inquiry-action-claims',
+    `${keyHash}.json`,
+  );
+  const claim: SupplierInquiryActionClaimV1 = Object.freeze({
+    schemaVersion: 'supplier-inquiry-action-claim.v1',
+    idempotencyKey: input.idempotencyKey,
+    requestHash,
+    state: 'in_flight',
+    ownerAttemptId: attemptId,
+    startedAt,
+  });
+  await fs.mkdir(path.dirname(claimPath), { recursive: true });
+  try {
+    const handle = await fs.open(claimPath, 'wx', 0o600);
+    try {
+      await handle.writeFile(`${JSON.stringify(claim)}\n`, 'utf8');
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await syncDirectory(path.dirname(claimPath));
+    return Object.freeze({
+      path: claimPath,
+      claim,
+      allowExternalSideEffect: true,
+      replayResult: null,
+    });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+  }
+  const existing = parseSupplierInquiryActionClaim(
+    JSON.parse(await fs.readFile(claimPath, 'utf8')),
+  );
+  if (existing.idempotencyKey !== input.idempotencyKey || existing.requestHash !== requestHash) {
+    throw new ProductionCollectionProtocolError(
+      'SUPPLIER_INQUIRY_IDEMPOTENCY_CONFLICT',
+      'The supplier inquiry idempotency key is already bound to another frozen action.',
+      false,
+      'fencing',
+    );
+  }
+  return Object.freeze({
+    path: claimPath,
+    claim: existing,
+    allowExternalSideEffect: existing.state === 'completed',
+    replayResult: existing.state === 'completed' ? existing.result! : null,
+  });
+}
+
+export async function completeSupplierInquiryActionClaim(
+  handle: SupplierInquiryActionClaimHandle,
+  result: SupplierInquiryActionResult,
+  completedAt: string,
+): Promise<void> {
+  const terminal: SupplierInquiryActionClaimV1 = Object.freeze({
+    ...handle.claim,
+    state: 'completed',
+    completedAt,
+    result,
+  });
+  await writeAtomicDurable(handle.path, `${JSON.stringify(terminal)}\n`);
+}
+
+function supplierInquiryActionRequestHash(input: SupplierInquiryActionInput): string {
+  const canonical = JSON.stringify({
+    action: input.action,
+    conversationScope: input.conversationScope,
+    idempotencyKey: input.idempotencyKey,
+    canonicalStoreId: input.canonicalStoreId,
+    memberId: input.memberId,
+    normalizedStoreUrl: input.normalizedStoreUrl,
+    offerId: input.offerId ?? null,
+    text: input.text ?? null,
+    cursor: input.cursor ?? null,
+    limit: input.limit ?? null,
+    timeoutMs: input.timeoutMs ?? null,
+  });
+  return createHash('sha256').update(canonical, 'utf8').digest('hex');
+}
+
+function parseSupplierInquiryActionClaim(value: unknown): SupplierInquiryActionClaimV1 {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    throw new ProductionCollectionProtocolError(
+      'SUPPLIER_INQUIRY_IDEMPOTENCY_CLAIM_CORRUPT',
+      'Stored supplier inquiry idempotency claim is not an object.',
+      false,
+      'fencing',
+    );
+  }
+  const claim = value as Partial<SupplierInquiryActionClaimV1>;
+  if (
+    claim.schemaVersion !== 'supplier-inquiry-action-claim.v1'
+    || typeof claim.idempotencyKey !== 'string'
+    || !/^[0-9a-f]{64}$/u.test(claim.requestHash ?? '')
+    || (claim.state !== 'in_flight' && claim.state !== 'completed')
+    || typeof claim.ownerAttemptId !== 'string'
+    || !Number.isFinite(Date.parse(claim.startedAt ?? ''))
+    || (claim.state === 'completed'
+      && (claim.result === undefined || !Number.isFinite(Date.parse(claim.completedAt ?? ''))))
+  ) {
+    throw new ProductionCollectionProtocolError(
+      'SUPPLIER_INQUIRY_IDEMPOTENCY_CLAIM_CORRUPT',
+      'Stored supplier inquiry idempotency claim is incomplete.',
+      false,
+      'fencing',
+    );
+  }
+  return claim as SupplierInquiryActionClaimV1;
+}
+
+function assertSupplierInquiryRuntimeAuthorization(
+  input: SupplierInquiryActionInput & { readonly realSendAuthorizationId: string },
+  environment: NodeJS.ProcessEnv,
+): void {
+  if (environment['VS1_REAL_1688_CONVERSATION_ENABLED'] !== 'yes') {
+    throw new ProductionCollectionProtocolError(
+      'REAL_1688_CONVERSATION_DISABLED',
+      'Real 1688 conversation access is disabled in the Profile daemon.',
+      false,
+      'authorization',
+    );
+  }
+  const expectedAuthorization = environment['VS1_REAL_1688_SEND_AUTHORIZATION_ID']?.trim();
+  if (
+    expectedAuthorization === undefined
+    || expectedAuthorization.length === 0
+    || input.realSendAuthorizationId !== expectedAuthorization
+  ) {
+    throw new ProductionCollectionProtocolError(
+      'REAL_1688_AUTHORIZATION_REJECTED',
+      'Real 1688 supplier inquiry authorization was rejected by the Profile daemon.',
+      false,
+      'authorization',
+    );
+  }
+  if (
+    (input.action === 'share_offer' || input.action === 'send_text')
+    && environment['VS1_REAL_1688_SEND_ENABLED'] !== 'yes'
+  ) {
+    throw new ProductionCollectionProtocolError(
+      'REAL_1688_SEND_DISABLED',
+      'Real 1688 sending is disabled in the Profile daemon.',
+      false,
+      'authorization',
+    );
+  }
 }
 
 async function runProductionQualification(
@@ -1137,6 +1423,13 @@ function isCanonicalSourceRequest(
     return meta.componentKey === STORE_CATALOG_COMPONENT_KEY
       || meta.componentKey?.toLowerCase() === STORE_PROFILE_COMPONENT_KEY.toLowerCase();
   }
+  if (workKind === 'supplier_inquiry') {
+    try {
+      return new URL(request.url()).hostname === 'air.1688.com';
+    } catch {
+      return false;
+    }
+  }
   try {
     const url = new URL(request.url());
     return url.hostname === 'detail.1688.com'
@@ -1259,6 +1552,29 @@ async function writeAtomic(filePath: string, contents: string): Promise<void> {
   const temporary = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
   await fs.writeFile(temporary, contents, { mode: 0o600 });
   await fs.rename(temporary, filePath);
+}
+
+async function writeAtomicDurable(filePath: string, contents: string): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
+  const temporary = `${filePath}.${process.pid}.${randomUUID()}.tmp`;
+  const handle = await fs.open(temporary, 'wx', 0o600);
+  try {
+    await handle.writeFile(contents, 'utf8');
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  await fs.rename(temporary, filePath);
+  await syncDirectory(path.dirname(filePath));
+}
+
+async function syncDirectory(directory: string): Promise<void> {
+  const handle = await fs.open(directory, 'r');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
 }
 
 async function delayUntil(startMs: number, deadlineMs: number): Promise<void> {

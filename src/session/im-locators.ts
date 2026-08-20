@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { FrameLocator, Locator, Page } from 'playwright';
 import { CliError } from '../io/errors.js';
 
@@ -146,4 +147,252 @@ export async function waitForMessageSent(
       'Send clicked but neither input cleared nor message appeared in scrollback.',
     );
   }
+}
+
+export const IM_OFFER_SHARE_LOCATOR_STRATEGIES = Object.freeze([
+  'page button:has-text("发送链接")',
+  'page [role="button"]:has-text("发送链接")',
+  'iframe button:has-text("发送链接")',
+  'iframe [role="button"]:has-text("发送链接")',
+] as const);
+
+export interface SharedOfferCardObservation {
+  readonly cardAnchorId: string;
+  readonly offerId: string;
+  readonly title: string | null;
+  readonly price: string | null;
+  readonly image: string | null;
+  readonly url: string | null;
+  readonly domSha256: string;
+  readonly observedAt: string;
+}
+
+const IM_OFFER_CARD_SELECTOR =
+  '.message-item .text-od-wrap, .message-item .od-wrap, .message-item .offer-card-wrap';
+const OWN_IM_OFFER_CARD_SELECTOR = [
+  '.message-item.self .text-od-wrap',
+  '.message-item.self .od-wrap',
+  '.message-item.self .offer-card-wrap',
+  '.message-item[class*="self"] .text-od-wrap',
+  '.message-item[class*="self"] .od-wrap',
+  '.message-item[class*="self"] .offer-card-wrap',
+].join(', ');
+
+export async function clickImOfferShareButton(page: Page): Promise<void> {
+  const candidates = [
+    page.locator('button:has-text("发送链接")').first(),
+    page.locator('[role="button"]:has-text("发送链接")').first(),
+    imFrame(page).locator('button:has-text("发送链接")').first(),
+    imFrame(page).locator('[role="button"]:has-text("发送链接")').first(),
+  ];
+  for (const candidate of candidates) {
+    if (!await candidate.isVisible({ timeout: 1_500 }).catch(() => false)) continue;
+    try {
+      await candidate.click({ force: true, timeout: 5_000 });
+      return;
+    } catch (error) {
+      throw new CliError(
+        14,
+        'STABLE_LOCATOR_BLOCKED',
+        `Located the 旺旺 offer share control, but it was not clickable: ${String(error)}`,
+        {
+          category: 'locator',
+          locatorDescription: 'wangwang offer share button',
+          locatorStrategies: [...IM_OFFER_SHARE_LOCATOR_STRATEGIES],
+          currentUrl: page.url(),
+          retryable: true,
+        },
+      );
+    }
+  }
+  throw new CliError(
+    22,
+    'STABLE_LOCATOR_NOT_FOUND',
+    'Could not locate the 旺旺 “发送链接” offer share control.',
+    {
+      category: 'locator',
+      locatorDescription: 'wangwang offer share button',
+      locatorStrategies: [...IM_OFFER_SHARE_LOCATOR_STRATEGIES],
+      currentUrl: page.url(),
+      retryable: true,
+    },
+  );
+}
+
+export async function countImOfferCards(page: Page): Promise<number> {
+  return imFrame(page).locator(IM_OFFER_CARD_SELECTOR).count();
+}
+
+export async function waitForNewImOfferCard(
+  page: Page,
+  previousCount: number,
+  expectedOfferId: string,
+): Promise<SharedOfferCardObservation> {
+  const cards = imFrame(page).locator(IM_OFFER_CARD_SELECTOR);
+  const deadline = Date.now() + 12_000;
+  const observedOfferIds = new Set<string>();
+  while (Date.now() < deadline) {
+    const count = await cards.count().catch(() => 0);
+    if (count > previousCount) {
+      for (let index = previousCount; index < count; index += 1) {
+        const observation = await observeOfferCard(cards.nth(index));
+        for (const offerId of observation.offerIds) observedOfferIds.add(offerId);
+        if (!observation.offerIds.includes(expectedOfferId)) continue;
+        return toSharedOfferCardObservation(observation, expectedOfferId);
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new CliError(
+    24,
+    'OFFER_CARD_UNCONFIRMED',
+    '“发送链接” was clicked, but no new 旺旺 card proved the requested offer identity.',
+    {
+      category: 'locator',
+      locatorDescription: 'new wangwang offer card',
+      locatorStrategies: [
+        'iframe .message-item .text-od-wrap',
+        'iframe .message-item .od-wrap',
+        'iframe .message-item .offer-card-wrap',
+      ],
+      currentUrl: page.url(),
+      previousCount,
+      expectedOfferId,
+      observedOfferIds: [...observedOfferIds],
+      retryable: true,
+    },
+  );
+}
+
+export async function findRecentOwnOfferCard(
+  page: Page,
+  expectedOfferId: string,
+): Promise<SharedOfferCardObservation | null> {
+  const cards = imFrame(page).locator(OWN_IM_OFFER_CARD_SELECTOR);
+  const count = await cards.count().catch(() => 0);
+  for (let index = count - 1; index >= Math.max(0, count - 20); index -= 1) {
+    const observation = await observeOfferCard(cards.nth(index));
+    if (observation.offerIds.includes(expectedOfferId)) {
+      return toSharedOfferCardObservation(observation, expectedOfferId);
+    }
+  }
+  return null;
+}
+
+export function offerIdFromImCardEvidence(value: string): string | null {
+  const normalized = value.trim();
+  if (/^\d{5,}$/u.test(normalized)) return normalized;
+  const patterns = [
+    /\/offer\/(\d{5,})\.html(?:[?#/]|$)/iu,
+    /[?&](?:offerId|offer_id|itemId|item_id)=(\d{5,})(?:[&#]|$)/iu,
+    /(?:data-(?:offer|item)-id|(?:offer|item)Id)\s*[=:]\s*["']?(\d{5,})/iu,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(normalized);
+    if (match?.[1] !== undefined) return match[1];
+  }
+  return null;
+}
+
+interface RawOfferCardObservation {
+  readonly title: string | null;
+  readonly price: string | null;
+  readonly image: string | null;
+  readonly url: string | null;
+  readonly html: string;
+  readonly offerIds: readonly string[];
+}
+
+async function observeOfferCard(card: Locator): Promise<RawOfferCardObservation> {
+  const raw = await card.evaluate((element) => {
+    const title = element.querySelector('.odName, .od-name, [class*="odName"]')
+      ?.textContent?.trim().slice(0, 200) ?? null;
+    const price = element.querySelector('.odPrice, .od-price, [class*="odPrice"]')
+      ?.textContent?.replace(/\s+/g, '').replace('￥', '¥').trim() ?? null;
+    const image = element.querySelector('img')?.getAttribute('src') ?? null;
+    const nodes = [element, ...element.querySelectorAll('*')];
+    const evidence = nodes.flatMap((node) => [...node.attributes]
+      .filter((attribute) => /(?:href|url|offer|item)/iu.test(attribute.name))
+      .map((attribute) => `${attribute.name}=${attribute.value}`));
+    const urls = nodes.flatMap((node) => node instanceof HTMLAnchorElement && node.href
+      ? [node.href]
+      : []);
+    return {
+      title,
+      price,
+      image,
+      url: urls.find((value) => /\/offer\/\d+\.html/iu.test(value)) ?? null,
+      evidence: [...evidence, ...urls],
+      html: element.outerHTML.slice(0, 16_384),
+    };
+  });
+  const offerIds = [...new Set(raw.evidence
+    .map(offerIdFromImCardEvidence)
+    .filter((value): value is string => value !== null))];
+  return { ...raw, offerIds };
+}
+
+function toSharedOfferCardObservation(
+  observation: RawOfferCardObservation,
+  expectedOfferId: string,
+): SharedOfferCardObservation {
+  const domSha256 = createHash('sha256').update(observation.html, 'utf8').digest('hex');
+  return Object.freeze({
+    cardAnchorId: `dom:${domSha256}`,
+    offerId: expectedOfferId,
+    title: observation.title,
+    price: observation.price,
+    image: observation.image,
+    url: observation.url,
+    domSha256,
+    observedAt: new Date().toISOString(),
+  });
+}
+
+export async function findRecentOwnTextMessage(
+  page: Page,
+  message: string,
+): Promise<{ anchorId: string; observedAt: string } | null> {
+  const items = imFrame(page).locator('.message-item.self, .message-item[class*="self"]');
+  const count = await items.count().catch(() => 0);
+  for (let index = count - 1; index >= Math.max(0, count - 20); index -= 1) {
+    const item = items.nth(index);
+    const text = await item.innerText().catch(() => '');
+    if (!text.includes(message)) continue;
+    const observedAt = new Date().toISOString();
+    return {
+      anchorId: `dom:${createHash('sha256')
+        .update(`${text}\n${index}`, 'utf8')
+        .digest('hex')}`,
+      observedAt,
+    };
+  }
+  return null;
+}
+
+export async function waitForOwnTextMessage(
+  page: Page,
+  message: string,
+): Promise<{ anchorId: string; observedAt: string }> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const observation = await findRecentOwnTextMessage(page, message);
+    if (observation !== null) return observation;
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  throw new CliError(
+    24,
+    'SEND_UNCONFIRMED',
+    'Send clicked, but the exact text did not appear in the outgoing 旺旺 scrollback.',
+    {
+      category: 'locator',
+      locatorDescription: 'outgoing wangwang text message',
+      locatorStrategies: [
+        'iframe .message-item.self',
+        'iframe .message-item[class*=self]',
+      ],
+      currentUrl: page.url(),
+      retryable: true,
+    },
+  );
 }

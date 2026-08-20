@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { BrowserContext } from 'playwright';
 import { dispatch } from '../session/dispatch.js';
 import { emit, info } from '../io/output.js';
@@ -6,9 +7,9 @@ import { executeRaw as cartListExecute } from './cart-list.js';
 import { readState } from '../session/state.js';
 import { sleep } from '../session/wait.js';
 import type {
-  SellerChatArgs,
-  SellerChatResult,
-} from './seller-chat.js';
+  SupplierInquiryActionInput,
+  SupplierInquiryActionResult,
+} from '../session/supplier-inquiry-actions.js';
 
 export interface SellerInquireOpts {
   offerId: string;
@@ -17,8 +18,6 @@ export interface SellerInquireOpts {
   profile?: string;
   headed?: boolean;
 }
-
-const PRODUCT_URL = (id: string) => `https://detail.1688.com/offer/${id}.html`;
 
 export async function run(opts: SellerInquireOpts): Promise<void> {
   if (!opts.offerId || !/^\d+$/.test(opts.offerId)) {
@@ -55,44 +54,54 @@ export async function run(opts: SellerInquireOpts): Promise<void> {
   }
   info(`Seller: ${sellerLoginId}${sellerName ? ` (${sellerName})` : ''}`);
 
-  // 2. Send TWO messages — URL first (so 1688 IM can auto-render product card
-  //    if it supports that for standalone links), then the question text.
-  //    Pass sellerLoginId + offerId so seller-chat uses offer-scoped URL that
-  //    creates the conversation server-side (works for never-chatted sellers).
-  const productUrl = PRODUCT_URL(opts.offerId);
-  const searchNames = [sellerLoginId, sellerName].filter(Boolean) as string[];
-  const chatBaseArgs = {
-    searchNames,
-    sellerLoginId,
+  // The manual command and fenced production RPC share these exact actions.
+  // Product context is established only by the UI's “发送链接” control; a raw
+  // offer URL is never used as a production-success fallback.
+  const actionBase = {
+    conversationScope: 'offer' as const,
+    memberId: sellerLoginId,
+    normalizedStoreUrl: 'https://shop.1688.com/',
     offerId: opts.offerId,
-    myLoginId: state.nick,
   };
-
-  info(`Sending message 1/2: product link`);
-  await dispatch<SellerChatArgs, SellerChatResult>(
-    'seller-chat',
-    { ...chatBaseArgs, message: productUrl },
+  info('Sharing and verifying the offer card');
+  const card = await dispatch<SupplierInquiryActionInput, SupplierInquiryActionResult>(
+    'supplier-inquiry-action',
+    {
+      ...actionBase,
+      action: 'share_offer',
+      idempotencyKey: `manual:share:${opts.offerId}`,
+    },
     { headed: opts.headed, profile: opts.profile },
   );
-
-  // Small pause so the 2 sends look natural (and avoid hammering)
-  await sleep(1500);
-
   info(`Sending message 2/2: question`);
-  const data = await dispatch<SellerChatArgs, SellerChatResult>(
-    'seller-chat',
-    { ...chatBaseArgs, message: opts.message },
+  const data = await dispatch<SupplierInquiryActionInput, SupplierInquiryActionResult>(
+    'supplier-inquiry-action',
+    {
+      ...actionBase,
+      action: 'send_text',
+      idempotencyKey: `manual:text:${opts.offerId}:${createHash('sha256')
+        .update(opts.message, 'utf8')
+        .digest('hex')}`,
+      text: opts.message,
+    },
     { headed: opts.headed, profile: opts.profile },
   );
 
   emit({
     human: () => {
-      process.stdout.write(`✓ Inquiry sent to ${data.sentTo}\n`);
-      process.stdout.write(`  msg 1 (link):     ${productUrl}\n`);
+      process.stdout.write(`✓ Inquiry sent to ${sellerLoginId}\n`);
+      process.stdout.write(`  msg 1 (card):     ${card.cardAnchorId ?? card.messageId}\n`);
       process.stdout.write(`  msg 2 (question): ${opts.message}\n`);
       process.stdout.write(`  at: ${data.sentAt}\n`);
     },
-    data: { ok: true, sentTo: data.sentTo, productUrl, question: opts.message, sentAt: data.sentAt },
+    data: {
+      ok: true,
+      sentTo: sellerLoginId,
+      offerId: opts.offerId,
+      cardAnchorId: card.cardAnchorId ?? card.messageId,
+      question: opts.message,
+      sentAt: data.sentAt,
+    },
   });
 }
 

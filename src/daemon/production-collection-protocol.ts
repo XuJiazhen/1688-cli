@@ -18,7 +18,8 @@ export type ProductionCollectionWorkKind =
   | 'search_page'
   | 'offer_detail'
   | 'store_qualification'
-  | 'store_pages';
+  | 'store_pages'
+  | 'supplier_inquiry';
 
 export interface ProductionCollectionQueryV1 {
   keyword: string;
@@ -198,12 +199,20 @@ export function parseProductionCollectionRpcRequestV1(
   ] as const, 'method');
   const workKind = oneOf(record['workKind'], [
     'search_page', 'offer_detail', 'store_qualification', 'store_pages',
+    'supplier_inquiry',
   ] as const, 'workKind');
-  const workInput = strictRecord(
-    record['workInput'],
-    'workInput',
-    workInputKeys(workKind),
-  );
+  const workInput = workKind === 'supplier_inquiry'
+    ? strictRecordShape(
+        record['workInput'],
+        'workInput',
+        [
+          'kind', 'executionMode', 'inquiryTaskId', 'outboundIntentId',
+          'action', 'conversationScope', 'idempotencyKey', 'canonicalStoreId',
+          'normalizedStoreUrl', 'memberId', 'realSendAuthorizationId',
+        ],
+        ['offerId', 'questionId', 'text', 'cursor', 'limit', 'timeoutMs'],
+      )
+    : strictRecord(record['workInput'], 'workInput', workInputKeys(workKind));
   if (workInput['kind'] !== workKind) invalid('workInput.kind must match workKind.');
   validateWorkInput(workKind, workInput);
   const query = record['query'] === null
@@ -330,6 +339,8 @@ function workInputKeys(kind: ProductionCollectionWorkKind): readonly string[] {
       return ['kind', 'normalizedStoreUrl', 'memberId'];
     case 'store_pages':
       return ['kind', 'normalizedStoreUrl', 'memberId', 'firstPage', 'lastPageInclusive'];
+    case 'supplier_inquiry':
+      return [];
   }
 }
 
@@ -363,6 +374,56 @@ function validateWorkInput(
     }
     return;
   }
+  if (kind === 'supplier_inquiry') {
+    if (input['executionMode'] !== 'real_1688') {
+      invalid('The production Profile daemon accepts only real_1688 supplier inquiry work.');
+    }
+    uuid(input['inquiryTaskId'], 'workInput.inquiryTaskId');
+    uuid(input['outboundIntentId'], 'workInput.outboundIntentId');
+    uuid(input['canonicalStoreId'], 'workInput.canonicalStoreId');
+    const action = oneOf(input['action'], [
+      'open_store_conversation', 'share_offer', 'send_text', 'read_messages',
+    ] as const, 'workInput.action');
+    const scope = oneOf(
+      input['conversationScope'],
+      ['store', 'offer'] as const,
+      'workInput.conversationScope',
+    );
+    boundedText(input['idempotencyKey'], 'workInput.idempotencyKey', 1_024);
+    boundedText(input['memberId'], 'workInput.memberId', 256);
+    httpUrl(input['normalizedStoreUrl'], 'workInput.normalizedStoreUrl');
+    boundedText(
+      input['realSendAuthorizationId'],
+      'workInput.realSendAuthorizationId',
+      512,
+    );
+    if (input['offerId'] !== undefined) numericId(input['offerId'], 'workInput.offerId');
+    if (scope === 'offer' && input['offerId'] === undefined) {
+      invalid('Offer-scoped supplier inquiry work requires offerId.');
+    }
+    if (action === 'open_store_conversation' && scope !== 'store') {
+      invalid('open_store_conversation requires store scope.');
+    }
+    if (action === 'share_offer' && scope !== 'offer') {
+      invalid('share_offer requires offer scope.');
+    }
+    if (action === 'send_text') boundedText(input['text'], 'workInput.text', 500);
+    if (input['questionId'] !== undefined) {
+      boundedText(input['questionId'], 'workInput.questionId', 256);
+    }
+    if (action === 'read_messages') {
+      if (input['cursor'] !== undefined && input['cursor'] !== null) {
+        boundedText(input['cursor'], 'workInput.cursor', 2_048);
+      }
+      positiveInteger(input['limit'], 'workInput.limit');
+      positiveInteger(input['timeoutMs'], 'workInput.timeoutMs');
+      if (Number(input['limit']) > 200) invalid('workInput.limit cannot exceed 200.');
+      if (Number(input['timeoutMs']) > 30_000) {
+        invalid('workInput.timeoutMs cannot exceed 30000.');
+      }
+    }
+    return;
+  }
   boundedText(input['memberId'], 'workInput.memberId', 256);
   httpUrl(input['normalizedStoreUrl'], 'workInput.normalizedStoreUrl');
   if (kind === 'offer_detail') {
@@ -393,6 +454,23 @@ function strictRecord(
     for (const key of keys) {
       if (!Object.hasOwn(record, key)) invalid(`${path}.${key} is required.`);
     }
+  }
+  return record;
+}
+
+function strictRecordShape(
+  value: unknown,
+  path: string,
+  requiredKeys: readonly string[],
+  optionalKeys: readonly string[],
+): Record<string, unknown> {
+  const record = strictRecord(value, path);
+  const allowed = new Set([...requiredKeys, ...optionalKeys]);
+  for (const key of Object.keys(record)) {
+    if (!allowed.has(key)) invalid(`${path}.${key} is not allowed.`);
+  }
+  for (const key of requiredKeys) {
+    if (!Object.hasOwn(record, key)) invalid(`${path}.${key} is required.`);
   }
   return record;
 }
