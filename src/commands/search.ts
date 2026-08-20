@@ -216,6 +216,11 @@ export async function fetchIncrementalSearchPage(
       9,
       'CAPTURE_TIMEOUT',
       `Search page ${args.page} did not produce a correlated offer response.`,
+      {
+        category: 'timeout',
+        retryable: true,
+        recoveryAction: 'retry-search-page',
+      },
     );
   }
   if (remoteHasMore === null) {
