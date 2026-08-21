@@ -136,7 +136,6 @@ export async function loadManagedServerOptions(
       runtimeHostId: config.runtimeHostId,
       artifactDirectory: config.artifactDirectory,
       now,
-      retainRiskPage: (input) => runtime.retainProductionCollectionRiskPage(input),
     }),
     pageActionVerification: config.pageActionVerification,
   };

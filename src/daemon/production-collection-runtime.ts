@@ -49,7 +49,6 @@ import {
   productionCollectionRequestHashV1,
   productionCollectionRpcFailureV1,
   type ProductionCollectionExecutionReceiptV3,
-  type ProductionCollectionRetainedPageReceiptV1,
   type ProductionCollectionResourceReceiptV1,
   type ProductionCollectionSourceTimingReceipt,
   type ProductionCollectionSourceTimingReceiptV2,
@@ -83,12 +82,6 @@ export interface ProductionCollectionRuntimeOptions {
     requestHash: string;
     admittedAt: string;
   }>>;
-  retainRiskPage?: (input: {
-    page: Page;
-    attemptId: string;
-    workItemId: string;
-    workKind: ProductionCollectionRpcRequestV1['workKind'];
-  }) => Promise<ProductionCollectionRetainedPageReceiptV1>;
 }
 
 interface SupplierInquiryActionBatch {
@@ -256,7 +249,6 @@ export class ProductionCollectionRuntime {
     }
     try {
       let batch: ProductionWorkBatch | null = null;
-      let retainedPage: ProductionCollectionRetainedPageReceiptV1 | null = null;
       try {
         const operation = async (context: BrowserContext): Promise<ProductionWorkBatch> => {
           const pages = new Set<Page>();
@@ -292,20 +284,6 @@ export class ProductionCollectionRuntime {
               if (!isRiskControlError(error) || riskPageHolder.page === null) throw error;
               batch = createRiskControlBatch(request, error);
             }
-            const riskPage = riskPageHolder.page;
-            if (
-              riskPage !== null
-              && !riskPage.isClosed()
-              && batch.actionRequired?.type === 'risk-control'
-              && this.options.retainRiskPage !== undefined
-            ) {
-              retainedPage = await this.options.retainRiskPage({
-                page: riskPage,
-                attemptId: request.attemptId,
-                workItemId: request.workItemId,
-                workKind: request.workKind,
-              });
-            }
             sourceTiming.sourcePayloadCompleteAt = notEarlierThan(
               eventNow(),
               sourceTiming.firstSourceByteAt,
@@ -315,10 +293,7 @@ export class ProductionCollectionRuntime {
             context.off('request', onRequest);
             context.off('response', onResponse);
             const closedBeforeCleanup = [...pages].filter((page) => page.isClosed()).length;
-            const remaining = [...pages].filter(
-              (page) => !page.isClosed()
-                && (retainedPage === null || page !== riskPageHolder.page),
-            );
+            const remaining = [...pages].filter((page) => !page.isClosed());
             const failures: string[] = [];
             for (const page of remaining) {
               await page.close().catch((error: unknown) => {
@@ -326,7 +301,7 @@ export class ProductionCollectionRuntime {
               });
             }
             const closedPageCount = [...pages].filter((page) => page.isClosed()).length;
-            const transferredPageCount = retainedPage === null ? 0 : 1;
+            const transferredPageCount = 0;
             lifecycle.cleanup = {
               ownedPageCount: pages.size,
               closedPageCount,
@@ -339,13 +314,6 @@ export class ProductionCollectionRuntime {
                 forcedCloseCount: remaining.length,
                 closeFailureCount: failures.length,
                 transferredPageCount,
-                ...(retainedPage === null
-                  ? {}
-                  : {
-                      retainedPageSessionId: retainedPage.pageSessionId,
-                      pendingInterventionSessionId:
-                        retainedPage.pendingInterventionSessionId,
-                    }),
               },
             };
           }
@@ -447,7 +415,6 @@ export class ProductionCollectionRuntime {
         payloadSchemaVersion: 'collection-batch-v1',
         batch: structuredClone(batch) as unknown as Record<string, unknown>,
         cleanup: lifecycle.cleanup,
-        ...(retainedPage === null ? {} : { retainedPage }),
         resource,
         timing,
       };

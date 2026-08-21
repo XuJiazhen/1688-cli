@@ -19,10 +19,7 @@ import {
   normalizePageActionExecuteResponseV1,
 } from '../collection/page-action-contracts.js';
 import type { PageLifecycleReceiptV1 } from '../session/page-lifecycle.js';
-import type {
-  ProductionCollectionRetainedPageReceiptV1,
-  ProductionCollectionWorkKind,
-} from './production-collection-protocol.js';
+import type { ProductionCollectionWorkKind } from './production-collection-protocol.js';
 import {
   PageRegistryError,
   ProfilePageRegistry,
@@ -564,81 +561,6 @@ export class ProfileDaemonRuntime {
       cooldownUntil: this.cooldownUntil,
       pageSessions: this.registry.snapshot(),
     };
-  }
-
-  async retainProductionCollectionRiskPage(input: {
-    page: ManagedPage;
-    attemptId: string;
-    workItemId: string;
-    workKind: ProductionCollectionWorkKind;
-  }): Promise<ProductionCollectionRetainedPageReceiptV1> {
-    return this.controlSerial(async () => {
-      if (
-        this.state !== 'warm'
-        || this.active !== null
-        || this.intervention !== null
-        || this.pendingProductionIntervention !== null
-      ) {
-        throw new SupervisorRuntimeError(
-          'PRODUCTION_INTERVENTION_BUSY',
-          'Production risk Page transfer requires an otherwise idle warm Runtime.',
-          true,
-        );
-      }
-      if (input.page.isClosed()) {
-        throw new SupervisorRuntimeError(
-          'PRODUCTION_INTERVENTION_PAGE_LOST',
-          'The exact production risk Page closed before custody transfer.',
-          false,
-        );
-      }
-      const pageSessionId = `production-page-${required(input.attemptId, 'attemptId')}`;
-      const pendingInterventionSessionId = `pending-production-intervention-${input.attemptId}`;
-      const registered = await this.registry.register(input.page, {
-        pageSessionId,
-        playwrightPageId: this.options.host.pageId(input.page),
-        ownerKind: 'work_unit',
-        ownerId: required(input.workItemId, 'workItemId'),
-        taskType: taskTypeForProductionCollection(input.workKind),
-        lastUrlClass: 'risk_challenge',
-      });
-      const transferred = await this.registry.transferToIntervention(
-        registered.pageSessionId,
-        input.workItemId,
-        pendingInterventionSessionId,
-      );
-      const timer = setTimeout(() => {
-        void this.expirePendingProductionIntervention(
-          pendingInterventionSessionId,
-          'production_intervention_transfer_expired',
-        );
-      }, this.interventionTransferGraceMs);
-      timer.unref();
-      this.pendingProductionIntervention = {
-        attemptId: input.attemptId,
-        workItemId: input.workItemId,
-        workKind: input.workKind,
-        pageSessionId: transferred.pageSessionId,
-        pendingInterventionSessionId,
-        timer,
-      };
-      await this.event('production_intervention_transfer_pending', {
-        attemptId: input.attemptId,
-        workItemId: input.workItemId,
-        workKind: input.workKind,
-        pageSessionId: transferred.pageSessionId,
-        pendingInterventionSessionId,
-      });
-      return {
-        schemaVersion: 'production-collection-retained-page.v1',
-        pageSessionId: transferred.pageSessionId,
-        pendingInterventionSessionId,
-        workItemId: input.workItemId,
-        workKind: input.workKind,
-        url: input.page.url(),
-        transferredAt: transferred.transferredAt!,
-      };
-    });
   }
 
   async handle(
@@ -1293,9 +1215,9 @@ export class ProfileDaemonRuntime {
       }
       const prepared = await this.options.host.prepareViewerPage({
         page,
-        ...(command.mode === 'work_unit_challenge'
-          ? {}
-          : { navigateTo: 'https://www.1688.com/' as const }),
+        ...(command.mode === 'onboarding_login'
+          ? { navigateTo: 'https://www.1688.com/' as const }
+          : {}),
       });
       const preparedAt = this.now().toISOString();
       await this.event('viewer_page_prepared', {
